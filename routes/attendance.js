@@ -25,6 +25,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 
     let success = 0;
     let errors = 0;
+    let conflicts = [];
 
     for (const record of attendanceRecords) {
       try {
@@ -35,13 +36,35 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
           continue;
         }
 
-        console.log(`\n✓ ${student.name}: ${record.status}`);
-
-        // Delete any existing attendance for this student on this date
-        await Attendance.deleteMany({
+        // CHECK FOR CONFLICTS: Has someone else already marked this student?
+        const existingRecord = await Attendance.findOne({
           studentId: String(student._id),
           date: dateOnly
         });
+
+        if (existingRecord) {
+          // Someone already marked this student on this date
+          if (String(existingRecord.markedBy) !== String(req.user._id)) {
+            // Different teacher marked it - CONFLICT! DON'T UPDATE
+            console.log(`❌ CONFLICT: ${student.name} already marked by ${existingRecord.markedByName}`);
+            conflicts.push({
+              studentName: student.name,
+              markedBy: existingRecord.markedByName,
+              status: existingRecord.status
+            });
+            errors++;
+            continue; // SKIP THIS STUDENT - DON'T SAVE
+          } else {
+            // Same teacher updating their own record - DELETE OLD AND CREATE NEW
+            console.log(`🔄 Updating own record for ${student.name}`);
+            await Attendance.deleteMany({
+              studentId: String(student._id),
+              date: dateOnly
+            });
+          }
+        }
+
+        console.log(`\n✓ ${student.name}: ${record.status}`);
 
         // Create new attendance record
         const attendance = new Attendance({
@@ -61,17 +84,36 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 
       } catch (err) {
         console.log('  Error:', err.message);
+        
+        // Check if it's a duplicate key error (E11000)
+        if (err.code === 11000) {
+          console.log(`  ⚠️ DUPLICATE ERROR: Student already marked on this date`);
+          conflicts.push({
+            studentName: record.studentId, // We'll use ID as fallback
+            markedBy: 'Unknown (overwrite attempt)',
+            status: 'Already marked'
+          });
+        }
+        
         errors++;
       }
     }
 
-    console.log('\n✅ Success:', success, '❌ Errors:', errors);
+    console.log('\n✅ Success:', success, '❌ Errors:', errors, '⚠️ Conflicts:', conflicts.length);
     console.log('==================================\n');
 
-    res.json({
-      message: 'Attendance marked',
+    // Return conflicts in response so frontend can alert user
+    const response = {
+      message: 'Attendance processed',
       results: { successful: success, errors: errors }
-    });
+    };
+
+    if (conflicts.length > 0) {
+      response.conflicts = conflicts;
+      response.warning = `⚠️ ${conflicts.length} student(s) already marked by another teacher`;
+    }
+
+    res.json(response);
 
   } catch (error) {
     console.error('FATAL ERROR:', error);

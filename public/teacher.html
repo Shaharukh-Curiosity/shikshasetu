@@ -308,7 +308,27 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    alert(`✅ Attendance marked successfully!\n\nMarked: ${data.results.successful}\nErrors: ${data.results.errors}`);
+                    // Check for conflicts
+                    if (data.conflicts && data.conflicts.length > 0) {
+                        let conflictMsg = `⚠️ CONFLICT DETECTED!\n\nThe following students were already marked by another teacher:\n\n`;
+                        data.conflicts.forEach(c => {
+                            conflictMsg += `• ${c.studentName} - Marked ${c.status} by ${c.markedBy}\n`;
+                        });
+                        conflictMsg += `\n❌ These students were NOT updated to prevent data loss.`;
+                        alert(conflictMsg);
+                    }
+
+                    // Show summary
+                    let summary = `✅ Attendance Processing Complete\n\n`;
+                    summary += `Marked: ${data.results.successful} students\n`;
+                    if (data.results.errors > 0) {
+                        summary += `Errors/Conflicts: ${data.results.errors} students\n`;
+                    }
+                    if (data.conflicts && data.conflicts.length === 0) {
+                        summary += `\nAll students marked successfully!`;
+                    }
+                    alert(summary);
+                    
                     loadMarkStudents(); // Reload
                 } else {
                     alert('❌ Error: ' + data.message);

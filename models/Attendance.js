@@ -16,4 +16,8 @@ const attendanceSchema = new mongoose.Schema({
 attendanceSchema.index({ schoolName: 1, batchNumber: 1, date: 1 });
 attendanceSchema.index({ markedByName: 1, date: 1 });
 
+// CRITICAL: Prevent duplicate attendance for same student on same date
+// This enforces at the database level - no two records for same student/date
+attendanceSchema.index({ studentId: 1, date: 1 }, { unique: true });
+
 module.exports = mongoose.model('Attendance', attendanceSchema);
