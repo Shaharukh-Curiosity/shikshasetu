@@ -3,6 +3,43 @@ const router = express.Router();
 const User = require('../models/User');
 const { auth, isAdmin } = require('../middleware/auth');
 
+// ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
+// Get schools
+router.get('/schools', auth, async (req, res) => {
+  try {
+    const schools = await User.distinct('schoolName', { role: 'student', isActive: true });
+    res.json(schools.filter(s => s));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get stats
+router.get('/stats/dashboard', auth, async (req, res) => {
+  try {
+    const total = await User.countDocuments({ role: 'student' });
+    const active = await User.countDocuments({ role: 'student', isActive: true });
+    res.json({ total, active, inactive: total - active });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get batches for a school (parameterized route)
+router.get('/batches/:schoolName', auth, async (req, res) => {
+  try {
+    const batches = await User.distinct('batchNumber', {
+      role: 'student',
+      schoolName: req.params.schoolName,
+      isActive: true
+    });
+    res.json(batches.filter(b => b));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ⚠️ GENERAL ROUTES LAST (generic routes)
 // Get all students
 router.get('/', auth, async (req, res) => {
   try {
@@ -14,30 +51,6 @@ router.get('/', auth, async (req, res) => {
     
     const students = await User.find(query).sort({ name: 1 });
     res.json(students);
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Get schools
-router.get('/schools', auth, async (req, res) => {
-  try {
-    const schools = await User.distinct('schoolName', { role: 'student', isActive: true });
-    res.json(schools.filter(s => s));
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-// Get batches for a school
-router.get('/batches/:schoolName', auth, async (req, res) => {
-  try {
-    const batches = await User.distinct('batchNumber', {
-      role: 'student',
-      schoolName: req.params.schoolName,
-      isActive: true
-    });
-    res.json(batches.filter(b => b));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

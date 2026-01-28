@@ -219,4 +219,122 @@ router.get('/by-batch', auth, async (req, res) => {
   }
 });
 
+// ============================================
+// ATTENDANCE SUMMARY - Month/Date wise Report
+// ============================================
+router.get('/summary', auth, async (req, res) => {
+  try {
+    const { schoolName, batchNumber, startDate, endDate, filterType } = req.query;
+
+    console.log('\n======= ATTENDANCE SUMMARY =======');
+    console.log('School:', schoolName);
+    console.log('Batch:', batchNumber);
+    console.log('Start Date:', startDate);
+    console.log('End Date:', endDate);
+    console.log('Filter Type:', filterType);
+
+    if (!schoolName || !batchNumber || !startDate || !endDate) {
+      return res.status(400).json({ message: 'Missing parameters' });
+    }
+
+    // Get all students in this batch
+    const students = await User.find({
+      role: 'student',
+      schoolName: schoolName,
+      batchNumber: batchNumber,
+      isActive: true
+    }).lean();
+
+    console.log('Found students:', students.length);
+
+    if (students.length === 0) {
+      console.log('No students found\n');
+      return res.json([]);
+    }
+
+    // Get attendance records for the date range
+    const attendanceRecords = await Attendance.find({
+      schoolName: schoolName,
+      batchNumber: batchNumber,
+      date: {
+        $gte: startDate,
+        $lte: endDate
+      }
+    }).lean();
+
+    console.log('Found attendance records:', attendanceRecords.length);
+
+    // Get unique dates in the range (to count total classes)
+    const uniqueDates = [...new Set(attendanceRecords.map(r => r.date))];
+    console.log('Unique class dates:', uniqueDates.length);
+
+    // Build summary for each student
+    const summary = students.map(student => {
+      const studentIdStr = String(student._id);
+      
+      // Get records for this student
+      const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr);
+      
+      // Count present and absent
+      const presentCount = studentRecords.filter(r => r.status === 'present').length;
+      const absentCount = studentRecords.filter(r => r.status === 'absent').length;
+      const totalMarked = presentCount + absentCount;
+
+      // Get all unique teachers/admins who marked this student
+      const markedBySet = new Set(studentRecords.map(r => r.markedByName).filter(Boolean));
+      const markedByList = Array.from(markedBySet).join(', ');
+
+      console.log(`\n${student.name} (${studentIdStr}):`);
+      console.log('  Marked:', totalMarked);
+      console.log('  Present:', presentCount);
+      console.log('  Absent:', absentCount);
+      console.log('  Marked By:', markedByList || 'Not marked');
+
+      return {
+        _id: student._id,
+        name: student.name,
+        studentId: student._id,
+        schoolName: student.schoolName,
+        batchNumber: student.batchNumber,
+        standard: student.standard,
+        mobile: student.mobile,
+        totalClasses: uniqueDates.length,        // Total number of classes held
+        totalMarked: totalMarked,                // Number of times student was marked
+        present: presentCount,
+        absent: absentCount,
+        markedBy: markedByList,                  // NEW: Teachers/Admins who marked
+        percentage: totalMarked > 0 ? ((presentCount / totalMarked) * 100).toFixed(2) : 0
+      };
+    });
+
+    const totalPresent = summary.reduce((sum, s) => sum + s.present, 0);
+    const totalAbsent = summary.reduce((sum, s) => sum + s.absent, 0);
+
+    console.log('\n📊 Overall Summary:');
+    console.log('Total Classes:', uniqueDates.length);
+    console.log('Total Present (combined):', totalPresent);
+    console.log('Total Absent (combined):', totalAbsent);
+    console.log('==================================\n');
+
+    res.json({
+      summary: summary,
+      stats: {
+        totalClasses: uniqueDates.length,
+        totalStudents: students.length,
+        totalPresent: totalPresent,
+        totalAbsent: totalAbsent,
+        dateRange: {
+          start: startDate,
+          end: endDate,
+          filterType: filterType
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;

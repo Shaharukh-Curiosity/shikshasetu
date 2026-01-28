@@ -59,24 +59,39 @@
         <div id="attendanceTab" style="display: none;">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">📊 Attendance Records (View All)</h5>
+                    <h5 class="card-title">📊 Attendance Report (Summary)</h5>
                     
                     <div class="row g-3 mb-4">
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label>School</label>
                             <select class="form-select" id="attSchool" onchange="loadAttBatches()">
                                 <option value="">Select School</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label>Batch</label>
-                            <select class="form-select" id="attBatch" onchange="loadAttendanceRecords()">
+                            <select class="form-select" id="attBatch">
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
-                            <label>Date</label>
-                            <input type="date" class="form-control" id="attDate" onchange="loadAttendanceRecords()">
+                        <div class="col-md-2">
+                            <label>Filter Type</label>
+                            <select class="form-select" id="attFilterType" onchange="updateAttFilterUI()">
+                                <option value="date-range">Date Range</option>
+                                <option value="month">Month</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label id="attDateLabel">Start Date</label>
+                            <input type="date" class="form-control" id="attStartDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label id="attEndLabel">End Date</label>
+                            <input type="date" class="form-control" id="attEndDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="loadAttendanceReport()">Generate Report</button>
                         </div>
                     </div>
 
@@ -400,63 +415,146 @@
             });
         }
 
-        async function loadAttendanceRecords() {
+        function updateAttFilterUI() {
+            const filterType = document.getElementById('attFilterType').value;
+            const dateLabel = document.getElementById('attDateLabel');
+            const endLabel = document.getElementById('attEndLabel');
+            const startInput = document.getElementById('attStartDate');
+            const endInput = document.getElementById('attEndDate');
+
+            if (filterType === 'month') {
+                dateLabel.textContent = 'Year-Month';
+                endLabel.textContent = '';
+                startInput.type = 'month';
+                startInput.value = new Date().toISOString().slice(0, 7);
+                endInput.style.display = 'none';
+            } else {
+                dateLabel.textContent = 'Start Date';
+                endLabel.textContent = 'End Date';
+                startInput.type = 'date';
+                startInput.value = new Date().toISOString().split('T')[0];
+                endInput.style.display = 'block';
+                endInput.type = 'date';
+                endInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+
+        async function loadAttendanceReport() {
             const school = document.getElementById('attSchool').value;
             const batch = document.getElementById('attBatch').value;
-            const date = document.getElementById('attDate').value;
+            const filterType = document.getElementById('attFilterType').value;
+            let startDate = document.getElementById('attStartDate').value;
+            let endDate = document.getElementById('attEndDate').value;
 
-            if (!school || !batch || !date) {
-                document.getElementById('attendanceResults').innerHTML = '<p class="text-muted">Select all fields to view attendance</p>';
+            if (!school || !batch || !startDate) {
+                alert('Please select school, batch, and date(s)');
                 return;
             }
 
-            const res = await fetch(`/api/attendance/by-batch?schoolName=${school}&batchNumber=${batch}&date=${date}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (!res.ok) {
-                document.getElementById('attendanceResults').innerHTML = '<p class="text-danger">Error loading attendance</p>';
-                return;
-            }
-
-            const records = await res.json();
-            
-            if (!records.some(r => r.attendance)) {
-                document.getElementById('attendanceResults').innerHTML = '<p class="text-muted mt-3">No attendance records found for this date</p>';
-                return;
-            }
-
-            let html = '<div class="alert alert-info mb-3">📋 All Attendance Records (Admin & Teacher Marked)</div>';
-            html += '<table class="table table-striped"><thead class="table-primary"><tr><th>Student Name</th><th>Status</th><th>Marked By</th><th>Role</th><th>Marked At</th></tr></thead><tbody>';
-            
-            records.forEach(r => {
-                if (r.attendance) {
-                    const status = r.attendance.status === 'present' ? 
-                        '<span class="badge bg-success">Present</span>' : 
-                        '<span class="badge bg-danger">Absent</span>';
-                    const markedAt = new Date(r.attendance.markedAt).toLocaleString();
-                    const isAdmin = r.attendance.markedBy && r.attendance.markedBy.includes('Admin');
-                    const roleBadge = isAdmin ? 
-                        '<span class="badge bg-primary">Admin</span>' : 
-                        '<span class="badge bg-warning text-dark">Teacher</span>';
-                    
-                    html += `<tr>
-                        <td><strong>${r.name}</strong></td>
-                        <td>${status}</td>
-                        <td>${r.attendance.markedBy}</td>
-                        <td>${roleBadge}</td>
-                        <td>${markedAt}</td>
-                    </tr>`;
+            // Convert month format to date range if needed
+            if (filterType === 'month') {
+                const [year, month] = startDate.split('-');
+                startDate = `${year}-${month}-01`;
+                // Get last day of month
+                const lastDay = new Date(year, month, 0).getDate();
+                endDate = `${year}-${month}-${lastDay}`;
+            } else {
+                if (!endDate) {
+                    alert('Please select end date');
+                    return;
                 }
-            });
-            html += '</tbody></table>';
+            }
 
-            document.getElementById('attendanceResults').innerHTML = html;
+            try {
+                const res = await fetch(
+                    `/api/attendance/summary?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+
+                const data = await res.json();
+
+                if (!data.summary || data.summary.length === 0) {
+                    document.getElementById('attendanceResults').innerHTML = 
+                        '<div class="alert alert-warning">No attendance records found for the selected period</div>';
+                    return;
+                }
+
+                const stats = data.stats;
+                let html = `
+                    <div class="alert alert-info">
+                        <h6>📊 Summary Statistics</h6>
+                        <div class="row">
+                            <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
+                            <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
+                            <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
+                            <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
+                        </div>
+                        <p class="mt-2 mb-0"><strong>Period:</strong> ${stats.dateRange.start} to ${stats.dateRange.end}</p>
+                    </div>
+
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Student Name</th>
+                                <th class="text-center">Total Classes</th>
+                                <th class="text-center">Marked</th>
+                                <th class="text-center">Present</th>
+                                <th class="text-center">Absent</th>
+                                <th class="text-center">Attendance %</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                data.summary.forEach(student => {
+                    const percentage = parseFloat(student.percentage);
+                    let percentBadge = 'bg-danger';
+                    if (percentage >= 75) {
+                        percentBadge = 'bg-success';
+                    } else if (percentage >= 50) {
+                        percentBadge = 'bg-warning';
+                    }
+
+                    const markedBy = student.markedBy || '-';
+
+                    html += `
+                        <tr>
+                            <td>${student.name}</td>
+                            <td class="text-center"><strong>${student.totalClasses}</strong></td>
+                            <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
+                            <td class="text-center"><span class="badge bg-success">${student.present}</span></td>
+                            <td class="text-center"><span class="badge bg-danger">${student.absent}</span></td>
+                            <td class="text-center"><span class="badge ${percentBadge}">${student.percentage}%</span></td>
+                            <td>${markedBy}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                    <button class="btn btn-secondary mt-3" onclick="printAttReport()">🖨️ Print Report</button>
+                `;
+
+                document.getElementById('attendanceResults').innerHTML = html;
+
+            } catch (error) {
+                console.error('Error loading report:', error);
+                alert('Failed to load report');
+            }
+        }
+
+        function printAttReport() {
+            window.print();
         }
 
         loadStats();
         loadStudents();
         loadUsers();
+        updateAttFilterUI();
     </script>
 </body>
 </html>

@@ -21,7 +21,10 @@
                 <button class="nav-link active" id="markTab" onclick="showTab('mark')">Mark Attendance</button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" id="viewTab" onclick="showTab('view')">View Attendance</button>
+                <button class="nav-link" id="viewTab" onclick="showTab('view')">View Daily</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="reportTab" onclick="showTab('report')">View Report</button>
             </li>
         </ul>
 
@@ -59,7 +62,7 @@
         <div id="viewSection" style="display: none;">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">View Attendance Records</h5>
+                    <h5 class="card-title">View Attendance Records (Daily)</h5>
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
@@ -88,14 +91,72 @@
                 </div>
             </div>
         </div>
+
+        <!-- VIEW REPORT (SUMMARY) -->
+        <div id="reportSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">📊 Attendance Report (Summary)</h5>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-2">
+                            <label>School</label>
+                            <select class="form-select" id="reportSchool" onchange="loadReportBatches()">
+                                <option value="">Select School</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label>Batch</label>
+                            <select class="form-select" id="reportBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label>Filter Type</label>
+                            <select class="form-select" id="filterType" onchange="updateFilterUI()">
+                                <option value="date-range">Date Range</option>
+                                <option value="month">Month</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label id="dateLabel">Start Date</label>
+                            <input type="date" class="form-control" id="reportStartDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label id="endLabel">End Date</label>
+                            <input type="date" class="form-control" id="reportEndDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="viewReport()">Generate Report</button>
+                        </div>
+                    </div>
+
+                    <div id="reportResults"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // DEBUG: Check authentication on page load
+        console.log('🔐 TEACHER DASHBOARD INITIALIZATION');
+        console.log('================================');
+        
         const token = localStorage.getItem('token');
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         
-        if (!token) window.location.href = '/';
+        console.log('✅ Token exists:', !!token);
+        console.log('✅ User found:', !!user.name);
+        
+        if (!token) {
+            console.error('❌ NO TOKEN FOUND - REDIRECTING TO LOGIN');
+            console.error('   User must login first at http://localhost:3000');
+            window.location.href = '/';
+        }
+        
+        console.log('👤 Logged in as:', user.name, `(${user.role})`);
         
         document.getElementById('userName').textContent = user.name;
         
@@ -105,84 +166,158 @@
         document.getElementById('viewDate').value = today;
 
         let currentStudents = [];
+        
+        console.log('📍 Current page:', window.location.pathname);
+        console.log('🚀 Loading initial data...');
+        console.log('================================');
 
         // TAB SWITCHING
         function showTab(tab) {
             if (tab === 'mark') {
                 document.getElementById('markSection').style.display = 'block';
                 document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('markTab').classList.add('active');
                 document.getElementById('viewTab').classList.remove('active');
-            } else {
+                document.getElementById('reportTab').classList.remove('active');
+            } else if (tab === 'view') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'block';
+                document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
+                document.getElementById('reportTab').classList.remove('active');
+            } else if (tab === 'report') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'block';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('reportTab').classList.add('active');
+                loadReportSchools();
             }
         }
 
         // LOAD SCHOOLS
         async function loadSchools() {
             try {
+                console.log('📚 Loading schools...');
                 const res = await fetch('/api/students/schools', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
+                if (!res.ok) {
+                    console.error('❌ API Error:', res.status, res.statusText);
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
                 const schools = await res.json();
+                console.log('✅ Schools loaded:', schools);
                 
                 const markSchool = document.getElementById('markSchool');
                 const viewSchool = document.getElementById('viewSchool');
                 
+                if (!markSchool || !viewSchool) {
+                    console.error('❌ School dropdowns not found in DOM');
+                    return;
+                }
+                
                 markSchool.innerHTML = '<option value="">Select School</option>';
                 viewSchool.innerHTML = '<option value="">Select School</option>';
+                
+                if (!schools || schools.length === 0) {
+                    console.warn('⚠️ No schools found');
+                    markSchool.innerHTML += '<option disabled>No schools available</option>';
+                    viewSchool.innerHTML += '<option disabled>No schools available</option>';
+                    return;
+                }
                 
                 schools.forEach(school => {
                     markSchool.innerHTML += `<option value="${school}">${school}</option>`;
                     viewSchool.innerHTML += `<option value="${school}">${school}</option>`;
                 });
+                console.log('✅ School dropdowns populated');
             } catch (error) {
-                console.error('Error loading schools:', error);
+                console.error('❌ Error loading schools:', error);
+                alert('Error loading schools: ' + error.message);
             }
         }
 
         // LOAD MARK BATCHES
         async function loadMarkBatches() {
             const school = document.getElementById('markSchool').value;
-            if (!school) return;
+            if (!school) {
+                console.warn('⚠️ No school selected');
+                return;
+            }
 
             try {
+                console.log('📚 Loading batches for:', school);
                 const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
                 const batches = await res.json();
+                console.log('✅ Batches loaded:', batches);
                 
                 const select = document.getElementById('markBatch');
                 select.innerHTML = '<option value="">Select Batch</option>';
+                
+                if (!batches || batches.length === 0) {
+                    console.warn('⚠️ No batches found for school:', school);
+                    select.innerHTML += '<option disabled>No batches available</option>';
+                    return;
+                }
+                
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
             } catch (error) {
-                console.error('Error loading batches:', error);
+                console.error('❌ Error loading batches:', error);
+                alert('Error loading batches: ' + error.message);
             }
         }
 
         // LOAD VIEW BATCHES
         async function loadViewBatches() {
             const school = document.getElementById('viewSchool').value;
-            if (!school) return;
+            if (!school) {
+                console.warn('⚠️ No school selected');
+                return;
+            }
 
             try {
+                console.log('📚 Loading view batches for:', school);
                 const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
                 const batches = await res.json();
+                console.log('✅ View batches loaded:', batches);
                 
                 const select = document.getElementById('viewBatch');
                 select.innerHTML = '<option value="">Select Batch</option>';
+                
+                if (!batches || batches.length === 0) {
+                    console.warn('⚠️ No batches found');
+                    select.innerHTML += '<option disabled>No batches available</option>';
+                    return;
+                }
+                
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
             } catch (error) {
-                console.error('Error loading batches:', error);
+                console.error('❌ Error loading view batches:', error);
+                alert('Error loading batches: ' + error.message);
             }
         }
 
@@ -191,15 +326,25 @@
             const school = document.getElementById('markSchool').value;
             const batch = document.getElementById('markBatch').value;
             
-            if (!school || !batch) return;
+            if (!school || !batch) {
+                console.warn('⚠️ School or batch not selected');
+                return;
+            }
 
             try {
+                console.log('👥 Loading students for marking:', school, batch);
                 const res = await fetch(`/api/students?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                currentStudents = await res.json();
                 
-                if (currentStudents.length === 0) {
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
+                currentStudents = await res.json();
+                console.log('✅ Students loaded:', currentStudents.length);
+                
+                if (!currentStudents || currentStudents.length === 0) {
                     document.getElementById('studentsTable').innerHTML = 
                         '<div class="alert alert-warning">No students found in this batch</div>';
                     return;
@@ -244,9 +389,10 @@
                 `;
 
                 document.getElementById('studentsTable').innerHTML = html;
+                console.log('✅ Students table rendered');
             } catch (error) {
-                console.error('Error loading students:', error);
-                alert('Error loading students');
+                console.error('❌ Error loading students:', error);
+                alert('Error loading students: ' + error.message);
             }
         }
 
@@ -261,18 +407,20 @@
                 return;
             }
 
+            console.log('📤 Submitting attendance for:', { school, batch, date });
+
             const attendanceRecords = [];
             
             currentStudents.forEach(student => {
                 const presentRadio = document.querySelector(`input[name="status_${student._id}"][value="present"]`);
                 const absentRadio = document.querySelector(`input[name="status_${student._id}"][value="absent"]`);
 
-                if (presentRadio.checked) {
+                if (presentRadio && presentRadio.checked) {
                     attendanceRecords.push({
                         studentId: student._id,
                         status: 'present'
                     });
-                } else if (absentRadio.checked) {
+                } else if (absentRadio && absentRadio.checked) {
                     attendanceRecords.push({
                         studentId: student._id,
                         status: 'absent'
@@ -280,16 +428,18 @@
                 }
             });
 
+            console.log('✅ Records to submit:', attendanceRecords.length);
+
             if (attendanceRecords.length === 0) {
                 alert('Please mark at least one student');
                 return;
             }
 
             if (attendanceRecords.length < currentStudents.length) {
-                const confirm = window.confirm(
+                const confirmSubmit = window.confirm(
                     `You have marked ${attendanceRecords.length} out of ${currentStudents.length} students. Submit anyway?`
                 );
-                if (!confirm) return;
+                if (!confirmSubmit) return;
             }
 
             try {
@@ -350,15 +500,22 @@
                 return;
             }
 
+            console.log('👀 Viewing attendance for:', { school, batch, date });
+
             try {
                 const res = await fetch(
                     `/api/attendance/by-batch?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
-                const students = await res.json();
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
 
-                if (students.length === 0) {
+                const students = await res.json();
+                console.log('✅ Attendance records loaded:', students.length);
+
+                if (!students || students.length === 0) {
                     document.getElementById('viewResults').innerHTML = 
                         '<div class="alert alert-warning">No students found in this batch</div>';
                     return;
@@ -432,8 +589,202 @@
             window.location.href = '/';
         }
 
+        // REPORT SECTION FUNCTIONS
+        async function loadReportSchools() {
+            try {
+                console.log('📚 Loading report schools...');
+                const res = await fetch('/api/students/schools', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
+                const schools = await res.json();
+                console.log('✅ Report schools loaded:', schools);
+                
+                const select = document.getElementById('reportSchool');
+                if (!select) {
+                    console.error('❌ reportSchool element not found');
+                    return;
+                }
+                
+                select.innerHTML = '<option value="">Select School</option>';
+                
+                if (!schools || schools.length === 0) {
+                    console.warn('⚠️ No schools found');
+                    select.innerHTML += '<option disabled>No schools available</option>';
+                    return;
+                }
+                
+                schools.forEach(school => {
+                    select.innerHTML += `<option value="${school}">${school}</option>`;
+                });
+            } catch (error) {
+                console.error('❌ Error loading report schools:', error);
+            }
+        }
+
+        async function loadReportBatches() {
+            const school = document.getElementById('reportSchool').value;
+            if (!school) return;
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const batches = await res.json();
+                
+                const select = document.getElementById('reportBatch');
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        function updateFilterUI() {
+            const filterType = document.getElementById('filterType').value;
+            const dateLabel = document.getElementById('dateLabel');
+            const endLabel = document.getElementById('endLabel');
+            const startInput = document.getElementById('reportStartDate');
+            const endInput = document.getElementById('reportEndDate');
+
+            if (filterType === 'month') {
+                dateLabel.textContent = 'Year-Month';
+                endLabel.textContent = '';
+                startInput.type = 'month';
+                startInput.value = new Date().toISOString().slice(0, 7);
+                endInput.style.display = 'none';
+            } else {
+                dateLabel.textContent = 'Start Date';
+                endLabel.textContent = 'End Date';
+                startInput.type = 'date';
+                startInput.value = new Date().toISOString().split('T')[0];
+                endInput.style.display = 'block';
+                endInput.type = 'date';
+                endInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+
+        async function viewReport() {
+            const school = document.getElementById('reportSchool').value;
+            const batch = document.getElementById('reportBatch').value;
+            const filterType = document.getElementById('filterType').value;
+            let startDate = document.getElementById('reportStartDate').value;
+            let endDate = document.getElementById('reportEndDate').value;
+
+            if (!school || !batch || !startDate) {
+                alert('Please select school, batch, and date(s)');
+                return;
+            }
+
+            // Convert month format to date range if needed
+            if (filterType === 'month') {
+                const [year, month] = startDate.split('-');
+                startDate = `${year}-${month}-01`;
+                // Get last day of month
+                const lastDay = new Date(year, month, 0).getDate();
+                endDate = `${year}-${month}-${lastDay}`;
+            } else {
+                if (!endDate) {
+                    alert('Please select end date');
+                    return;
+                }
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/attendance/summary?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+
+                const data = await res.json();
+
+                if (!data.summary || data.summary.length === 0) {
+                    document.getElementById('reportResults').innerHTML = 
+                        '<div class="alert alert-warning">No attendance records found for the selected period</div>';
+                    return;
+                }
+
+                const stats = data.stats;
+                let html = `
+                    <div class="alert alert-info">
+                        <h6>📊 Summary Statistics</h6>
+                        <div class="row">
+                            <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
+                            <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
+                            <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
+                            <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
+                        </div>
+                        <p class="mt-2 mb-0"><strong>Period:</strong> ${stats.dateRange.start} to ${stats.dateRange.end}</p>
+                    </div>
+
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Student Name</th>
+                                <th class="text-center">Total Classes</th>
+                                <th class="text-center">Marked</th>
+                                <th class="text-center">Present</th>
+                                <th class="text-center">Absent</th>
+                                <th class="text-center">Attendance %</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                data.summary.forEach(student => {
+                    const percentage = parseFloat(student.percentage);
+                    let percentBadge = 'bg-danger';
+                    if (percentage >= 75) {
+                        percentBadge = 'bg-success';
+                    } else if (percentage >= 50) {
+                        percentBadge = 'bg-warning';
+                    }
+
+                    const markedBy = student.markedBy || '-';
+
+                    html += `
+                        <tr>
+                            <td>${student.name}</td>
+                            <td class="text-center"><strong>${student.totalClasses}</strong></td>
+                            <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
+                            <td class="text-center"><span class="badge bg-success">${student.present}</span></td>
+                            <td class="text-center"><span class="badge bg-danger">${student.absent}</span></td>
+                            <td class="text-center"><span class="badge ${percentBadge}">${student.percentage}%</span></td>
+                            <td>${markedBy}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                    <button class="btn btn-secondary mt-3" onclick="printReport()">🖨️ Print Report</button>
+                `;
+
+                document.getElementById('reportResults').innerHTML = html;
+
+            } catch (error) {
+                console.error('Error viewing report:', error);
+                alert('Failed to load report');
+            }
+        }
+
+        function printReport() {
+            window.print();
+        }
+
         // Initialize
         loadSchools();
+        updateFilterUI();
     </script>
 </body>
 </html>
