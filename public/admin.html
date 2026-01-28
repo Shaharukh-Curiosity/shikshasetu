@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand">👨‍💼 Admin Dashboard</span>
+            <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="text-muted">Total Students</h6>
+                        <h2 id="totalStudents">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="text-muted">Active Students</h6>
+                        <h2 id="activeStudents">0</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <button class="nav-link active" onclick="showTab('students')">Students</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('users')">Users</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('attendance')">Attendance Report</button>
+            </li>
+        </ul>
+
+        <div id="studentsTab">
+            <button class="btn btn-primary mb-3" onclick="showAddStudentModal()">Add Student</button>
+            <div id="studentsList"></div>
+        </div>
+
+        <div id="usersTab" style="display: none;">
+            <button class="btn btn-primary mb-3" onclick="showAddUserModal()">Add User</button>
+            <div id="usersList"></div>
+        </div>
+
+        <div id="attendanceTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">📊 Attendance Records (View All)</h5>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>School</label>
+                            <select class="form-select" id="attSchool" onchange="loadAttBatches()">
+                                <option value="">Select School</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="attBatch" onchange="loadAttendanceRecords()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="attDate" onchange="loadAttendanceRecords()">
+                        </div>
+                    </div>
+
+                    <div id="attendanceResults"></div>
+                </div>
+            </div>
+        </div>
+
+    <!-- Add Student Modal -->
+    <div class="modal" id="studentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Add Student</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('studentModal')"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="studentForm">
+                        <input type="text" class="form-control mb-2" placeholder="Name" id="sName" required>
+                        <input type="number" class="form-control mb-2" placeholder="Age" id="sAge" required>
+                        <input type="text" class="form-control mb-2" placeholder="School Name" id="sSchool" required>
+                        <input type="text" class="form-control mb-2" placeholder="Mobile" id="sMobile" required>
+                        <input type="text" class="form-control mb-2" placeholder="Standard" id="sStandard" required>
+                        <input type="text" class="form-control mb-2" placeholder="Batch Number" id="sBatch" required>
+                        <button type="submit" class="btn btn-success">Add Student</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Student Modal -->
+    <div class="modal" id="editStudentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Edit Student</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('editStudentModal')"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editStudentForm">
+                        <input type="hidden" id="editStudentId">
+                        <input type="text" class="form-control mb-2" placeholder="Name" id="editSName" required>
+                        <input type="number" class="form-control mb-2" placeholder="Age" id="editSAge">
+                        <input type="text" class="form-control mb-2" placeholder="School Name" id="editSSchool" required>
+                        <input type="text" class="form-control mb-2" placeholder="Mobile" id="editSMobile">
+                        <input type="text" class="form-control mb-2" placeholder="Standard" id="editSStandard">
+                        <input type="text" class="form-control mb-2" placeholder="Batch Number" id="editSBatch" required>
+                        <button type="submit" class="btn btn-primary">Update Student</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div class="modal" id="userModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Add Teacher/Admin</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('userModal')"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="userForm">
+                        <input type="text" class="form-control mb-2" placeholder="Name" id="uName" required>
+                        <input type="email" class="form-control mb-2" placeholder="Email" id="uEmail" required>
+                        <input type="password" class="form-control mb-2" placeholder="Password" id="uPass" required>
+                        <select class="form-select mb-2" id="uRole" required>
+                            <option value="teacher">Teacher</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <button type="submit" class="btn btn-success">Add User</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        function showTab(tab) {
+            if (tab === 'students') {
+                document.getElementById('studentsTab').style.display = 'block';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+            } else if (tab === 'users') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'block';
+                document.getElementById('attendanceTab').style.display = 'none';
+            } else if (tab === 'attendance') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'block';
+                loadAttSchools();
+            }
+        }
+
+        function showAddStudentModal() {
+            new bootstrap.Modal(document.getElementById('studentModal')).show();
+        }
+
+        function showAddUserModal() {
+            new bootstrap.Modal(document.getElementById('userModal')).show();
+        }
+
+        function closeModal(id) {
+            bootstrap.Modal.getInstance(document.getElementById(id)).hide();
+        }
+
+        async function loadStats() {
+            const res = await fetch('/api/students/stats/dashboard', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            document.getElementById('totalStudents').textContent = data.total;
+            document.getElementById('activeStudents').textContent = data.active;
+        }
+
+        async function loadStudents() {
+            const res = await fetch('/api/students', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const students = await res.json();
+            
+            let html = '<table class="table"><thead><tr><th>Name</th><th>School</th><th>Batch</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
+            students.forEach(s => {
+                html += `<tr>
+                    <td>${s.name}</td>
+                    <td>${s.schoolName}</td>
+                    <td>${s.batchNumber}</td>
+                    <td>${s.mobile || '-'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.age || ''}', '${s.schoolName}', '${s.mobile || ''}', '${s.standard || ''}', '${s.batchNumber}')">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s._id}')">Delete</button>
+                    </td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('studentsList').innerHTML = html;
+        }
+
+        async function loadUsers() {
+            const res = await fetch('/api/users', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const users = await res.json();
+            
+            let html = '<table class="table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr></thead><tbody>';
+            users.forEach(u => {
+                html += `<tr>
+                    <td>${u.name}</td>
+                    <td>${u.email}</td>
+                    <td>${u.role}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="deleteUser('${u._id}')">Delete</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('usersList').innerHTML = html;
+        }
+
+        document.getElementById('studentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('sName').value,
+                age: document.getElementById('sAge').value,
+                schoolName: document.getElementById('sSchool').value,
+                mobile: document.getElementById('sMobile').value,
+                standard: document.getElementById('sStandard').value,
+                batchNumber: document.getElementById('sBatch').value
+            };
+            
+            const res = await fetch('/api/students', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (res.ok) {
+                alert('Student added successfully!');
+                closeModal('studentModal');
+                e.target.reset();
+                loadStudents();
+                loadStats();
+            } else {
+                alert('Error adding student');
+            }
+        });
+
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('uName').value,
+                email: document.getElementById('uEmail').value,
+                password: document.getElementById('uPass').value,
+                role: document.getElementById('uRole').value
+            };
+            
+            const res = await fetch('/api/users', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (res.ok) {
+                alert('User added successfully!');
+                closeModal('userModal');
+                e.target.reset();
+                loadUsers();
+            } else {
+                alert('Error adding user');
+            }
+        });
+
+        // Edit Student Functions
+        function editStudent(id, name, age, school, mobile, standard, batch) {
+            document.getElementById('editStudentId').value = id;
+            document.getElementById('editSName').value = name;
+            document.getElementById('editSAge').value = age;
+            document.getElementById('editSSchool').value = school;
+            document.getElementById('editSMobile').value = mobile;
+            document.getElementById('editSStandard').value = standard;
+            document.getElementById('editSBatch').value = batch;
+            new bootstrap.Modal(document.getElementById('editStudentModal')).show();
+        }
+
+        document.getElementById('editStudentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editStudentId').value;
+            const data = {
+                name: document.getElementById('editSName').value,
+                age: document.getElementById('editSAge').value,
+                schoolName: document.getElementById('editSSchool').value,
+                mobile: document.getElementById('editSMobile').value,
+                standard: document.getElementById('editSStandard').value,
+                batchNumber: document.getElementById('editSBatch').value
+            };
+            
+            const res = await fetch(`/api/students/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+            
+            if (res.ok) {
+                alert('Student updated successfully!');
+                closeModal('editStudentModal');
+                e.target.reset();
+                loadStudents();
+                loadStats();
+            } else {
+                const error = await res.json();
+                alert('Error updating student: ' + (error.message || 'Unknown error'));
+            }
+        });
+
+        async function deleteStudent(id) {
+            if (!confirm('Delete this student?')) return;
+            await fetch(`/api/students/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            loadStudents();
+            loadStats();
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Delete this user?')) return;
+            await fetch(`/api/users/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            loadUsers();
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+
+        // ===== ATTENDANCE FUNCTIONS =====
+        async function loadAttSchools() {
+            const res = await fetch('/api/students/schools', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const schools = await res.json();
+            const select = document.getElementById('attSchool');
+            select.innerHTML = '<option value="">Select School</option>';
+            schools.forEach(s => {
+                select.innerHTML += `<option value="${s}">${s}</option>`;
+            });
+        }
+
+        async function loadAttBatches() {
+            const school = document.getElementById('attSchool').value;
+            if (!school) {
+                document.getElementById('attBatch').innerHTML = '<option value="">Select Batch</option>';
+                return;
+            }
+            
+            const res = await fetch(`/api/students/batches/${school}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const batches = await res.json();
+            const select = document.getElementById('attBatch');
+            select.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(b => {
+                select.innerHTML += `<option value="${b}">${b}</option>`;
+            });
+        }
+
+        async function loadAttendanceRecords() {
+            const school = document.getElementById('attSchool').value;
+            const batch = document.getElementById('attBatch').value;
+            const date = document.getElementById('attDate').value;
+
+            if (!school || !batch || !date) {
+                document.getElementById('attendanceResults').innerHTML = '<p class="text-muted">Select all fields to view attendance</p>';
+                return;
+            }
+
+            const res = await fetch(`/api/attendance/by-batch?schoolName=${school}&batchNumber=${batch}&date=${date}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!res.ok) {
+                document.getElementById('attendanceResults').innerHTML = '<p class="text-danger">Error loading attendance</p>';
+                return;
+            }
+
+            const records = await res.json();
+            
+            if (!records.some(r => r.attendance)) {
+                document.getElementById('attendanceResults').innerHTML = '<p class="text-muted mt-3">No attendance records found for this date</p>';
+                return;
+            }
+
+            let html = '<div class="alert alert-info mb-3">📋 All Attendance Records (Admin & Teacher Marked)</div>';
+            html += '<table class="table table-striped"><thead class="table-primary"><tr><th>Student Name</th><th>Status</th><th>Marked By</th><th>Role</th><th>Marked At</th></tr></thead><tbody>';
+            
+            records.forEach(r => {
+                if (r.attendance) {
+                    const status = r.attendance.status === 'present' ? 
+                        '<span class="badge bg-success">Present</span>' : 
+                        '<span class="badge bg-danger">Absent</span>';
+                    const markedAt = new Date(r.attendance.markedAt).toLocaleString();
+                    const isAdmin = r.attendance.markedBy && r.attendance.markedBy.includes('Admin');
+                    const roleBadge = isAdmin ? 
+                        '<span class="badge bg-primary">Admin</span>' : 
+                        '<span class="badge bg-warning text-dark">Teacher</span>';
+                    
+                    html += `<tr>
+                        <td><strong>${r.name}</strong></td>
+                        <td>${status}</td>
+                        <td>${r.attendance.markedBy}</td>
+                        <td>${roleBadge}</td>
+                        <td>${markedAt}</td>
+                    </tr>`;
+                }
+            });
+            html += '</tbody></table>';
+
+            document.getElementById('attendanceResults').innerHTML = html;
+        }
+
+        loadStats();
+        loadStudents();
+        loadUsers();
+    </script>
+</body>
+</html>

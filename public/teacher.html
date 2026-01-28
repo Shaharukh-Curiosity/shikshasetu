@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand">👨‍🏫 Teacher Dashboard</span>
+            <span class="text-white" id="userName"></span>
+            <button class="btn btn-outline-light btn-sm" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <ul class="nav nav-tabs mb-4">
+            <li class="nav-item">
+                <button class="nav-link active" id="markTab" onclick="showTab('mark')">Mark Attendance</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="viewTab" onclick="showTab('view')">View Attendance</button>
+            </li>
+        </ul>
+
+        <!-- MARK ATTENDANCE -->
+        <div id="markSection">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Mark Daily Attendance</h5>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>School</label>
+                            <select class="form-select" id="markSchool" onchange="loadMarkBatches()">
+                                <option value="">Select School</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="markBatch" onchange="loadMarkStudents()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="markDate" required>
+                        </div>
+                    </div>
+
+                    <div id="studentsTable"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW ATTENDANCE -->
+        <div id="viewSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">View Attendance Records</h5>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>School</label>
+                            <select class="form-select" id="viewSchool" onchange="loadViewBatches()">
+                                <option value="">Select School</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="viewBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="viewDate" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="viewAttendance()">View</button>
+                        </div>
+                    </div>
+
+                    <div id="viewResults"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        
+        if (!token) window.location.href = '/';
+        
+        document.getElementById('userName').textContent = user.name;
+        
+        // Set today's date
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('markDate').value = today;
+        document.getElementById('viewDate').value = today;
+
+        let currentStudents = [];
+
+        // TAB SWITCHING
+        function showTab(tab) {
+            if (tab === 'mark') {
+                document.getElementById('markSection').style.display = 'block';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('markTab').classList.add('active');
+                document.getElementById('viewTab').classList.remove('active');
+            } else {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'block';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.add('active');
+            }
+        }
+
+        // LOAD SCHOOLS
+        async function loadSchools() {
+            try {
+                const res = await fetch('/api/students/schools', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const schools = await res.json();
+                
+                const markSchool = document.getElementById('markSchool');
+                const viewSchool = document.getElementById('viewSchool');
+                
+                markSchool.innerHTML = '<option value="">Select School</option>';
+                viewSchool.innerHTML = '<option value="">Select School</option>';
+                
+                schools.forEach(school => {
+                    markSchool.innerHTML += `<option value="${school}">${school}</option>`;
+                    viewSchool.innerHTML += `<option value="${school}">${school}</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading schools:', error);
+            }
+        }
+
+        // LOAD MARK BATCHES
+        async function loadMarkBatches() {
+            const school = document.getElementById('markSchool').value;
+            if (!school) return;
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const batches = await res.json();
+                
+                const select = document.getElementById('markBatch');
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        // LOAD VIEW BATCHES
+        async function loadViewBatches() {
+            const school = document.getElementById('viewSchool').value;
+            if (!school) return;
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const batches = await res.json();
+                
+                const select = document.getElementById('viewBatch');
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        // LOAD STUDENTS FOR MARKING
+        async function loadMarkStudents() {
+            const school = document.getElementById('markSchool').value;
+            const batch = document.getElementById('markBatch').value;
+            
+            if (!school || !batch) return;
+
+            try {
+                const res = await fetch(`/api/students?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                currentStudents = await res.json();
+                
+                if (currentStudents.length === 0) {
+                    document.getElementById('studentsTable').innerHTML = 
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                let html = `
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Mobile</th>
+                                <th>Standard</th>
+                                <th width="100">Present</th>
+                                <th width="100">Absent</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                currentStudents.forEach(student => {
+                    html += `
+                        <tr>
+                            <td>${student.name}</td>
+                            <td>${student.mobile || '-'}</td>
+                            <td>${student.standard || '-'}</td>
+                            <td class="text-center">
+                                <input type="radio" name="status_${student._id}" value="present" class="form-check-input">
+                            </td>
+                            <td class="text-center">
+                                <input type="radio" name="status_${student._id}" value="absent" class="form-check-input">
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    <button class="btn btn-success btn-lg mt-3" onclick="submitAttendance()">
+                        Submit Attendance
+                    </button>
+                `;
+
+                document.getElementById('studentsTable').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading students:', error);
+                alert('Error loading students');
+            }
+        }
+
+        // SUBMIT ATTENDANCE
+        async function submitAttendance() {
+            const school = document.getElementById('markSchool').value;
+            const batch = document.getElementById('markBatch').value;
+            const date = document.getElementById('markDate').value;
+
+            if (!school || !batch || !date) {
+                alert('Please select school, batch, and date');
+                return;
+            }
+
+            const attendanceRecords = [];
+            
+            currentStudents.forEach(student => {
+                const presentRadio = document.querySelector(`input[name="status_${student._id}"][value="present"]`);
+                const absentRadio = document.querySelector(`input[name="status_${student._id}"][value="absent"]`);
+
+                if (presentRadio.checked) {
+                    attendanceRecords.push({
+                        studentId: student._id,
+                        status: 'present'
+                    });
+                } else if (absentRadio.checked) {
+                    attendanceRecords.push({
+                        studentId: student._id,
+                        status: 'absent'
+                    });
+                }
+            });
+
+            if (attendanceRecords.length === 0) {
+                alert('Please mark at least one student');
+                return;
+            }
+
+            if (attendanceRecords.length < currentStudents.length) {
+                const confirm = window.confirm(
+                    `You have marked ${attendanceRecords.length} out of ${currentStudents.length} students. Submit anyway?`
+                );
+                if (!confirm) return;
+            }
+
+            try {
+                const res = await fetch('/api/attendance/mark', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        date: date,
+                        attendanceRecords: attendanceRecords
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    alert(`✅ Attendance marked successfully!\n\nMarked: ${data.results.successful}\nErrors: ${data.results.errors}`);
+                    loadMarkStudents(); // Reload
+                } else {
+                    alert('❌ Error: ' + data.message);
+                }
+            } catch (error) {
+                console.error('Error submitting attendance:', error);
+                alert('Failed to submit attendance');
+            }
+        }
+
+        // VIEW ATTENDANCE
+        async function viewAttendance() {
+            const school = document.getElementById('viewSchool').value;
+            const batch = document.getElementById('viewBatch').value;
+            const date = document.getElementById('viewDate').value;
+
+            if (!school || !batch || !date) {
+                alert('Please select school, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/attendance/by-batch?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+
+                const students = await res.json();
+
+                if (students.length === 0) {
+                    document.getElementById('viewResults').innerHTML = 
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                let present = 0, absent = 0, notMarked = 0;
+
+                let html = `
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Mobile</th>
+                                <th>Status</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                students.forEach(student => {
+                    let statusBadge, markedBy;
+
+                    if (student.attendance) {
+                        if (student.attendance.status === 'present') {
+                            statusBadge = '<span class="badge bg-success">PRESENT</span>';
+                            present++;
+                        } else {
+                            statusBadge = '<span class="badge bg-danger">ABSENT</span>';
+                            absent++;
+                        }
+                        markedBy = student.attendance.markedBy;
+                    } else {
+                        statusBadge = '<span class="badge bg-secondary">NOT MARKED</span>';
+                        markedBy = '-';
+                        notMarked++;
+                    }
+
+                    html += `
+                        <tr>
+                            <td>${student.name}</td>
+                            <td>${student.mobile || '-'}</td>
+                            <td>${statusBadge}</td>
+                            <td>${markedBy}</td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table>';
+
+                const summary = `
+                    <div class="alert alert-info">
+                        <strong>📊 Summary:</strong> 
+                        Present: <span class="badge bg-success">${present}</span> | 
+                        Absent: <span class="badge bg-danger">${absent}</span> | 
+                        Not Marked: <span class="badge bg-secondary">${notMarked}</span>
+                    </div>
+                `;
+
+                document.getElementById('viewResults').innerHTML = summary + html;
+
+            } catch (error) {
+                console.error('Error viewing attendance:', error);
+                alert('Failed to load attendance');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+
+        // Initialize
+        loadSchools();
+    </script>
+</body>
+</html>
