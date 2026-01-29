@@ -24,6 +24,9 @@
                 <button class="nav-link" id="viewTab" onclick="showTab('view')">View Daily</button>
             </li>
             <li class="nav-item">
+                <button class="nav-link" id="studentsTab" onclick="showTab('students')">View Students</button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link" id="reportTab" onclick="showTab('report')">View Report</button>
             </li>
         </ul>
@@ -88,6 +91,32 @@
                     </div>
 
                     <div id="viewResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW STUDENTS -->
+        <div id="studentsSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">👥 View All Students</h5>
+                    
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label>Region</label>
+                            <select class="form-select" id="studentsRegion" onchange="loadStudentsBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Batch</label>
+                            <select class="form-select" id="studentsBatch" onchange="loadStudentsData()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="studentsResults"></div>
                 </div>
             </div>
         </div>
@@ -176,25 +205,41 @@
             if (tab === 'mark') {
                 document.getElementById('markSection').style.display = 'block';
                 document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('markTab').classList.add('active');
                 document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'view') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'block';
+                document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
+                document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 loadRegions();
+            } else if (tab === 'students') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'block';
+                document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.add('active');
+                document.getElementById('reportTab').classList.remove('active');
+                loadStudentsRegions();
             } else if (tab === 'report') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'block';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.add('active');
                 loadReportRegions();
             }
@@ -353,14 +398,11 @@
                 }
 
                 let html = `
-                    <table class="table table-bordered">
+                    <table class="table table-sm table-striped">
                         <thead class="table-light">
                             <tr>
-                                <th>Name</th>
-                                <th>Mobile</th>
-                                <th>Standard</th>
-                                <th width="100">Present</th>
-                                <th width="100">Absent</th>
+                                <th>Student Name</th>
+                                <th class="text-center">Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -370,13 +412,9 @@
                     html += `
                         <tr>
                             <td>${student.name}</td>
-                            <td>${student.mobile || '-'}</td>
-                            <td>${student.standard || '-'}</td>
                             <td class="text-center">
-                                <input type="radio" name="status_${student._id}" value="present" class="form-check-input">
-                            </td>
-                            <td class="text-center">
-                                <input type="radio" name="status_${student._id}" value="absent" class="form-check-input">
+                                <label class="me-2"><input type="radio" name="status_${student._id}" value="present"> Present</label>
+                                <label><input type="radio" name="status_${student._id}" value="absent"> Absent</label>
                             </td>
                         </tr>
                     `;
@@ -589,6 +627,151 @@
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/';
+        }
+
+        // ===== VIEW STUDENTS FUNCTIONS =====
+        async function loadStudentsRegions() {
+            try {
+                console.log('📚 Loading regions for students view...');
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
+                const regions = await res.json();
+                console.log('✅ Regions loaded:', regions);
+                
+                const select = document.getElementById('studentsRegion');
+                select.innerHTML = '<option value="">Select Region</option>';
+                
+                if (!regions || regions.length === 0) {
+                    console.warn('⚠️ No regions found');
+                    select.innerHTML += '<option disabled>No regions available</option>';
+                    return;
+                }
+                
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+            } catch (error) {
+                console.error('❌ Error loading regions:', error);
+            }
+        }
+
+        async function loadStudentsBatches() {
+            const region = document.getElementById('studentsRegion').value;
+            if (!region) {
+                console.warn('⚠️ No region selected');
+                document.getElementById('studentsBatch').innerHTML = '<option value="">Select Batch</option>';
+                return;
+            }
+
+            try {
+                console.log('📚 Loading batches for region:', region);
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
+                const batches = await res.json();
+                console.log('✅ Batches loaded:', batches);
+                
+                const select = document.getElementById('studentsBatch');
+                select.innerHTML = '<option value="">Select Batch</option>';
+                
+                if (!batches || batches.length === 0) {
+                    console.warn('⚠️ No batches found');
+                    select.innerHTML += '<option disabled>No batches available</option>';
+                    return;
+                }
+                
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+            } catch (error) {
+                console.error('❌ Error loading batches:', error);
+            }
+        }
+
+        async function loadStudentsData() {
+            const region = document.getElementById('studentsRegion').value;
+            const batch = document.getElementById('studentsBatch').value;
+            
+            if (!region || !batch) {
+                console.warn('⚠️ Region or batch not selected');
+                return;
+            }
+
+            try {
+                console.log('👥 Loading students for region:', region, 'batch:', batch);
+                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                
+                const students = await res.json();
+                console.log('✅ Students loaded:', students.length);
+                
+                if (!students || students.length === 0) {
+                    document.getElementById('studentsResults').innerHTML = 
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">
+                        <h6>📊 Total Students: <strong>${students.length}</strong></h6>
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>School</th>
+                                <th>Standard</th>
+                                <th>Mobile</th>
+                                <th>Age</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                students.forEach((student, index) => {
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${student.name}</td>
+                            <td>${student.schoolName || '-'}</td>
+                            <td>${student.standard || '-'}</td>
+                            <td>${student.mobile || '-'}</td>
+                            <td>${student.age || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('studentsResults').innerHTML = html;
+                console.log('✅ Students table rendered');
+            } catch (error) {
+                console.error('❌ Error loading students:', error);
+                document.getElementById('studentsResults').innerHTML = 
+                    `<div class="alert alert-danger">Error loading students: ${error.message}</div>`;
+            }
         }
 
         // REPORT SECTION FUNCTIONS
