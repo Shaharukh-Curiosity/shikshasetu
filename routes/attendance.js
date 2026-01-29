@@ -70,6 +70,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         const attendance = new Attendance({
           studentId: String(student._id),  // Store as STRING
           studentName: student.name,
+          region: student.region,
           schoolName: student.schoolName,
           batchNumber: student.batchNumber,
           date: dateOnly,  // Store as STRING "YYYY-MM-DD"
@@ -126,15 +127,15 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 // ============================================
 router.get('/by-batch', auth, async (req, res) => {
   try {
-    const { schoolName, batchNumber, date, markedByRole } = req.query;
+    const { region, batchNumber, date, markedByRole } = req.query;
 
     console.log('\n======= VIEWING ATTENDANCE =======');
-    console.log('School:', schoolName);
+    console.log('Region:', region);
     console.log('Batch:', batchNumber);
     console.log('Date:', date);
     console.log('Filter by role:', markedByRole || 'none');
 
-    if (!schoolName || !batchNumber || !date) {
+    if (!region || !batchNumber || !date) {
       return res.status(400).json({ message: 'Missing parameters' });
     }
 
@@ -142,10 +143,10 @@ router.get('/by-batch', auth, async (req, res) => {
     const dateOnly = date.substring(0, 10);
     console.log('Date (YYYY-MM-DD):', dateOnly);
 
-    // Get all students in this batch
+    // Get all students in this batch/region
     const students = await User.find({
       role: 'student',
-      schoolName: schoolName,
+      region: region,
       batchNumber: batchNumber,
       isActive: true
     }).lean();
@@ -157,9 +158,9 @@ router.get('/by-batch', auth, async (req, res) => {
       return res.json([]);
     }
 
-    // Get attendance for this school/batch/date
+    // Get attendance for this region/batch/date
     let attendanceQuery = {
-      schoolName: schoolName,
+      region: region,
       batchNumber: batchNumber,
       date: dateOnly
     };
@@ -224,23 +225,23 @@ router.get('/by-batch', auth, async (req, res) => {
 // ============================================
 router.get('/summary', auth, async (req, res) => {
   try {
-    const { schoolName, batchNumber, startDate, endDate, filterType } = req.query;
+    const { region, batchNumber, startDate, endDate, filterType } = req.query;
 
     console.log('\n======= ATTENDANCE SUMMARY =======');
-    console.log('School:', schoolName);
+    console.log('Region:', region);
     console.log('Batch:', batchNumber);
     console.log('Start Date:', startDate);
     console.log('End Date:', endDate);
     console.log('Filter Type:', filterType);
 
-    if (!schoolName || !batchNumber || !startDate || !endDate) {
+    if (!region || !batchNumber || !startDate || !endDate) {
       return res.status(400).json({ message: 'Missing parameters' });
     }
 
-    // Get all students in this batch
+    // Get all students in this batch/region
     const students = await User.find({
       role: 'student',
-      schoolName: schoolName,
+      region: region,
       batchNumber: batchNumber,
       isActive: true
     }).lean();
@@ -254,7 +255,7 @@ router.get('/summary', auth, async (req, res) => {
 
     // Get attendance records for the date range
     const attendanceRecords = await Attendance.find({
-      schoolName: schoolName,
+      region: region,
       batchNumber: batchNumber,
       date: {
         $gte: startDate,

@@ -36,9 +36,9 @@
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
-                            <label>School</label>
-                            <select class="form-select" id="markSchool" onchange="loadMarkBatches()">
-                                <option value="">Select School</option>
+                            <label>Region</label>
+                            <select class="form-select" id="markRegion" onchange="loadMarkBatches()">
+                                <option value="">Select Region</option>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -66,9 +66,9 @@
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
-                            <label>School</label>
-                            <select class="form-select" id="viewSchool" onchange="loadViewBatches()">
-                                <option value="">Select School</option>
+                            <label>Region</label>
+                            <select class="form-select" id="viewRegion" onchange="loadViewBatches()">
+                                <option value="">Select Region</option>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -100,9 +100,9 @@
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-2">
-                            <label>School</label>
-                            <select class="form-select" id="reportSchool" onchange="loadReportBatches()">
-                                <option value="">Select School</option>
+                            <label>Region</label>
+                            <select class="form-select" id="reportRegion" onchange="loadReportBatches()">
+                                <option value="">Select Region</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -180,6 +180,7 @@
                 document.getElementById('markTab').classList.add('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
+                loadRegions();
             } else if (tab === 'view') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'block';
@@ -187,6 +188,7 @@
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
                 document.getElementById('reportTab').classList.remove('active');
+                loadRegions();
             } else if (tab === 'report') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'none';
@@ -194,15 +196,15 @@
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('reportTab').classList.add('active');
-                loadReportSchools();
+                loadReportRegions();
             }
         }
 
-        // LOAD SCHOOLS
-        async function loadSchools() {
+        // LOAD REGIONS
+        async function loadRegions() {
             try {
-                console.log('📚 Loading schools...');
-                const res = await fetch('/api/students/schools', {
+                console.log('📚 Loading regions...');
+                const res = await fetch('/api/students/regions/all', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -211,49 +213,49 @@
                     throw new Error(`API Error: ${res.status}`);
                 }
                 
-                const schools = await res.json();
-                console.log('✅ Schools loaded:', schools);
+                const regions = await res.json();
+                console.log('✅ Regions loaded:', regions);
                 
-                const markSchool = document.getElementById('markSchool');
-                const viewSchool = document.getElementById('viewSchool');
+                const markRegion = document.getElementById('markRegion');
+                const viewRegion = document.getElementById('viewRegion');
                 
-                if (!markSchool || !viewSchool) {
-                    console.error('❌ School dropdowns not found in DOM');
+                if (!markRegion || !viewRegion) {
+                    console.error('❌ Region dropdowns not found in DOM');
                     return;
                 }
                 
-                markSchool.innerHTML = '<option value="">Select School</option>';
-                viewSchool.innerHTML = '<option value="">Select School</option>';
+                markRegion.innerHTML = '<option value="">Select Region</option>';
+                viewRegion.innerHTML = '<option value="">Select Region</option>';
                 
-                if (!schools || schools.length === 0) {
-                    console.warn('⚠️ No schools found');
-                    markSchool.innerHTML += '<option disabled>No schools available</option>';
-                    viewSchool.innerHTML += '<option disabled>No schools available</option>';
+                if (!regions || regions.length === 0) {
+                    console.warn('⚠️ No regions found');
+                    markRegion.innerHTML += '<option disabled>No regions available</option>';
+                    viewRegion.innerHTML += '<option disabled>No regions available</option>';
                     return;
                 }
                 
-                schools.forEach(school => {
-                    markSchool.innerHTML += `<option value="${school}">${school}</option>`;
-                    viewSchool.innerHTML += `<option value="${school}">${school}</option>`;
+                regions.forEach(region => {
+                    markRegion.innerHTML += `<option value="${region}">${region}</option>`;
+                    viewRegion.innerHTML += `<option value="${region}">${region}</option>`;
                 });
-                console.log('✅ School dropdowns populated');
+                console.log('✅ Region dropdowns populated');
             } catch (error) {
-                console.error('❌ Error loading schools:', error);
-                alert('Error loading schools: ' + error.message);
+                console.error('❌ Error loading regions:', error);
+                alert('Error loading regions: ' + error.message);
             }
         }
 
         // LOAD MARK BATCHES
         async function loadMarkBatches() {
-            const school = document.getElementById('markSchool').value;
-            if (!school) {
-                console.warn('⚠️ No school selected');
+            const region = document.getElementById('markRegion').value;
+            if (!region) {
+                console.warn('⚠️ No region selected');
                 return;
             }
 
             try {
-                console.log('📚 Loading batches for:', school);
-                const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
+                console.log('📚 Loading batches for region:', region);
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -268,7 +270,7 @@
                 select.innerHTML = '<option value="">Select Batch</option>';
                 
                 if (!batches || batches.length === 0) {
-                    console.warn('⚠️ No batches found for school:', school);
+                    console.warn('⚠️ No batches found for region:', region);
                     select.innerHTML += '<option disabled>No batches available</option>';
                     return;
                 }
@@ -284,15 +286,15 @@
 
         // LOAD VIEW BATCHES
         async function loadViewBatches() {
-            const school = document.getElementById('viewSchool').value;
-            if (!school) {
-                console.warn('⚠️ No school selected');
+            const region = document.getElementById('viewRegion').value;
+            if (!region) {
+                console.warn('⚠️ No region selected');
                 return;
             }
 
             try {
-                console.log('📚 Loading view batches for:', school);
-                const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
+                console.log('📚 Loading view batches for region:', region);
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -307,7 +309,7 @@
                 select.innerHTML = '<option value="">Select Batch</option>';
                 
                 if (!batches || batches.length === 0) {
-                    console.warn('⚠️ No batches found');
+                    console.warn('⚠️ No batches found for region:', region);
                     select.innerHTML += '<option disabled>No batches available</option>';
                     return;
                 }
@@ -323,17 +325,17 @@
 
         // LOAD STUDENTS FOR MARKING
         async function loadMarkStudents() {
-            const school = document.getElementById('markSchool').value;
+            const region = document.getElementById('markRegion').value;
             const batch = document.getElementById('markBatch').value;
             
-            if (!school || !batch) {
-                console.warn('⚠️ School or batch not selected');
+            if (!region || !batch) {
+                console.warn('⚠️ Region or batch not selected');
                 return;
             }
 
             try {
-                console.log('👥 Loading students for marking:', school, batch);
-                const res = await fetch(`/api/students?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}`, {
+                console.log('👥 Loading students for marking:', region, batch);
+                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -398,16 +400,16 @@
 
         // SUBMIT ATTENDANCE
         async function submitAttendance() {
-            const school = document.getElementById('markSchool').value;
+            const region = document.getElementById('markRegion').value;
             const batch = document.getElementById('markBatch').value;
             const date = document.getElementById('markDate').value;
 
-            if (!school || !batch || !date) {
-                alert('Please select school, batch, and date');
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
                 return;
             }
 
-            console.log('📤 Submitting attendance for:', { school, batch, date });
+            console.log('📤 Submitting attendance for:', { region, batch, date });
 
             const attendanceRecords = [];
             
@@ -491,20 +493,20 @@
 
         // VIEW ATTENDANCE
         async function viewAttendance() {
-            const school = document.getElementById('viewSchool').value;
+            const region = document.getElementById('viewRegion').value;
             const batch = document.getElementById('viewBatch').value;
             const date = document.getElementById('viewDate').value;
 
-            if (!school || !batch || !date) {
-                alert('Please select school, batch, and date');
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
                 return;
             }
 
-            console.log('👀 Viewing attendance for:', { school, batch, date });
+            console.log('👀 Viewing attendance for:', { region, batch, date });
 
             try {
                 const res = await fetch(
-                    `/api/attendance/by-batch?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
@@ -590,10 +592,10 @@
         }
 
         // REPORT SECTION FUNCTIONS
-        async function loadReportSchools() {
+        async function loadReportRegions() {
             try {
-                console.log('📚 Loading report schools...');
-                const res = await fetch('/api/students/schools', {
+                console.log('📚 Loading report regions...');
+                const res = await fetch('/api/students/regions/all', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -601,37 +603,37 @@
                     throw new Error(`API Error: ${res.status}`);
                 }
                 
-                const schools = await res.json();
-                console.log('✅ Report schools loaded:', schools);
+                const regions = await res.json();
+                console.log('✅ Report regions loaded:', regions);
                 
-                const select = document.getElementById('reportSchool');
+                const select = document.getElementById('reportRegion');
                 if (!select) {
-                    console.error('❌ reportSchool element not found');
+                    console.error('❌ reportRegion element not found');
                     return;
                 }
                 
-                select.innerHTML = '<option value="">Select School</option>';
+                select.innerHTML = '<option value="">Select Region</option>';
                 
-                if (!schools || schools.length === 0) {
-                    console.warn('⚠️ No schools found');
-                    select.innerHTML += '<option disabled>No schools available</option>';
+                if (!regions || regions.length === 0) {
+                    console.warn('⚠️ No regions found');
+                    select.innerHTML += '<option disabled>No regions available</option>';
                     return;
                 }
                 
-                schools.forEach(school => {
-                    select.innerHTML += `<option value="${school}">${school}</option>`;
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
                 });
             } catch (error) {
-                console.error('❌ Error loading report schools:', error);
+                console.error('❌ Error loading report regions:', error);
             }
         }
 
         async function loadReportBatches() {
-            const school = document.getElementById('reportSchool').value;
-            if (!school) return;
+            const region = document.getElementById('reportRegion').value;
+            if (!region) return;
 
             try {
-                const res = await fetch(`/api/students/batches/${encodeURIComponent(school)}`, {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const batches = await res.json();
@@ -671,14 +673,14 @@
         }
 
         async function viewReport() {
-            const school = document.getElementById('reportSchool').value;
+            const region = document.getElementById('reportRegion').value;
             const batch = document.getElementById('reportBatch').value;
             const filterType = document.getElementById('filterType').value;
             let startDate = document.getElementById('reportStartDate').value;
             let endDate = document.getElementById('reportEndDate').value;
 
-            if (!school || !batch || !startDate) {
-                alert('Please select school, batch, and date(s)');
+            if (!region || !batch || !startDate) {
+                alert('Please select region, batch, and date(s)');
                 return;
             }
 
@@ -698,7 +700,7 @@
 
             try {
                 const res = await fetch(
-                    `/api/attendance/summary?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
+                    `/api/attendance/summary?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
@@ -773,8 +775,9 @@
                 document.getElementById('reportResults').innerHTML = html;
 
             } catch (error) {
-                console.error('Error viewing report:', error);
-                alert('Failed to load report');
+                console.error('❌ Error viewing report:', error);
+                document.getElementById('reportResults').innerHTML = 
+                    `<div class="alert alert-danger">Failed to generate the report: ${error.message}</div>`;
             }
         }
 
@@ -783,7 +786,7 @@
         }
 
         // Initialize
-        loadSchools();
+        loadRegions();
         updateFilterUI();
     </script>
 </body>

@@ -4,10 +4,34 @@ const User = require('../models/User');
 const { auth, isAdmin } = require('../middleware/auth');
 
 // ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
+// Get all regions
+router.get('/regions/all', auth, async (req, res) => {
+  try {
+    const regions = await User.distinct('region', { role: 'student', isActive: true });
+    res.json(regions.filter(r => r));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get schools
 router.get('/schools', auth, async (req, res) => {
   try {
     const schools = await User.distinct('schoolName', { role: 'student', isActive: true });
+    res.json(schools.filter(s => s));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get schools by region
+router.get('/schools/:region', auth, async (req, res) => {
+  try {
+    const schools = await User.distinct('schoolName', {
+      role: 'student',
+      region: req.params.region,
+      isActive: true
+    });
     res.json(schools.filter(s => s));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -25,12 +49,12 @@ router.get('/stats/dashboard', auth, async (req, res) => {
   }
 });
 
-// Get batches for a school (parameterized route)
-router.get('/batches/:schoolName', auth, async (req, res) => {
+// Get batches for a region (parameterized route)
+router.get('/batches/:region', auth, async (req, res) => {
   try {
     const batches = await User.distinct('batchNumber', {
       role: 'student',
-      schoolName: req.params.schoolName,
+      region: req.params.region,
       isActive: true
     });
     res.json(batches.filter(b => b));
@@ -43,9 +67,10 @@ router.get('/batches/:schoolName', auth, async (req, res) => {
 // Get all students
 router.get('/', auth, async (req, res) => {
   try {
-    const { schoolName, batchNumber } = req.query;
+    const { region, schoolName, batchNumber } = req.query;
     let query = { role: 'student', isActive: true };
     
+    if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
     if (batchNumber) query.batchNumber = batchNumber;
     

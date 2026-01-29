@@ -48,6 +48,31 @@
 
         <div id="studentsTab">
             <button class="btn btn-primary mb-3" onclick="showAddStudentModal()">Add Student</button>
+            
+            <!-- Region and Batch Filters -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label>Region</label>
+                            <select class="form-select" id="filterRegion" onchange="loadFilterBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Batch</label>
+                            <select class="form-select" id="filterBatch" onchange="loadStudents()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-secondary w-100" onclick="resetStudentFilters()">Reset Filters</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <div id="studentsList"></div>
         </div>
 
@@ -63,9 +88,9 @@
                     
                     <div class="row g-3 mb-4">
                         <div class="col-md-2">
-                            <label>School</label>
-                            <select class="form-select" id="attSchool" onchange="loadAttBatches()">
-                                <option value="">Select School</option>
+                            <label>Region</label>
+                            <select class="form-select" id="attRegion" onchange="loadAttBatches()">
+                                <option value="">Select Region</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -111,10 +136,11 @@
                 <div class="modal-body">
                     <form id="studentForm">
                         <input type="text" class="form-control mb-2" placeholder="Name" id="sName" required>
-                        <input type="number" class="form-control mb-2" placeholder="Age" id="sAge" required>
-                        <input type="text" class="form-control mb-2" placeholder="School Name" id="sSchool" required>
+                        <input type="text" class="form-control mb-2" placeholder="Region" id="sRegion" required>
+                        <input type="text" class="form-control mb-2" placeholder="School Name" id="sSchool">
+                        <input type="number" class="form-control mb-2" placeholder="Age" id="sAge">
                         <input type="text" class="form-control mb-2" placeholder="Mobile" id="sMobile" required>
-                        <input type="text" class="form-control mb-2" placeholder="Standard" id="sStandard" required>
+                        <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="sStandard">
                         <input type="text" class="form-control mb-2" placeholder="Batch Number" id="sBatch" required>
                         <button type="submit" class="btn btn-success">Add Student</button>
                     </form>
@@ -135,10 +161,11 @@
                     <form id="editStudentForm">
                         <input type="hidden" id="editStudentId">
                         <input type="text" class="form-control mb-2" placeholder="Name" id="editSName" required>
+                        <input type="text" class="form-control mb-2" placeholder="Region" id="editSRegion" required>
+                        <input type="text" class="form-control mb-2" placeholder="School Name" id="editSSchool">
                         <input type="number" class="form-control mb-2" placeholder="Age" id="editSAge">
-                        <input type="text" class="form-control mb-2" placeholder="School Name" id="editSSchool" required>
-                        <input type="text" class="form-control mb-2" placeholder="Mobile" id="editSMobile">
-                        <input type="text" class="form-control mb-2" placeholder="Standard" id="editSStandard">
+                        <input type="text" class="form-control mb-2" placeholder="Mobile" id="editSMobile" required>
+                        <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="editSStandard">
                         <input type="text" class="form-control mb-2" placeholder="Batch Number" id="editSBatch" required>
                         <button type="submit" class="btn btn-primary">Update Student</button>
                     </form>
@@ -181,6 +208,7 @@
                 document.getElementById('studentsTab').style.display = 'block';
                 document.getElementById('usersTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                loadFilterRegions();
             } else if (tab === 'users') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'block';
@@ -189,7 +217,7 @@
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'block';
-                loadAttSchools();
+                loadAttRegions();
             }
         }
 
@@ -215,20 +243,30 @@
         }
 
         async function loadStudents() {
-            const res = await fetch('/api/students', {
+            const region = document.getElementById('filterRegion').value;
+            const batch = document.getElementById('filterBatch').value;
+            
+            let url = '/api/students';
+            const params = new URLSearchParams();
+            if (region) params.append('region', region);
+            if (batch) params.append('batchNumber', batch);
+            if (params.toString()) url += '?' + params.toString();
+            
+            const res = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const students = await res.json();
             
-            let html = '<table class="table"><thead><tr><th>Name</th><th>School</th><th>Batch</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
+            let html = '<table class="table"><thead><tr><th>Name</th><th>Region</th><th>School</th><th>Batch</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
             students.forEach(s => {
                 html += `<tr>
                     <td>${s.name}</td>
-                    <td>${s.schoolName}</td>
+                    <td>${s.region}</td>
+                    <td>${s.schoolName || '-'}</td>
                     <td>${s.batchNumber}</td>
                     <td>${s.mobile || '-'}</td>
                     <td>
-                        <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.age || ''}', '${s.schoolName}', '${s.mobile || ''}', '${s.standard || ''}', '${s.batchNumber}')">Edit</button>
+                        <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.region}', '${s.schoolName || ''}', '${s.mobile || ''}', '${s.age || ''}', '${s.standard || ''}', '${s.batchNumber}')">Edit</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s._id}')">Delete</button>
                     </td>
                 </tr>`;
@@ -260,8 +298,9 @@
             e.preventDefault();
             const data = {
                 name: document.getElementById('sName').value,
-                age: document.getElementById('sAge').value,
+                region: document.getElementById('sRegion').value,
                 schoolName: document.getElementById('sSchool').value,
+                age: document.getElementById('sAge').value,
                 mobile: document.getElementById('sMobile').value,
                 standard: document.getElementById('sStandard').value,
                 batchNumber: document.getElementById('sBatch').value
@@ -316,12 +355,13 @@
         });
 
         // Edit Student Functions
-        function editStudent(id, name, age, school, mobile, standard, batch) {
+        function editStudent(id, name, region, school, mobile, age, standard, batch) {
             document.getElementById('editStudentId').value = id;
             document.getElementById('editSName').value = name;
-            document.getElementById('editSAge').value = age;
+            document.getElementById('editSRegion').value = region;
             document.getElementById('editSSchool').value = school;
             document.getElementById('editSMobile').value = mobile;
+            document.getElementById('editSAge').value = age;
             document.getElementById('editSStandard').value = standard;
             document.getElementById('editSBatch').value = batch;
             new bootstrap.Modal(document.getElementById('editStudentModal')).show();
@@ -332,8 +372,9 @@
             const id = document.getElementById('editStudentId').value;
             const data = {
                 name: document.getElementById('editSName').value,
-                age: document.getElementById('editSAge').value,
+                region: document.getElementById('editSRegion').value,
                 schoolName: document.getElementById('editSSchool').value,
+                age: document.getElementById('editSAge').value,
                 mobile: document.getElementById('editSMobile').value,
                 standard: document.getElementById('editSStandard').value,
                 batchNumber: document.getElementById('editSBatch').value
@@ -384,7 +425,58 @@
             window.location.href = '/';
         }
 
+        // ===== STUDENT FILTER FUNCTIONS =====
+        async function loadFilterRegions() {
+            const res = await fetch('/api/students/regions/all', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const regions = await res.json();
+            const select = document.getElementById('filterRegion');
+            select.innerHTML = '<option value="">Select Region</option>';
+            regions.forEach(r => {
+                select.innerHTML += `<option value="${r}">${r}</option>`;
+            });
+        }
+
+        async function loadFilterBatches() {
+            const region = document.getElementById('filterRegion').value;
+            if (!region) {
+                document.getElementById('filterBatch').innerHTML = '<option value="">Select Batch</option>';
+                loadStudents();
+                return;
+            }
+            
+            const res = await fetch(`/api/students/batches/${region}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const batches = await res.json();
+            const select = document.getElementById('filterBatch');
+            select.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(b => {
+                select.innerHTML += `<option value="${b}">${b}</option>`;
+            });
+            loadStudents();
+        }
+
+        function resetStudentFilters() {
+            document.getElementById('filterRegion').value = '';
+            document.getElementById('filterBatch').value = '';
+            loadStudents();
+        }
+
         // ===== ATTENDANCE FUNCTIONS =====
+        async function loadAttRegions() {
+            const res = await fetch('/api/students/regions/all', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const regions = await res.json();
+            const select = document.getElementById('attRegion');
+            select.innerHTML = '<option value="">Select Region</option>';
+            regions.forEach(r => {
+                select.innerHTML += `<option value="${r}">${r}</option>`;
+            });
+        }
+
         async function loadAttSchools() {
             const res = await fetch('/api/students/schools', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -398,13 +490,13 @@
         }
 
         async function loadAttBatches() {
-            const school = document.getElementById('attSchool').value;
-            if (!school) {
+            const region = document.getElementById('attRegion').value;
+            if (!region) {
                 document.getElementById('attBatch').innerHTML = '<option value="">Select Batch</option>';
                 return;
             }
             
-            const res = await fetch(`/api/students/batches/${school}`, {
+            const res = await fetch(`/api/students/batches/${region}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const batches = await res.json();
@@ -440,14 +532,14 @@
         }
 
         async function loadAttendanceReport() {
-            const school = document.getElementById('attSchool').value;
+            const region = document.getElementById('attRegion').value;
             const batch = document.getElementById('attBatch').value;
             const filterType = document.getElementById('attFilterType').value;
             let startDate = document.getElementById('attStartDate').value;
             let endDate = document.getElementById('attEndDate').value;
 
-            if (!school || !batch || !startDate) {
-                alert('Please select school, batch, and date(s)');
+            if (!region || !batch || !startDate) {
+                alert('Please select region, batch, and date(s)');
                 return;
             }
 
@@ -467,7 +559,7 @@
 
             try {
                 const res = await fetch(
-                    `/api/attendance/summary?schoolName=${encodeURIComponent(school)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
+                    `/api/attendance/summary?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
@@ -552,7 +644,6 @@
         }
 
         loadStats();
-        loadStudents();
         loadUsers();
         updateAttFilterUI();
     </script>

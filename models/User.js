@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['student', 'teacher', 'admin'], required: true },
   
   // Student fields
+  region: String,
   schoolName: String,
   batchNumber: String,
   mobile: String,

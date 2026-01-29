@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const attendanceSchema = new mongoose.Schema({
   studentId: String,  // Store as STRING to avoid conversion issues
   studentName: String,
+  region: String,
   schoolName: String,
   batchNumber: String,
   date: String,  // Store as STRING "YYYY-MM-DD" to avoid timezone issues
@@ -13,6 +14,7 @@ const attendanceSchema = new mongoose.Schema({
 });
 
 // Index for fast queries
+attendanceSchema.index({ region: 1, batchNumber: 1, date: 1 });
 attendanceSchema.index({ schoolName: 1, batchNumber: 1, date: 1 });
 attendanceSchema.index({ markedByName: 1, date: 1 });
 
