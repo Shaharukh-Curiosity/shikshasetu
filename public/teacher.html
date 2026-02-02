@@ -411,12 +411,35 @@
                 currentStudents.forEach(student => {
                     html += `
                         <tr>
-                            <td>${student.name}</td>
-                            <td class="text-center">
-                                <label class="me-2"><input type="radio" name="status_${student._id}" value="present"> Present</label>
-                                <label><input type="radio" name="status_${student._id}" value="absent"> Absent</label>
-                            </td>
-                        </tr>
+  <td class="align-middle fw-semibold">${student.name}</td>
+
+  <td class="align-middle">
+    <div class="d-flex justify-content-center gap-3">
+      
+      <!-- present -->
+      <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light"
+             style="cursor:pointer;">
+        <input type="radio"
+               class="form-check-input m-0"
+               name="status_${student._id}"
+               value="present">
+        <span class="fw-semibold text-success">present</span>
+      </label>
+
+      <!-- absent -->
+      <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light"
+             style="cursor:pointer;">
+        <input type="radio"
+               class="form-check-input m-0"
+               name="status_${student._id}"
+               value="absent">
+        <span class="fw-semibold text-danger">absent</span>
+      </label>
+
+    </div>
+  </td>
+</tr>
+
                     `;
                 });
 
@@ -901,7 +924,8 @@
                         <h6>📊 Summary Statistics</h6>
                         <div class="row">
                             <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
-                            <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
+                            <div class="col-md-3"
+                            ><strong>Total Stuents:</strong> ${stats.totalStudents}</div>
                             <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
                             <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
                         </div>
