@@ -65,13 +65,18 @@
                 <button class="nav-link" id="viewTab" onclick="showTab('view')">View Daily</button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" id="studentsTab" onclick="showTab('students')">View Students</button>
+                <button class="nav-link" id="studentsTab" onclick="showTab('students')">Students Details
+
+                </Details></button>
             </li>
             <li class="nav-item">
                 <button class="nav-link" id="reportTab" onclick="showTab('report')">View Report</button>
             </li>
             <li class="nav-item">
                 <button class="nav-link" id="workTab" onclick="showTab('work')">Daily Work</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="lowTab" onclick="showTab('low')">Low Attendance</button>
             </li>
         </ul>
 
@@ -272,6 +277,36 @@
                 </div>
             </div>
         </div>
+
+        <!-- LOW ATTENDANCE -->
+        <div id="lowSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Low Attendance (Absent Last 3 Days)</h5>
+
+                    <div class="row g-3 mb-3 align-items-end">
+                        <div class="col-md-4">
+                            <label>Region</label>
+                            <select class="form-select" id="lowRegion" onchange="loadLowBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Batch</label>
+                            <select class="form-select" id="lowBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="loadLowAttendance()">View Students</button>
+                        </div>
+                    </div>
+
+                    <div id="lowResults"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -341,11 +376,13 @@
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
                 document.getElementById('markTab').classList.add('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'view') {
                 document.getElementById('markSection').style.display = 'none';
@@ -353,11 +390,13 @@
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'students') {
                 document.getElementById('markSection').style.display = 'none';
@@ -365,11 +404,13 @@
                 document.getElementById('studentsSection').style.display = 'block';
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.add('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
                 loadStudentsRegions();
             } else if (tab === 'report') {
                 document.getElementById('markSection').style.display = 'none';
@@ -377,11 +418,13 @@
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'block';
                 document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.add('active');
                 document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
                 loadReportRegions();
             } else if (tab === 'work') {
                 document.getElementById('markSection').style.display = 'none';
@@ -389,11 +432,27 @@
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'block';
+                document.getElementById('lowSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.add('active');
+                document.getElementById('lowTab').classList.remove('active');
+            } else if (tab === 'low') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'block';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
+                document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.add('active');
+                loadLowRegions();
             }
         }
 
@@ -554,6 +613,136 @@
                 dateLabel.textContent = 'Date';
                 dateInput.type = 'date';
                 dateInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+
+        // LOW ATTENDANCE FUNCTIONS
+        async function loadLowRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const regions = await res.json();
+                const select = document.getElementById('lowRegion');
+                if (!select) return;
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+                document.getElementById('lowBatch').innerHTML = '<option value="">Select Batch</option>';
+            } catch (error) {
+                console.error('❌ Error loading low attendance regions:', error);
+            }
+        }
+
+        async function loadLowBatches() {
+            const region = document.getElementById('lowRegion').value;
+            const select = document.getElementById('lowBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const batches = await res.json();
+                select.innerHTML = '<option value="all">All Batches</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+                select.value = 'all';
+            } catch (error) {
+                console.error('❌ Error loading low attendance batches:', error);
+            }
+        }
+
+        async function loadLowAttendance() {
+            const region = document.getElementById('lowRegion').value;
+            const batch = document.getElementById('lowBatch').value;
+
+            if (!region) {
+                alert('Please select region');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('region', region);
+            if (batch) {
+                params.append('batchNumber', batch);
+            }
+
+            try {
+                const res = await fetch(`/api/attendance/low-attendance?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const data = await res.json();
+                const results = data.results || [];
+                const dates = (data.dates || []).sort();
+
+                if (results.length === 0) {
+                    document.getElementById('lowResults').innerHTML =
+                        '<div class="alert alert-warning">No students found absent for the last 3 days</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">
+                        Showing students absent on: <strong>${dates.join(', ')}</strong>
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Batch</th>
+                                <th>Mobile</th>
+                                <th>Standard</th>
+                                <th>Absent Dates</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                results.forEach((student, index) => {
+                    const absentDates = (student.absentDates || []).sort().join(', ');
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${student.name}</td>
+                            <td>${student.batchNumber || '-'}</td>
+                            <td>${student.mobile || '-'}</td>
+                            <td>${student.standard || '-'}</td>
+                            <td>${absentDates || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('lowResults').innerHTML = html;
+            } catch (error) {
+                console.error('❌ Error loading low attendance:', error);
+                document.getElementById('lowResults').innerHTML =
+                    `<div class="alert alert-danger">Error loading results: ${error.message}</div>`;
             }
         }
 

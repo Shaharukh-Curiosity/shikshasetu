@@ -343,4 +343,82 @@ router.get('/summary', auth, async (req, res) => {
   }
 });
 
+// ============================================
+// LOW ATTENDANCE - Absent last 3 days
+// ============================================
+router.get('/low-attendance', auth, async (req, res) => {
+  try {
+    const { region, batchNumber } = req.query;
+
+    if (!region) {
+      return res.status(400).json({ message: 'Missing region' });
+    }
+
+    const today = new Date();
+    const dates = [];
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
+
+    const match = {
+      region: region,
+      date: { $in: dates },
+      status: 'absent'
+    };
+    if (batchNumber && batchNumber !== 'all') {
+      match.batchNumber = batchNumber;
+    }
+
+    const results = await Attendance.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: '$studentId',
+          dates: { $addToSet: '$date' },
+          absentCount: { $sum: 1 }
+        }
+      },
+      { $addFields: { uniqueDatesCount: { $size: '$dates' } } },
+      { $match: { uniqueDatesCount: dates.length } },
+      { $addFields: { studentObjectId: { $toObjectId: '$_id' } } },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'studentObjectId',
+          foreignField: '_id',
+          as: 'student'
+        }
+      },
+      { $unwind: '$student' },
+      {
+        $match: {
+          'student.role': 'student',
+          'student.isActive': true
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          studentId: '$_id',
+          name: '$student.name',
+          schoolName: '$student.schoolName',
+          batchNumber: '$student.batchNumber',
+          mobile: '$student.mobile',
+          standard: '$student.standard',
+          region: '$student.region',
+          absentDates: '$dates'
+        }
+      },
+      { $sort: { name: 1 } }
+    ]);
+
+    res.json({ dates, results });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router;
