@@ -6,22 +6,26 @@ const WorkReportSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    teacherName: {
+        type: String,
+        trim: true
+    },
     date: {
         type: Date,
         required: true
     },
     region: {
         type: String,
-        required: true
+        default: ''
     },
     batchNumber: {
         type: String,
-        required: true
+        default: ''
     },
     subject: {
         type: String,
-        required: true,
-        trim: true
+        trim: true,
+        default: 'Daily Work'
     },
     topicsCovered: {
         type: String,
@@ -30,13 +34,13 @@ const WorkReportSchema = new mongoose.Schema({
     },
     assignment: {
         type: String,
-        required: true,
-        trim: true
+        trim: true,
+        default: ''
     },
     attendanceCount: {
         type: Number,
-        required: true,
-        min: 0
+        min: 0,
+        default: 0
     },
     createdAt: {
         type: Date,

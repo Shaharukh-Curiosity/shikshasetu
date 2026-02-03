@@ -5,6 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Teacher Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            padding-bottom: 2rem;
+        }
+
+        .card {
+            background-color: #ffffff;
+            border-color: #e6eef5;
+            box-shadow: 0 10px 24px rgba(22, 42, 60, 0.08);
+        }
+    </style>
 </head>
 <body>
     <nav class="navbar navbar-dark bg-primary mb-4">
@@ -16,6 +32,31 @@
     </nav>
 
     <div class="container">
+        <div class="row mb-3" id="statsRow">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="text-muted">Total Enrolled Students</h6>
+                        <h2 id="totalStudents">0</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label>Region (Summary)</label>
+                        <select class="form-select" id="summaryRegion" onchange="updateSelectedRegionCount()">
+                            <option value="">Select Region</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <div id="selectedRegionCount"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
         <ul class="nav nav-tabs mb-4">
             <li class="nav-item">
                 <button class="nav-link active" id="markTab" onclick="showTab('mark')">Mark Attendance</button>
@@ -29,6 +70,9 @@
             <li class="nav-item">
                 <button class="nav-link" id="reportTab" onclick="showTab('report')">View Report</button>
             </li>
+            <li class="nav-item">
+                <button class="nav-link" id="workTab" onclick="showTab('work')">Daily Work</button>
+            </li>
         </ul>
 
         <!-- MARK ATTENDANCE -->
@@ -40,7 +84,7 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
                             <label>Region</label>
-                            <select class="form-select" id="markRegion" onchange="loadMarkBatches()">
+                            <select class="form-select" id="markRegion" onchange="loadMarkBatches();">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
@@ -56,6 +100,7 @@
                         </div>
                     </div>
 
+                    <div id="savingBanner" class="alert alert-info d-none">Saving attendance...</div>
                     <div id="studentsTable"></div>
                 </div>
             </div>
@@ -70,7 +115,7 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
                             <label>Region</label>
-                            <select class="form-select" id="viewRegion" onchange="loadViewBatches()">
+                            <select class="form-select" id="viewRegion" onchange="loadViewBatches();">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
@@ -104,7 +149,7 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-4">
                             <label>Region</label>
-                            <select class="form-select" id="studentsRegion" onchange="loadStudentsBatches()">
+                            <select class="form-select" id="studentsRegion" onchange="loadStudentsBatches();">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
@@ -130,7 +175,7 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-2">
                             <label>Region</label>
-                            <select class="form-select" id="reportRegion" onchange="loadReportBatches()">
+                            <select class="form-select" id="reportRegion" onchange="loadReportBatches();">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
@@ -165,6 +210,68 @@
                 </div>
             </div>
         </div>
+        
+        <!-- DAILY WORK REPORT -->
+        <div id="workSection" style="display: none;">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">📝 Daily Work Report</h5>
+                    
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label>Teacher Name</label>
+                            <input type="text" class="form-control" id="workTeacherName" readonly>
+                        </div>
+                        <div class="col-md-4">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="workDate" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label>Topics Taught Today</label>
+                        <textarea class="form-control" id="workTopics" rows="3" placeholder="Enter topics covered..." required></textarea>
+                    </div>
+                    
+                    <button class="btn btn-success" onclick="submitWorkReport()">Submit Daily Work</button>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">🔍 View Daily Work</h5>
+                    
+                    <div class="row g-3 mb-3 align-items-end">
+                        <div class="col-md-4">
+                            <label>Teacher</label>
+                            <select class="form-select" id="workViewTeacher">
+                                <option value="">All Teachers</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Filter Type</label>
+                            <select class="form-select" id="workViewFilterType" onchange="updateWorkViewFilterUI()">
+                                <option value="date">Date</option>
+                                <option value="month">Month</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label id="workViewDateLabel">Date</label>
+                            <input type="date" class="form-control" id="workViewDate" required>
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check mt-4">
+                                <input class="form-check-input" type="checkbox" id="workViewOnlyMine" onchange="toggleWorkViewOnlyMine()">
+                                <label class="form-check-label" for="workViewOnlyMine">Only My Reports</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary mb-3" onclick="loadWorkReports()">View Reports</button>
+                    <div id="workResults"></div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -188,11 +295,19 @@
         console.log('👤 Logged in as:', user.name, `(${user.role})`);
         
         document.getElementById('userName').textContent = user.name;
+        const workTeacherName = document.getElementById('workTeacherName');
+        if (workTeacherName) workTeacherName.value = user.name || '';
         
         // Set today's date
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('markDate').value = today;
         document.getElementById('viewDate').value = today;
+        const workDateEl = document.getElementById('workDate');
+        const workViewDateEl = document.getElementById('workViewDate');
+        if (workDateEl) workDateEl.value = today;
+        if (workViewDateEl) workViewDateEl.value = today;
+        updateWorkViewFilterUI();
+        loadWorkViewTeachers();
 
         let currentStudents = [];
         
@@ -201,47 +316,84 @@
         console.log('================================');
 
         // TAB SWITCHING
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/students/stats/dashboard', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const data = await res.json();
+                const totalEl = document.getElementById('totalStudents');
+                if (totalEl) totalEl.textContent = data.total;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
         function showTab(tab) {
             if (tab === 'mark') {
                 document.getElementById('markSection').style.display = 'block';
                 document.getElementById('viewSection').style.display = 'none';
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
                 document.getElementById('markTab').classList.add('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'view') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'block';
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'students') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'none';
                 document.getElementById('studentsSection').style.display = 'block';
                 document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.add('active');
                 document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
                 loadStudentsRegions();
             } else if (tab === 'report') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'none';
                 document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'block';
+                document.getElementById('workSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.add('active');
+                document.getElementById('workTab').classList.remove('active');
                 loadReportRegions();
+            } else if (tab === 'work') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'block';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
+                document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.add('active');
             }
         }
 
@@ -290,11 +442,246 @@
             }
         }
 
+        async function loadSummaryRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const regions = await res.json();
+                const select = document.getElementById('summaryRegion');
+                if (!select) return;
+
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+            } catch (error) {
+                console.error('❌ Error loading summary regions:', error);
+            }
+        }
+
+        async function updateSelectedRegionCount() {
+            const select = document.getElementById('summaryRegion');
+            if (!select) return;
+            const region = select.value;
+
+            if (!region) {
+                document.getElementById('selectedRegionCount').innerHTML = '';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const students = await res.json();
+                document.getElementById('selectedRegionCount').innerHTML = `
+                    <div class="alert alert-info">
+                        <h6>📊 Total Registered Students in ${region}: <strong>${students.length}</strong></h6>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('❌ Error loading region count:', error);
+                document.getElementById('selectedRegionCount').innerHTML =
+                    `<div class="alert alert-danger">Error loading region count: ${error.message}</div>`;
+            }
+        }
+
+        async function loadWorkViewTeachers() {
+            try {
+                const res = await fetch('/api/users/teachers', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const users = await res.json();
+                const select = document.getElementById('workViewTeacher');
+                if (!select) return;
+
+                select.innerHTML = '<option value="">All Teachers</option>';
+                users.forEach(u => {
+                    select.innerHTML += `<option value="${u._id}">${u.name}</option>`;
+                });
+
+                if (user && user._id) {
+                    select.dataset.currentUserId = user._id;
+                }
+                toggleWorkViewOnlyMine();
+            } catch (error) {
+                console.error('❌ Error loading teachers:', error);
+            }
+        }
+
+        function toggleWorkViewOnlyMine() {
+            const checkbox = document.getElementById('workViewOnlyMine');
+            const select = document.getElementById('workViewTeacher');
+            if (!checkbox || !select) return;
+
+            if (checkbox.checked) {
+                const currentUserId = select.dataset.currentUserId || (user && user._id ? user._id : '');
+                if (currentUserId) {
+                    select.value = currentUserId;
+                }
+                select.disabled = true;
+            } else {
+                select.disabled = false;
+            }
+        }
+
+        function updateWorkViewFilterUI() {
+            const filterTypeEl = document.getElementById('workViewFilterType');
+            const dateLabel = document.getElementById('workViewDateLabel');
+            const dateInput = document.getElementById('workViewDate');
+            if (!filterTypeEl || !dateLabel || !dateInput) return;
+
+            if (filterTypeEl.value === 'month') {
+                dateLabel.textContent = 'Month';
+                dateInput.type = 'month';
+                dateInput.value = new Date().toISOString().slice(0, 7);
+            } else {
+                dateLabel.textContent = 'Date';
+                dateInput.type = 'date';
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
+        }
+
+        // DAILY WORK REPORT FUNCTIONS
+        async function submitWorkReport() {
+            const date = document.getElementById('workDate').value;
+            const topicsCovered = document.getElementById('workTopics').value.trim();
+
+            if (!date || !topicsCovered) {
+                alert('Please select date and enter topics.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/workReport', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        date,
+                        topicsCovered,
+                        subject: 'Daily Work'
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message || 'Report submitted successfully');
+                    document.getElementById('workTopics').value = '';
+                    loadWorkReports();
+                } else {
+                    alert('Error: ' + (data.error || data.message || 'Failed to submit report'));
+                }
+            } catch (error) {
+                console.error('❌ Error submitting work report:', error);
+                alert('Failed to submit report');
+            }
+        }
+
+        async function loadWorkReports() {
+            const filterType = document.getElementById('workViewFilterType').value;
+            const dateInput = document.getElementById('workViewDate').value;
+            const teacherId = document.getElementById('workViewTeacher').value;
+
+            if (!dateInput) {
+                alert('Please select date/month');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            if (teacherId) {
+                params.append('teacherId', teacherId);
+            }
+            if (filterType === 'month') {
+                const [year, month] = dateInput.split('-');
+                const startDate = `${year}-${month}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const endDate = `${year}-${month}-${lastDay}`;
+                params.append('startDate', startDate);
+                params.append('endDate', endDate);
+            } else {
+                params.append('date', dateInput);
+            }
+
+            try {
+                const res = await fetch(`/api/workReport?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const reports = await res.json();
+                if (!reports || reports.length === 0) {
+                    document.getElementById('workResults').innerHTML =
+                        '<div class="alert alert-warning">No reports found for the selected filters</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Date</th>
+                                <th>Teacher</th>
+                                <th>Topics Taught</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                reports.forEach((report, index) => {
+                    const reportDate = new Date(report.date).toISOString().split('T')[0];
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${reportDate}</td>
+                            <td>${report.teacherName || '-'}</td>
+                            <td>${report.topicsCovered}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('workResults').innerHTML = html;
+            } catch (error) {
+                console.error('❌ Error loading work reports:', error);
+                document.getElementById('workResults').innerHTML =
+                    `<div class="alert alert-danger">Error loading reports: ${error.message}</div>`;
+            }
+        }
+
         // LOAD MARK BATCHES
         async function loadMarkBatches() {
             const region = document.getElementById('markRegion').value;
             if (!region) {
                 console.warn('⚠️ No region selected');
+                document.getElementById('studentsTable').innerHTML = '';
                 return;
             }
 
@@ -352,6 +739,7 @@
                 
                 const select = document.getElementById('viewBatch');
                 select.innerHTML = '<option value="">Select Batch</option>';
+                select.innerHTML += '<option value="all">All Batches</option>';
                 
                 if (!batches || batches.length === 0) {
                     console.warn('⚠️ No batches found for region:', region);
@@ -362,6 +750,10 @@
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
+                select.value = 'all';
+                if (document.getElementById('viewDate').value) {
+                    viewAttendance();
+                }
             } catch (error) {
                 console.error('❌ Error loading view batches:', error);
                 alert('Error loading batches: ' + error.message);
@@ -401,6 +793,7 @@
                     <table class="table table-sm table-striped">
                         <thead class="table-light">
                             <tr>
+                                <th>#</th>
                                 <th>Student Name</th>
                                 <th class="text-center">Status</th>
                             </tr>
@@ -408,9 +801,10 @@
                         <tbody>
                 `;
 
-                currentStudents.forEach(student => {
+                currentStudents.forEach((student, index) => {
                     html += `
                         <tr>
+  <td class="align-middle">${index + 1}</td>
   <td class="align-middle fw-semibold">${student.name}</td>
 
   <td class="align-middle">
@@ -446,8 +840,9 @@
                 html += `
                         </tbody>
                     </table>
-                    <button class="btn btn-success btn-lg mt-3" onclick="submitAttendance()">
-                        Submit Attendance
+                    <button class="btn btn-success btn-lg mt-3" id="submitAttendanceBtn" onclick="submitAttendance()">
+                        <span class="spinner-border spinner-border-sm me-2 d-none" id="submitAttendanceSpinner" role="status" aria-hidden="true"></span>
+                        <span id="submitAttendanceText">Submit Attendance</span>
                     </button>
                 `;
 
@@ -465,12 +860,17 @@
             const batch = document.getElementById('markBatch').value;
             const date = document.getElementById('markDate').value;
 
-            if (!region || !batch || !date) {
-                alert('Please select region, batch, and date');
+            if (!region || !date) {
+                alert('Please select region and date');
                 return;
             }
 
             console.log('📤 Submitting attendance for:', { region, batch, date });
+
+            const submitBtn = document.getElementById('submitAttendanceBtn');
+            const submitSpinner = document.getElementById('submitAttendanceSpinner');
+            const submitText = document.getElementById('submitAttendanceText');
+            const savingBanner = document.getElementById('savingBanner');
 
             const attendanceRecords = [];
             
@@ -506,6 +906,15 @@
             }
 
             try {
+                if (submitBtn && submitSpinner && submitText) {
+                    submitBtn.disabled = true;
+                    submitSpinner.classList.remove('d-none');
+                    submitText.textContent = 'Submitting...';
+                }
+                if (savingBanner) {
+                    savingBanner.classList.remove('d-none');
+                }
+
                 const res = await fetch('/api/attendance/mark', {
                     method: 'POST',
                     headers: {
@@ -549,6 +958,15 @@
             } catch (error) {
                 console.error('Error submitting attendance:', error);
                 alert('Failed to submit attendance');
+            } finally {
+                if (submitBtn && submitSpinner && submitText) {
+                    submitBtn.disabled = false;
+                    submitSpinner.classList.add('d-none');
+                    submitText.textContent = 'Submit Attendance';
+                }
+                if (savingBanner) {
+                    savingBanner.classList.add('d-none');
+                }
             }
         }
 
@@ -590,6 +1008,7 @@
                     <table class="table table-bordered">
                         <thead class="table-light">
                             <tr>
+                                <th>#</th>
                                 <th>Name</th>
                                 <th>Mobile</th>
                                 <th>Status</th>
@@ -599,7 +1018,7 @@
                         <tbody>
                 `;
 
-                students.forEach(student => {
+                students.forEach((student, index) => {
                     let statusBadge, markedBy;
 
                     if (student.attendance) {
@@ -619,6 +1038,7 @@
 
                     html += `
                         <tr>
+                            <td>${index + 1}</td>
                             <td>${student.name}</td>
                             <td>${student.mobile || '-'}</td>
                             <td>${statusBadge}</td>
@@ -689,6 +1109,7 @@
             if (!region) {
                 console.warn('⚠️ No region selected');
                 document.getElementById('studentsBatch').innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('studentsResults').innerHTML = '';
                 return;
             }
 
@@ -993,8 +1414,13 @@
         }
 
         // Initialize
+        loadStats();
         loadRegions();
+        loadSummaryRegions();
         updateFilterUI();
     </script>
 </body>
 </html>
+
+
+

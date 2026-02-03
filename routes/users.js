@@ -2,7 +2,17 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
-const { auth, isAdmin } = require('../middleware/auth');
+const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
+
+// Get teachers (for teacher/admin dropdowns)
+router.get('/teachers', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const users = await User.find({ role: 'teacher' }).select('-password');
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 // Get all users (teachers/admins)
 router.get('/', auth, isAdmin, async (req, res) => {

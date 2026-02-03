@@ -25,77 +25,77 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 
     let success = 0;
     let errors = 0;
-    let conflicts = [];
+    const conflicts = [];
+
+    const studentIds = attendanceRecords.map(r => String(r.studentId));
+    const students = await User.find({ _id: { $in: studentIds } }).lean();
+    const studentMap = new Map(students.map(s => [String(s._id), s]));
+
+    const existingRecords = await Attendance.find({
+      studentId: { $in: studentIds },
+      date: dateOnly
+    }).lean();
+    const existingMap = new Map(existingRecords.map(r => [String(r.studentId), r]));
+
+    const bulkOps = [];
+    const now = new Date();
 
     for (const record of attendanceRecords) {
-      try {
-        const student = await User.findById(record.studentId);
-        if (!student) {
-          console.log('❌ Student not found:', record.studentId);
-          errors++;
-          continue;
-        }
+      const studentId = String(record.studentId);
+      const student = studentMap.get(studentId);
+      if (!student) {
+        console.log('❌ Student not found:', studentId);
+        errors++;
+        continue;
+      }
 
-        // CHECK FOR CONFLICTS: Has someone else already marked this student?
-        const existingRecord = await Attendance.findOne({
-          studentId: String(student._id),
-          date: dateOnly
-        });
-
-        if (existingRecord) {
-          // Someone already marked this student on this date
-          if (String(existingRecord.markedBy) !== String(req.user._id)) {
-            // Different teacher marked it - CONFLICT! DON'T UPDATE
-            console.log(`❌ CONFLICT: ${student.name} already marked by ${existingRecord.markedByName}`);
-            conflicts.push({
-              studentName: student.name,
-              markedBy: existingRecord.markedByName,
-              status: existingRecord.status
-            });
-            errors++;
-            continue; // SKIP THIS STUDENT - DON'T SAVE
-          } else {
-            // Same teacher updating their own record - DELETE OLD AND CREATE NEW
-            console.log(`🔄 Updating own record for ${student.name}`);
-            await Attendance.deleteMany({
-              studentId: String(student._id),
-              date: dateOnly
-            });
-          }
-        }
-
-        console.log(`\n✓ ${student.name}: ${record.status}`);
-
-        // Create new attendance record
-        const attendance = new Attendance({
-          studentId: String(student._id),  // Store as STRING
+      const existingRecord = existingMap.get(studentId);
+      if (existingRecord && String(existingRecord.markedBy) !== String(req.user._id)) {
+        console.log(`❌ CONFLICT: ${student.name} already marked by ${existingRecord.markedByName}`);
+        conflicts.push({
           studentName: student.name,
-          region: student.region,
-          schoolName: student.schoolName,
-          batchNumber: student.batchNumber,
-          date: dateOnly,  // Store as STRING "YYYY-MM-DD"
-          status: record.status.toLowerCase(),
-          markedBy: String(req.user._id),
-          markedByName: req.user.name
+          markedBy: existingRecord.markedByName,
+          status: existingRecord.status
         });
+        errors++;
+        continue;
+      }
 
-        await attendance.save();
-        console.log('  Saved! ID:', String(student._id), 'Date:', dateOnly);
-        success++;
+      const doc = {
+        studentId: studentId,
+        studentName: student.name,
+        region: student.region,
+        schoolName: student.schoolName,
+        batchNumber: student.batchNumber,
+        date: dateOnly,
+        status: record.status.toLowerCase(),
+        markedBy: String(req.user._id),
+        markedByName: req.user.name,
+        markedAt: now
+      };
 
+      if (existingRecord) {
+        bulkOps.push({
+          updateOne: {
+            filter: { studentId: studentId, date: dateOnly },
+            update: { $set: doc },
+            upsert: true
+          }
+        });
+      } else {
+        bulkOps.push({ insertOne: { document: doc } });
+      }
+    }
+
+    if (bulkOps.length > 0) {
+      try {
+        await Attendance.bulkWrite(bulkOps, { ordered: false });
+        success += bulkOps.length;
       } catch (err) {
         console.log('  Error:', err.message);
-        
-        // Check if it's a duplicate key error (E11000)
         if (err.code === 11000) {
           console.log(`  ⚠️ DUPLICATE ERROR: Student already marked on this date`);
-          conflicts.push({
-            studentName: record.studentId, // We'll use ID as fallback
-            markedBy: 'Unknown (overwrite attempt)',
-            status: 'Already marked'
-          });
         }
-        
         errors++;
       }
     }
@@ -135,7 +135,7 @@ router.get('/by-batch', auth, async (req, res) => {
     console.log('Date:', date);
     console.log('Filter by role:', markedByRole || 'none');
 
-    if (!region || !batchNumber || !date) {
+    if (!region || !date) {
       return res.status(400).json({ message: 'Missing parameters' });
     }
 
@@ -144,12 +144,15 @@ router.get('/by-batch', auth, async (req, res) => {
     console.log('Date (YYYY-MM-DD):', dateOnly);
 
     // Get all students in this batch/region
-    const students = await User.find({
+    const studentsQuery = {
       role: 'student',
       region: region,
-      batchNumber: batchNumber,
       isActive: true
-    }).lean();
+    };
+    if (batchNumber && batchNumber !== 'all') {
+      studentsQuery.batchNumber = batchNumber;
+    }
+    const students = await User.find(studentsQuery).lean();
 
     console.log('Found students:', students.length);
 
@@ -161,9 +164,11 @@ router.get('/by-batch', auth, async (req, res) => {
     // Get attendance for this region/batch/date
     let attendanceQuery = {
       region: region,
-      batchNumber: batchNumber,
       date: dateOnly
     };
+    if (batchNumber && batchNumber !== 'all') {
+      attendanceQuery.batchNumber = batchNumber;
+    }
 
     const attendanceRecords = await Attendance.find(attendanceQuery).lean();
 

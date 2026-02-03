@@ -44,6 +44,9 @@
             <li class="nav-item">
                 <button class="nav-link" onclick="showTab('attendance')">Attendance Report</button>
             </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('dailywork')">Daily Work</button>
+            </li>
         </ul>
 
         <div id="studentsTab">
@@ -125,6 +128,40 @@
             </div>
         </div>
 
+        <div id="dailyWorkTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">📝 Daily Work (All Teachers)</h5>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label>Teacher</label>
+                            <select class="form-select" id="adminWorkTeacher">
+                                <option value="">All Teachers</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Filter Type</label>
+                            <select class="form-select" id="adminWorkFilterType" onchange="updateAdminWorkFilterUI()">
+                                <option value="date">Date</option>
+                                <option value="month">Month</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label id="adminWorkDateLabel">Date</label>
+                            <input type="date" class="form-control" id="adminWorkDate">
+                        </div>
+                        <div class="col-md-2">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="loadAdminWorkReports()">View Reports</button>
+                        </div>
+                    </div>
+
+                    <div id="adminWorkResults"></div>
+                </div>
+            </div>
+        </div>
+
     <!-- Add Student Modal -->
     <div class="modal" id="studentModal" tabindex="-1">
         <div class="modal-dialog">
@@ -137,7 +174,7 @@
                     <form id="studentForm">
                         <input type="text" class="form-control mb-2" placeholder="Name" id="sName" required>
                         <input type="text" class="form-control mb-2" placeholder="Region" id="sRegion" required>
-                        <input type="text" class="form-control mb-2" placeholder="School Name" id="sSchool">
+                        <input type="text" class="form-control mb-2" placeholder="School Name" id="sSchool" required>
                         <input type="number" class="form-control mb-2" placeholder="Age" id="sAge">
                         <input type="text" class="form-control mb-2" placeholder="Mobile" id="sMobile" required>
                         <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="sStandard">
@@ -162,7 +199,7 @@
                         <input type="hidden" id="editStudentId">
                         <input type="text" class="form-control mb-2" placeholder="Name" id="editSName" required>
                         <input type="text" class="form-control mb-2" placeholder="Region" id="editSRegion" required>
-                        <input type="text" class="form-control mb-2" placeholder="School Name" id="editSSchool">
+                        <input type="text" class="form-control mb-2" placeholder="School Name" id="editSSchool" required>
                         <input type="number" class="form-control mb-2" placeholder="Age" id="editSAge">
                         <input type="text" class="form-control mb-2" placeholder="Mobile" id="editSMobile" required>
                         <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="editSStandard">
@@ -201,23 +238,40 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const token = localStorage.getItem('token');
-        if (!token) window.location.href = '/';
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        if (!token || !user.role) {
+            localStorage.clear();
+            window.location.href = '/';
+        }
+        if (user.role !== 'admin') {
+            alert('Admin access required. Please login with an admin account.');
+            localStorage.clear();
+            window.location.href = '/';
+        }
 
         function showTab(tab) {
             if (tab === 'students') {
                 document.getElementById('studentsTab').style.display = 'block';
                 document.getElementById('usersTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
                 loadFilterRegions();
             } else if (tab === 'users') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'block';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
             } else if (tab === 'attendance') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'block';
+                document.getElementById('dailyWorkTab').style.display = 'none';
                 loadAttRegions();
+            } else if (tab === 'dailywork') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'block';
             }
         }
 
@@ -322,7 +376,17 @@
                 loadStudents();
                 loadStats();
             } else {
-                alert('Error adding student');
+                let errorMessage = 'Unknown error';
+                try {
+                    const error = await res.json();
+                    errorMessage = error.message || errorMessage;
+                } catch (e2) {
+                    // ignore JSON parse error
+                }
+                if (res.status === 403) {
+                    errorMessage = `Admin only. You are logged in as: ${user.role || 'unknown'}`;
+                }
+                alert('Error adding student: ' + errorMessage);
             }
         });
 
@@ -475,6 +539,116 @@
             regions.forEach(r => {
                 select.innerHTML += `<option value="${r}">${r}</option>`;
             });
+        }
+
+        async function loadAdminWorkTeachers() {
+            const res = await fetch('/api/users', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const users = await res.json();
+            const select = document.getElementById('adminWorkTeacher');
+            if (!select) return;
+            select.innerHTML = '<option value="">All Teachers</option>';
+            users
+                .filter(u => u.role === 'teacher')
+                .forEach(u => {
+                    select.innerHTML += `<option value="${u._id}">${u.name}</option>`;
+                });
+        }
+
+        async function loadAdminWorkReports() {
+            const filterType = document.getElementById('adminWorkFilterType').value;
+            const dateInput = document.getElementById('adminWorkDate').value;
+            const teacherId = document.getElementById('adminWorkTeacher').value;
+
+            if (!dateInput) {
+                alert('Please select date/month');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            if (teacherId) {
+                params.append('teacherId', teacherId);
+            }
+            if (filterType === 'month') {
+                const [year, month] = dateInput.split('-');
+                const startDate = `${year}-${month}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const endDate = `${year}-${month}-${lastDay}`;
+                params.append('startDate', startDate);
+                params.append('endDate', endDate);
+            } else {
+                params.append('date', dateInput);
+            }
+
+            const res = await fetch(`/api/workReport?${params.toString()}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) {
+                alert('Failed to load reports');
+                return;
+            }
+
+            const reports = await res.json();
+            if (!reports || reports.length === 0) {
+                document.getElementById('adminWorkResults').innerHTML =
+                    '<div class="alert alert-warning">No reports found for the selected filters</div>';
+                return;
+            }
+
+            let html = `
+                <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Teacher</th>
+                            <th>Topics Taught</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            reports.forEach((report, index) => {
+                const reportDate = new Date(report.date).toISOString().split('T')[0];
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${reportDate}</td>
+                        <td>${report.teacherName || '-'}</td>
+                        <td>${report.topicsCovered}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+
+            document.getElementById('adminWorkResults').innerHTML = html;
+        }
+
+        updateAdminWorkFilterUI();
+        loadAdminWorkTeachers();
+
+        function updateAdminWorkFilterUI() {
+            const filterType = document.getElementById('adminWorkFilterType').value;
+            const dateLabel = document.getElementById('adminWorkDateLabel');
+            const dateInput = document.getElementById('adminWorkDate');
+
+            if (filterType === 'month') {
+                dateLabel.textContent = 'Month';
+                dateInput.type = 'month';
+                dateInput.value = new Date().toISOString().slice(0, 7);
+            } else {
+                dateLabel.textContent = 'Date';
+                dateInput.type = 'date';
+                dateInput.value = new Date().toISOString().split('T')[0];
+            }
         }
 
         async function loadAttSchools() {

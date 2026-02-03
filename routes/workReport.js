@@ -1,38 +1,38 @@
 const express = require('express');
 const router = express.Router();
 const WorkReport = require('../models/WorkReport');
-const auth = require('../middleware/auth');
+const { auth } = require('../middleware/auth');
 
 // @route   POST /api/workReport
 // @desc    Submit a new daily work report
 // @access  Private (Teachers only)
 router.post('/', auth, async (req, res) => {
     try {
-        const { date, region, batchNumber, subject, topicsCovered, assignment, attendanceCount } = req.body;
+        const { date, region, subject, topicsCovered, assignment, attendanceCount } = req.body;
 
         // Validation
-        if (!date || !region || !batchNumber || !subject || !topicsCovered || !assignment || attendanceCount === undefined) {
-            return res.status(400).json({ error: 'All fields are required' });
-        }
-
-        if (attendanceCount < 0) {
-            return res.status(400).json({ error: 'Attendance count cannot be negative' });
+        if (!date || !topicsCovered) {
+            return res.status(400).json({ error: 'Date and topics are required' });
         }
 
         // Check if report already exists for this date, teacher, region, batch
-        const existingReport = await WorkReport.findOne({
-            teacherId: req.userId,
-            date: new Date(date),
-            region,
-            batchNumber
-        });
+        const existingFilter = {
+            teacherId: req.user._id,
+            date: new Date(date)
+        };
+        if (region) {
+            existingFilter.region = region;
+        }
+        const existingReport = await WorkReport.findOne(existingFilter);
 
         if (existingReport) {
             // Update existing report
-            existingReport.subject = subject;
+            existingReport.subject = subject || existingReport.subject;
             existingReport.topicsCovered = topicsCovered;
-            existingReport.assignment = assignment;
-            existingReport.attendanceCount = attendanceCount;
+            existingReport.assignment = assignment || existingReport.assignment;
+            if (attendanceCount !== undefined) {
+                existingReport.attendanceCount = attendanceCount;
+            }
             existingReport.updatedAt = new Date();
 
             await existingReport.save();
@@ -41,14 +41,14 @@ router.post('/', auth, async (req, res) => {
 
         // Create new report
         const workReport = new WorkReport({
-            teacherId: req.userId,
+            teacherId: req.user._id,
+            teacherName: req.user.name,
             date: new Date(date),
-            region,
-            batchNumber,
-            subject,
+            region: region || '',
+            subject: subject || 'Daily Work',
             topicsCovered,
-            assignment,
-            attendanceCount
+            assignment: assignment || '',
+            attendanceCount: attendanceCount || 0
         });
 
         await workReport.save();
@@ -64,24 +64,27 @@ router.post('/', auth, async (req, res) => {
 // @access  Private (Teachers only)
 router.get('/', auth, async (req, res) => {
     try {
-        const { date, region, batchNumber } = req.query;
+        const { date, region, startDate, endDate, teacherId } = req.query;
 
         // Build filter
-        let filter = { teacherId: req.userId };
-
+        let filter = {};
         if (date) {
-            const startDate = new Date(date);
-            const endDate = new Date(date);
-            endDate.setDate(endDate.getDate() + 1);
-            filter.date = { $gte: startDate, $lt: endDate };
+            const start = new Date(date);
+            const end = new Date(date);
+            end.setDate(end.getDate() + 1);
+            filter.date = { $gte: start, $lt: end };
+        } else if (startDate && endDate) {
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            end.setDate(end.getDate() + 1);
+            filter.date = { $gte: start, $lt: end };
         }
 
         if (region) {
             filter.region = region;
         }
-
-        if (batchNumber) {
-            filter.batchNumber = batchNumber;
+        if (teacherId) {
+            filter.teacherId = teacherId;
         }
 
         const reports = await WorkReport.find(filter)
@@ -102,7 +105,7 @@ router.get('/:id', auth, async (req, res) => {
     try {
         const report = await WorkReport.findOne({
             _id: req.params.id,
-            teacherId: req.userId
+            teacherId: req.user._id
         });
 
         if (!report) {
@@ -123,7 +126,7 @@ router.delete('/:id', auth, async (req, res) => {
     try {
         const report = await WorkReport.findOneAndDelete({
             _id: req.params.id,
-            teacherId: req.userId
+            teacherId: req.user._id
         });
 
         if (!report) {
