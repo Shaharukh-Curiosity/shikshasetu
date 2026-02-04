@@ -189,7 +189,7 @@
                         </div>
                         <div class="col-md-3">
                             <label>Date</label>
-                            <input type="date" class="form-control" id="markDate" required>
+                            <input type="date" class="form-control" id="markDate" required onchange="loadMarkStudents()">
                         </div>
                     </div>
 
@@ -224,7 +224,10 @@
                         </div>
                         <div class="col-md-3">
                             <label>&nbsp;</label>
-                            <button class="btn btn-primary w-100" onclick="viewAttendance()">View</button>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary w-100" onclick="viewAttendance()">View</button>
+                                <button class="btn btn-success w-100" onclick="shareDailySummaryAllBatches()">Share Daily Summary</button>
+                            </div>
                         </div>
                     </div>
 
@@ -370,22 +373,26 @@
         <div id="lowSection" style="display: none;">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Low Attendance (Absent Last 3 Days)</h5>
+                    <h5 class="card-title">Low Attendance (Absent 3+ Classes)</h5>
 
                     <div class="row g-3 mb-3 align-items-end">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label>Region</label>
                             <select class="form-select" id="lowRegion" onchange="loadLowBatches()">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label>Batch</label>
                             <select class="form-select" id="lowBatch">
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <label>Last N Days</label>
+                            <input type="number" class="form-control" id="lowDays" min="1" value="30">
+                        </div>
+                        <div class="col-md-3">
                             <label>&nbsp;</label>
                             <button class="btn btn-primary w-100" onclick="loadLowAttendance()">View Students</button>
                         </div>
@@ -436,6 +443,7 @@
         loadWorkViewTeachers();
 
         let currentStudents = [];
+        let lastViewAttendance = null;
         
         console.log('📍 Current page:', window.location.pathname);
         console.log('🚀 Loading initial data...');
@@ -760,6 +768,7 @@
         async function loadLowAttendance() {
             const region = document.getElementById('lowRegion').value;
             const batch = document.getElementById('lowBatch').value;
+            const days = document.getElementById('lowDays')?.value;
 
             if (!region) {
                 alert('Please select region');
@@ -770,6 +779,9 @@
             params.append('region', region);
             if (batch) {
                 params.append('batchNumber', batch);
+            }
+            if (days) {
+                params.append('days', days);
             }
 
             try {
@@ -782,17 +794,20 @@
 
                 const data = await res.json();
                 const results = data.results || [];
-                const dates = (data.dates || []).sort();
+                const threshold = data.threshold || 3;
+                const days = data.days || 30;
+                const dateRange = data.dateRange || {};
 
                 if (results.length === 0) {
                     document.getElementById('lowResults').innerHTML =
-                        '<div class="alert alert-warning">No students found absent for the last 3 days</div>';
+                        `<div class="alert alert-warning">No students found absent for ${threshold}+ classes in the last ${days} days</div>`;
                     return;
                 }
 
                 let html = `
                     <div class="alert alert-info">
-                        Showing students absent on: <strong>${dates.join(', ')}</strong>
+                        Showing students absent for <strong>${threshold}+ classes</strong> in the last <strong>${days} days</strong>
+                        ${dateRange.start && dateRange.end ? ` (from ${dateRange.start} to ${dateRange.end})` : ''}
                     </div>
                     <div class="table-responsive">
                     <table class="table table-bordered table-striped">
@@ -1031,9 +1046,6 @@
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
                 select.value = 'all';
-                if (document.getElementById('viewDate').value) {
-                    viewAttendance();
-                }
             } catch (error) {
                 console.error('❌ Error loading view batches:', error);
                 alert('Error loading batches: ' + error.message);
@@ -1044,6 +1056,7 @@
         async function loadMarkStudents() {
             const region = document.getElementById('markRegion').value;
             const batch = document.getElementById('markBatch').value;
+            const date = document.getElementById('markDate').value;
             
             if (!region || !batch) {
                 console.warn('⚠️ Region or batch not selected');
@@ -1051,8 +1064,8 @@
             }
 
             try {
-                console.log('👥 Loading students for marking:', region, batch);
-                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
+                console.log('👥 Loading students for marking:', region, batch, date);
+                const res = await fetch(`/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -1082,6 +1095,8 @@
                 `;
 
                 currentStudents.forEach((student, index) => {
+                    const isPresent = student.attendance && student.attendance.status === 'present';
+                    const isAbsent = student.attendance && student.attendance.status === 'absent';
                     html += `
                         <tr>
   <td class="align-middle">${index + 1}</td>
@@ -1096,7 +1111,7 @@
         <input type="radio"
                class="form-check-input m-0"
                name="status_${student._id}"
-               value="present">
+               value="present" ${isPresent ? 'checked' : ''}>
         <span class="fw-semibold text-success">present</span>
       </label>
 
@@ -1106,7 +1121,7 @@
         <input type="radio"
                class="form-check-input m-0"
                name="status_${student._id}"
-               value="absent">
+               value="absent" ${isAbsent ? 'checked' : ''}>
         <span class="fw-semibold text-danger">absent</span>
       </label>
 
@@ -1283,6 +1298,7 @@
                 }
 
                 let present = 0, absent = 0, notMarked = 0;
+                const absentNames = [];
 
                 let html = `
                     <table class="table table-bordered">
@@ -1307,6 +1323,7 @@
                         } else {
                             statusBadge = '<span class="badge bg-danger">ABSENT</span>';
                             absent++;
+                            absentNames.push(student.name);
                         }
                         markedBy = student.attendance.markedBy;
                     } else {
@@ -1334,13 +1351,128 @@
                         Absent: <span class="badge bg-danger">${absent}</span> | 
                         Not Marked: <span class="badge bg-secondary">${notMarked}</span>
                     </div>
+                    <button class="btn btn-success mb-3" onclick="shareAttendanceWhatsApp()">
+                        Share to WhatsApp
+                    </button>
                 `;
 
                 document.getElementById('viewResults').innerHTML = summary + html;
+                lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames };
 
             } catch (error) {
                 console.error('Error viewing attendance:', error);
                 alert('Failed to load attendance');
+            }
+        }
+
+        function shareAttendanceWhatsApp() {
+            if (!lastViewAttendance) {
+                alert('Please load attendance first.');
+                return;
+            }
+
+            const { region, batch, date, present, absent, notMarked, absentNames } = lastViewAttendance;
+            const header = `Daily Attendance - ${date}`;
+            const details = [
+                `Region: ${region}`,
+                `Batch: ${batch}`,
+                `Present: ${present}`,
+                `Absent: ${absent}`,
+                `Not Marked: ${notMarked}`
+            ];
+            let message = `${header}\n${details.join('\n')}`;
+
+            if (absentNames.length > 0) {
+                const list = absentNames.slice(0, 30).join(', ');
+                message += `\nAbsent Students: ${list}`;
+                if (absentNames.length > 30) {
+                    message += ` +${absentNames.length - 30} more`;
+                }
+            }
+
+            const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            window.open(url, '_blank');
+        }
+
+        async function shareDailySummaryAllBatches() {
+            const region = document.getElementById('viewRegion').value;
+            const date = document.getElementById('viewDate').value;
+
+            if (!region || !date) {
+                alert('Please select region and date');
+                return;
+            }
+
+            try {
+                const batchesRes = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!batchesRes.ok) {
+                    throw new Error(`API Error: ${batchesRes.status}`);
+                }
+                const batches = await batchesRes.json();
+                if (!batches || batches.length === 0) {
+                    alert('No batches found for this region');
+                    return;
+                }
+
+                const summaries = await Promise.all(
+                    batches.map(async (batch) => {
+                        const res = await fetch(
+                            `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                            { headers: { 'Authorization': `Bearer ${token}` } }
+                        );
+                        if (!res.ok) {
+                            throw new Error(`API Error: ${res.status}`);
+                        }
+                        const students = await res.json();
+                        if (!students || students.length === 0) {
+                            return null;
+                        }
+
+                        let present = 0, absent = 0, notMarked = 0;
+                        const absentNames = [];
+                        students.forEach((student) => {
+                            if (student.attendance) {
+                                if (student.attendance.status === 'present') {
+                                    present++;
+                                } else {
+                                    absent++;
+                                    absentNames.push(student.name);
+                                }
+                            } else {
+                                notMarked++;
+                            }
+                        });
+
+                        return { batch, present, absent, notMarked, total: students.length, absentNames };
+                    })
+                );
+
+                const cleaned = summaries.filter(Boolean);
+                if (cleaned.length === 0) {
+                    alert('No students found in batches for this date');
+                    return;
+                }
+
+                const header = `Daily Attendance Summary - ${date}`;
+                const col = (text, width) => String(text).padEnd(width, ' ');
+                const tableHeader = `${col('Batch', 12)} ${col('P', 3)} ${col('A', 3)} ${col('NM', 3)} Absent Students`;
+                const tableDivider = `${col('-----', 12)} ${col('--', 3)} ${col('--', 3)} ${col('---', 3)} ---------------`;
+                const lines = cleaned.map(s => {
+                    const names = s.absentNames.length > 0
+                        ? s.absentNames.slice(0, 20).join(', ')
+                        : '-';
+                    const suffix = s.absentNames.length > 20 ? ` +${s.absentNames.length - 20} more` : '';
+                    return `${col(s.batch, 12)} ${col(s.present, 3)} ${col(s.absent, 3)} ${col(s.notMarked, 3)} ${names}${suffix}`;
+                });
+                const message = `${header}\nRegion: ${region}\n\n${tableHeader}\n${tableDivider}\n${lines.join('\n')}`;
+
+                const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+                window.open(url, '_blank');
+            } catch (error) {
+                console.error('Error sharing daily summary:', error);
+                alert('Failed to create summary: ' + error.message);
             }
         }
 
@@ -1699,6 +1831,12 @@
     </script>
 </body>
 </html>
+
+
+
+
+
+
 
 
 

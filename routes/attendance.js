@@ -344,28 +344,28 @@ router.get('/summary', auth, async (req, res) => {
 });
 
 // ============================================
-// LOW ATTENDANCE - Absent last 3 days
+// LOW ATTENDANCE - Absent 3+ classes (any days)
 // ============================================
 router.get('/low-attendance', auth, async (req, res) => {
   try {
-    const { region, batchNumber } = req.query;
+    const { region, batchNumber, minAbsent, days } = req.query;
 
     if (!region) {
       return res.status(400).json({ message: 'Missing region' });
     }
 
-    const today = new Date();
-    const dates = [];
-    for (let i = 0; i < 3; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      dates.push(d.toISOString().split('T')[0]);
-    }
+    const threshold = Math.max(parseInt(minAbsent, 10) || 3, 1);
+    const daysInt = Math.max(parseInt(days, 10) || 30, 1);
+    const endDate = new Date();
+    const startDateObj = new Date(endDate);
+    startDateObj.setDate(endDate.getDate() - (daysInt - 1));
+    const startDate = startDateObj.toISOString().split('T')[0];
+    const endDateStr = endDate.toISOString().split('T')[0];
 
     const match = {
       region: region,
-      date: { $in: dates },
-      status: 'absent'
+      status: 'absent',
+      date: { $gte: startDate, $lte: endDateStr }
     };
     if (batchNumber && batchNumber !== 'all') {
       match.batchNumber = batchNumber;
@@ -381,7 +381,7 @@ router.get('/low-attendance', auth, async (req, res) => {
         }
       },
       { $addFields: { uniqueDatesCount: { $size: '$dates' } } },
-      { $match: { uniqueDatesCount: dates.length } },
+      { $match: { absentCount: { $gte: threshold } } },
       { $addFields: { studentObjectId: { $toObjectId: '$_id' } } },
       {
         $lookup: {
@@ -414,7 +414,12 @@ router.get('/low-attendance', auth, async (req, res) => {
       { $sort: { name: 1 } }
     ]);
 
-    res.json({ dates, results });
+    res.json({
+      threshold,
+      days: daysInt,
+      dateRange: { start: startDate, end: endDateStr },
+      results
+    });
   } catch (error) {
     console.error('FATAL ERROR:', error);
     res.status(500).json({ message: 'Server error' });
