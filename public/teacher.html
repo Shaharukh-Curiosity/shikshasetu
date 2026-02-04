@@ -165,6 +165,15 @@
             <li class="nav-item">
                 <button class="nav-link" id="lowTab" onclick="showTab('low')">Low Attendance</button>
             </li>
+            <li class="nav-item">
+                <button class="nav-link" id="marksTab" onclick="showTab('marks')">Marks</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="resultTab" onclick="showTab('result')">Result</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="analysisTab" onclick="showTab('analysis')">Data Analysis</button>
+            </li>
         </ul>
         <div class="tabs-hint">All tabs are visible on mobile — tap any section below.</div>
 
@@ -369,6 +378,73 @@
             </div>
         </div>
 
+        <!-- MARKS -->
+        <div id="marksSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Enter Marks</h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="marksRegion" onchange="loadMarksBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="marksBatch" onchange="loadMarksStudents()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="marksDate" required onchange="loadMarksStudents()">
+                        </div>
+                    </div>
+
+                    <div id="marksTable"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RESULT -->
+        <div id="resultSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Result</h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="resultRegion" onchange="loadResultBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="resultBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="resultDate" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary w-100" onclick="viewResult()">View</button>
+                                <button class="btn btn-success w-100" onclick="viewTop3()">Top 3</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="resultResults"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- LOW ATTENDANCE -->
         <div id="lowSection" style="display: none;">
             <div class="card">
@@ -402,12 +478,76 @@
                 </div>
             </div>
         </div>
+
+        <!-- DATA ANALYSIS -->
+        <div id="analysisSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Data Analysis</h5>
+
+                    <div class="row g-3 mb-4 align-items-end">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="analysisRegion" onchange="loadAnalysisBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="analysisBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Start Date</label>
+                            <input type="date" class="form-control" id="analysisStartDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label>End Date</label>
+                            <input type="date" class="form-control" id="analysisEndDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="runDataAnalysis()">Analyze</button>
+                        </div>
+                    </div>
+
+                    <div id="analysisSummary" class="mb-3"></div>
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title">Attendance by Batch (Percentage)</h6>
+                                    <canvas id="analysisChart" height="220"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <h6 class="card-title mb-0">Download All-Classes List</h6>
+                                        <button class="btn btn-outline-primary btn-sm" onclick="downloadAnalysisCSV()">
+                                            Download CSV
+                                        </button>
+                                    </div>
+                                    <div class="text-muted small">
+                                        Export students who attended all classes within the selected range.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     <footer class="dashboard-footer">
         <span>© 2026 Digital Literacy for Every Child — All Rights Reserved</span>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         // DEBUG: Check authentication on page load
         console.log('🔐 TEACHER DASHBOARD INITIALIZATION');
@@ -435,15 +575,26 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('markDate').value = today;
         document.getElementById('viewDate').value = today;
+        document.getElementById('marksDate').value = today;
+        document.getElementById('resultDate').value = today;
         const workDateEl = document.getElementById('workDate');
         const workViewDateEl = document.getElementById('workViewDate');
         if (workDateEl) workDateEl.value = today;
         if (workViewDateEl) workViewDateEl.value = today;
+        const analysisStartEl = document.getElementById('analysisStartDate');
+        const analysisEndEl = document.getElementById('analysisEndDate');
+        if (analysisStartEl && analysisEndEl) {
+            const start = new Date();
+            start.setDate(start.getDate() - 29);
+            analysisStartEl.value = start.toISOString().split('T')[0];
+            analysisEndEl.value = today;
+        }
         updateWorkViewFilterUI();
         loadWorkViewTeachers();
 
         let currentStudents = [];
         let lastViewAttendance = null;
+        let analysisChart = null;
         
         console.log('📍 Current page:', window.location.pathname);
         console.log('🚀 Loading initial data...');
@@ -476,12 +627,18 @@
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
                 document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.add('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
                 document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'view') {
                 document.getElementById('markSection').style.display = 'none';
@@ -490,12 +647,18 @@
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
                 document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
                 document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'students') {
                 document.getElementById('markSection').style.display = 'none';
@@ -504,12 +667,18 @@
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
                 document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.add('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
                 document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
                 loadStudentsRegions();
             } else if (tab === 'report') {
                 document.getElementById('markSection').style.display = 'none';
@@ -518,12 +687,18 @@
                 document.getElementById('reportSection').style.display = 'block';
                 document.getElementById('workSection').style.display = 'none';
                 document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.add('active');
                 document.getElementById('workTab').classList.remove('active');
                 document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
                 loadReportRegions();
             } else if (tab === 'work') {
                 document.getElementById('markSection').style.display = 'none';
@@ -532,12 +707,78 @@
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'block';
                 document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.add('active');
                 document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
+            } else if (tab === 'marks') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'block';
+                document.getElementById('resultSection').style.display = 'none';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
+                document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.add('active');
+                document.getElementById('resultTab').classList.remove('active');
+                loadMarksRegions();
+            } else if (tab === 'result') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'block';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
+                document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.add('active');
+                loadResultRegions();
+            } else if (tab === 'analysis') {
+                document.getElementById('markSection').style.display = 'none';
+                document.getElementById('viewSection').style.display = 'none';
+                document.getElementById('studentsSection').style.display = 'none';
+                document.getElementById('reportSection').style.display = 'none';
+                document.getElementById('workSection').style.display = 'none';
+                document.getElementById('lowSection').style.display = 'none';
+                document.getElementById('analysisSection').style.display = 'block';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
+                document.getElementById('markTab').classList.remove('active');
+                document.getElementById('viewTab').classList.remove('active');
+                document.getElementById('studentsTab').classList.remove('active');
+                document.getElementById('reportTab').classList.remove('active');
+                document.getElementById('workTab').classList.remove('active');
+                document.getElementById('lowTab').classList.remove('active');
+                document.getElementById('analysisTab').classList.add('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
+                loadAnalysisRegions();
             } else if (tab === 'low') {
                 document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'none';
@@ -545,12 +786,18 @@
                 document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'none';
                 document.getElementById('lowSection').style.display = 'block';
+                document.getElementById('analysisSection').style.display = 'none';
+                document.getElementById('marksSection').style.display = 'none';
+                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.remove('active');
                 document.getElementById('lowTab').classList.add('active');
+                document.getElementById('analysisTab').classList.remove('active');
+                document.getElementById('marksTab').classList.remove('active');
+                document.getElementById('resultTab').classList.remove('active');
                 loadLowRegions();
             }
         }
@@ -715,7 +962,390 @@
             }
         }
 
-        // LOW ATTENDANCE FUNCTIONS
+                // MARKS FUNCTIONS
+        let marksCurrentStudents = [];
+
+        async function loadMarksRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const regions = await res.json();
+                const select = document.getElementById('marksRegion');
+                if (!select) return;
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+                document.getElementById('marksBatch').innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('marksTable').innerHTML = '';
+            } catch (error) {
+                console.error('Error loading marks regions:', error);
+            }
+        }
+
+        async function loadMarksBatches() {
+            const region = document.getElementById('marksRegion').value;
+            const select = document.getElementById('marksBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('marksTable').innerHTML = '';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const batches = await res.json();
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+                document.getElementById('marksTable').innerHTML = '';
+            } catch (error) {
+                console.error('Error loading marks batches:', error);
+            }
+        }
+
+        async function loadMarksStudents() {
+            const region = document.getElementById('marksRegion').value;
+            const batch = document.getElementById('marksBatch').value;
+            const date = document.getElementById('marksDate').value;
+
+            if (!region || !batch || !date) return;
+
+            try {
+                const res = await fetch(
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                marksCurrentStudents = await res.json();
+
+                if (!marksCurrentStudents || marksCurrentStudents.length === 0) {
+                    document.getElementById('marksTable').innerHTML =
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                let html = `
+                    <table class="table table-sm table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th class="text-center">Theory (40)</th>
+                                <th class="text-center">Practical (40)</th>
+                                <th class="text-center">Presentation (20)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                marksCurrentStudents.forEach((student, index) => {
+                    const m = student.marks || {};
+                    html += `
+                        <tr>
+                            <td class="align-middle">${index + 1}</td>
+                            <td class="align-middle fw-semibold">${student.name}</td>
+                            <td class="align-middle text-center">
+                                <input type="number" class="form-control form-control-sm" min="0" max="40"
+                                    id="theory_${student._id}" value="${m.theory ?? ''}">
+                            </td>
+                            <td class="align-middle text-center">
+                                <input type="number" class="form-control form-control-sm" min="0" max="40"
+                                    id="practical_${student._id}" value="${m.practical ?? ''}">
+                            </td>
+                            <td class="align-middle text-center">
+                                <input type="number" class="form-control form-control-sm" min="0" max="20"
+                                    id="presentation_${student._id}" value="${m.presentation ?? ''}">
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    <button class="btn btn-success btn-lg mt-3" onclick="submitMarks()">Submit Marks</button>
+                `;
+
+                document.getElementById('marksTable').innerHTML = html;
+            } catch (error) {
+                console.error('? Error loading marks:', error);
+                document.getElementById('marksTable').innerHTML =
+                    `<div class="alert alert-danger">Error loading marks: ${error.message}</div>`;
+            }
+        }
+
+        async function submitMarks() {
+            const region = document.getElementById('marksRegion').value;
+            const batch = document.getElementById('marksBatch').value;
+            const date = document.getElementById('marksDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            const marksRecords = [];
+            marksCurrentStudents.forEach(student => {
+                const theoryEl = document.getElementById(`theory_${student._id}`);
+                const practicalEl = document.getElementById(`practical_${student._id}`);
+                const presentationEl = document.getElementById(`presentation_${student._id}`);
+
+                const hasValue = (theoryEl?.value ?? '') !== '' ||
+                                 (practicalEl?.value ?? '') !== '' ||
+                                 (presentationEl?.value ?? '') !== '';
+
+                if (!hasValue) return;
+
+                const theory = Number(theoryEl.value || 0);
+                const practical = Number(practicalEl.value || 0);
+                const presentation = Number(presentationEl.value || 0);
+
+                marksRecords.push({
+                    studentId: student._id,
+                    theory,
+                    practical,
+                    presentation
+                });
+            });
+
+            if (marksRecords.length === 0) {
+                alert('Please enter marks for at least one student');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/marks/mark', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ date, marksRecords })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Marks saved. Successful: ${data.results?.successful || 0}`);
+                    loadMarksStudents();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to submit marks'));
+                }
+            } catch (error) {
+                console.error('? Error submitting marks:', error);
+                alert('Failed to submit marks');
+            }
+        }
+
+        // RESULT FUNCTIONS
+        async function loadResultRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const regions = await res.json();
+                const select = document.getElementById('resultRegion');
+                if (!select) return;
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+                document.getElementById('resultBatch').innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('resultResults').innerHTML = '';
+            } catch (error) {
+                console.error('? Error loading result regions:', error);
+            }
+        }
+
+        async function loadResultBatches() {
+            const region = document.getElementById('resultRegion').value;
+            const select = document.getElementById('resultBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('resultResults').innerHTML = '';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const batches = await res.json();
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+            } catch (error) {
+                console.error('? Error loading result batches:', error);
+            }
+        }
+
+        async function viewResult() {
+            const region = document.getElementById('resultRegion').value;
+            const batch = document.getElementById('resultBatch').value;
+            const date = document.getElementById('resultDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const students = await res.json();
+
+                if (!students || students.length === 0) {
+                    document.getElementById('resultResults').innerHTML =
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">
+                        <strong>Region:</strong> ${region} &nbsp; | &nbsp;
+                        <strong>Batch:</strong> ${batch} &nbsp; | &nbsp;
+                        <strong>Date:</strong> ${date}
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th class="text-center">Total Marks</th>
+                                <th class="text-center">Total Obtained</th>
+                                <th class="text-center">Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                students.forEach((student, index) => {
+                    const m = student.marks;
+                    if (!m) {
+                        html += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${student.name}</td>
+                                <td class="text-center">100</td>
+                                <td class="text-center">-</td>
+                                <td class="text-center"><span class="badge bg-secondary">NOT MARKED</span></td>
+                            </tr>
+                        `;
+                        return;
+                    }
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${student.name}</td>
+                            <td class="text-center">${m.totalMarks}</td>
+                            <td class="text-center">${m.totalObtained}</td>
+                            <td class="text-center"><span class="badge bg-primary">${m.percentage}%</span></td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('resultResults').innerHTML = html;
+            } catch (error) {
+                console.error('? Error loading results:', error);
+                document.getElementById('resultResults').innerHTML =
+                    `<div class="alert alert-danger">Error loading results: ${error.message}</div>`;
+            }
+        }
+
+        async function viewTop3() {
+            const region = document.getElementById('resultRegion').value;
+            const date = document.getElementById('resultDate').value;
+
+            if (!date) {
+                alert('Please select date');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('date', date);
+            if (region) params.append('region', region);
+
+            try {
+                const res = await fetch(`/api/marks/top?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const rows = await res.json();
+
+                if (!rows || rows.length === 0) {
+                    document.getElementById('resultResults').innerHTML =
+                        '<div class="alert alert-warning">No marks found for this date</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">
+                        <strong>Top 3 Students</strong> (Date: ${date})
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Batch</th>
+                                <th>Total Marks</th>
+                                <th>Total Obtained</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                rows.forEach((r, index) => {
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${r.studentName}</td>
+                            <td>${r.batchNumber}</td>
+                            <td class="text-center">${r.totalMarks}</td>
+                            <td class="text-center">${r.totalObtained}</td>
+                            <td class="text-center"><span class="badge bg-primary">${r.percentage}%</span></td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('resultResults').innerHTML = html;
+            } catch (error) {
+                console.error('❌ Error loading top 3:', error);
+                document.getElementById('resultResults').innerHTML =
+                    `<div class="alert alert-danger">Error loading top 3: ${error.message}</div>`;
+            }
+        }
+// LOW ATTENDANCE FUNCTIONS
         async function loadLowRegions() {
             try {
                 const res = await fetch('/api/students/regions/all', {
@@ -850,6 +1480,254 @@
                 document.getElementById('lowResults').innerHTML =
                     `<div class="alert alert-danger">Error loading results: ${error.message}</div>`;
             }
+        }
+
+        // DATA ANALYSIS FUNCTIONS
+        async function loadAnalysisRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const regions = await res.json();
+                const select = document.getElementById('analysisRegion');
+                if (!select) return;
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+                const batchSelect = document.getElementById('analysisBatch');
+                if (batchSelect) {
+                    batchSelect.innerHTML = '<option value="">Select Batch</option>';
+                }
+            } catch (error) {
+                console.error('❌ Error loading analysis regions:', error);
+            }
+        }
+
+        async function loadAnalysisBatches() {
+            const region = document.getElementById('analysisRegion').value;
+            const select = document.getElementById('analysisBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const batches = await res.json();
+                select.innerHTML = '<option value="all">All Batches</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+                select.value = 'all';
+            } catch (error) {
+                console.error('❌ Error loading analysis batches:', error);
+            }
+        }
+
+        async function runDataAnalysis() {
+            const region = document.getElementById('analysisRegion').value;
+            const batch = document.getElementById('analysisBatch').value;
+            const startDate = document.getElementById('analysisStartDate').value;
+            const endDate = document.getElementById('analysisEndDate').value;
+
+            if (!region || !batch || !startDate || !endDate) {
+                alert('Please select region, batch, and date range');
+                return;
+            }
+
+            if (startDate > endDate) {
+                alert('Start date must be before end date');
+                return;
+            }
+
+            try {
+                let batches = [];
+                if (batch === 'all') {
+                    const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!res.ok) {
+                        throw new Error(`API Error: ${res.status}`);
+                    }
+                    batches = await res.json();
+                } else {
+                    batches = [batch];
+                }
+
+                if (!batches || batches.length === 0) {
+                    alert('No batches found for this region');
+                    return;
+                }
+
+                const batchResults = [];
+                const allAttended = [];
+
+                for (const b of batches) {
+                    const res = await fetch(
+                        `/api/attendance/summary?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(b)}&startDate=${startDate}&endDate=${endDate}&filterType=date-range`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    if (!res.ok) {
+                        throw new Error(`API Error: ${res.status}`);
+                    }
+                    const data = await res.json();
+                    const summary = data.summary || [];
+                    const stats = data.stats || {};
+                    const totalClasses = stats.totalClasses || 0;
+                    const present = stats.totalPresent || 0;
+                    const absent = stats.totalAbsent || 0;
+                    const rate = (present + absent) > 0 ? ((present / (present + absent)) * 100) : 0;
+
+                    batchResults.push({
+                        batch: b,
+                        present,
+                        absent,
+                        totalClasses,
+                        rate: Number(rate.toFixed(2))
+                    });
+
+                    if (totalClasses > 0) {
+                        summary
+                            .filter(s => s.present === totalClasses)
+                            .forEach(s => {
+                                allAttended.push({
+                                    batch: b,
+                                    name: s.name,
+                                    totalClasses
+                                });
+                            });
+                    }
+                }
+
+                if (batchResults.length === 0) {
+                    document.getElementById('analysisSummary').innerHTML =
+                        '<div class="alert alert-warning">No attendance data found for this range</div>';
+                    document.getElementById('analysisStudents').innerHTML = '';
+                    if (analysisChart) {
+                        analysisChart.destroy();
+                        analysisChart = null;
+                    }
+                    return;
+                }
+
+                const maxBatch = batchResults.reduce((a, b) => (b.rate > a.rate ? b : a), batchResults[0]);
+                const minBatch = batchResults.reduce((a, b) => (b.rate < a.rate ? b : a), batchResults[0]);
+
+                document.getElementById('analysisSummary').innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="alert alert-success mb-0">
+                                <strong>Top Attendance:</strong> Batch ${maxBatch.batch}<br>
+                                Rate: ${maxBatch.rate}% | Present: ${maxBatch.present} | Absent: ${maxBatch.absent}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning mb-0">
+                                <strong>Lowest Attendance:</strong> Batch ${minBatch.batch}<br>
+                                Rate: ${minBatch.rate}% | Present: ${minBatch.present} | Absent: ${minBatch.absent}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                const labels = batchResults.map(b => `Batch ${b.batch}`);
+                const values = batchResults.map(b => b.rate);
+                const colors = [
+                    '#0ea5a4', '#f59e0b', '#ef4444', '#3b82f6', '#22c55e',
+                    '#a855f7', '#14b8a6', '#f97316', '#64748b', '#06b6d4'
+                ];
+
+                const ctx = document.getElementById('analysisChart').getContext('2d');
+                if (analysisChart) analysisChart.destroy();
+                analysisChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: labels.map((_, i) => colors[i % colors.length])
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: { position: 'bottom' },
+                            tooltip: {
+                                callbacks: {
+                                    label: (ctx) => `${ctx.label}: ${ctx.formattedValue}%`
+                                }
+                            }
+                        }
+                    },
+                    plugins: [{
+                        id: 'percentageLabels',
+                        afterDraw(chart) {
+                            const { ctx } = chart;
+                            const meta = chart.getDatasetMeta(0);
+                            const data = chart.data.datasets[0].data || [];
+                            ctx.save();
+                            ctx.font = '600 12px Arial';
+                            ctx.fillStyle = '#0f172a';
+                            ctx.textAlign = 'center';
+                            ctx.textBaseline = 'middle';
+                            meta.data.forEach((arc, index) => {
+                                const value = Number(data[index] || 0);
+                                if (value < 5) return;
+                                const pos = arc.tooltipPosition();
+                                ctx.fillText(`${value}%`, pos.x, pos.y);
+                            });
+                            ctx.restore();
+                        }
+                    }]
+                });
+
+                window.analysisAllAttended = allAttended;
+
+                // Student details are intentionally not shown in the UI.
+            } catch (error) {
+                console.error('❌ Error running data analysis:', error);
+                document.getElementById('analysisSummary').innerHTML =
+                    `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            }
+        }
+
+        function downloadAnalysisCSV() {
+            const rows = window.analysisAllAttended || [];
+            if (!rows || rows.length === 0) {
+                alert('No students to download.');
+                return;
+            }
+
+            const header = ['Batch', 'Student Name', 'Total Classes'];
+            const lines = [header.join(',')];
+            rows.forEach(r => {
+                const line = [
+                    `"${String(r.batch).replace(/\"/g, '""')}"`,
+                    `"${String(r.name).replace(/\"/g, '""')}"`,
+                    `"${String(r.totalClasses).replace(/\"/g, '""')}"`
+                ];
+                lines.push(line.join(','));
+            });
+
+            const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `attendance_all_classes_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         // DAILY WORK REPORT FUNCTIONS
@@ -1831,6 +2709,13 @@
     </script>
 </body>
 </html>
+
+
+
+
+
+
+
 
 
 

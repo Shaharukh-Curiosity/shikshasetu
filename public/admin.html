@@ -138,6 +138,15 @@
                 <button class="nav-link" onclick="showTab('users')">Users</button>
             </li>
             <li class="nav-item">
+                <button class="nav-link" onclick="showTab('markattendance')">Mark Attendance</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('viewdaily')">View Daily</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('whatsapp')">Send WhatsApp Invite</button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link" onclick="showTab('attendance')">Attendance Report</button>
             </li>
             <li class="nav-item">
@@ -179,6 +188,102 @@
         <div id="usersTab" style="display: none;">
             <button class="btn btn-primary mb-3" onclick="showAddUserModal()">Add User</button>
             <div id="usersList"></div>
+        </div>
+
+        <div id="markAttendanceTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Mark Attendance (Admin)</h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="adminMarkRegion" onchange="loadAdminMarkBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="adminMarkBatch" onchange="loadAdminMarkStudents()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="adminMarkDate" required onchange="loadAdminMarkStudents()">
+                        </div>
+                    </div>
+
+                    <div id="adminSavingBanner" class="alert alert-info d-none">Saving attendance...</div>
+                    <div id="adminStudentsTable"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="viewDailyTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">View Daily Attendance (Admin)</h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="adminViewRegion" onchange="loadAdminViewBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="adminViewBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="adminViewDate" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="viewAdminDailyAttendance()">View</button>
+                        </div>
+                    </div>
+
+                    <div id="adminViewResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="whatsappInviteTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Send WhatsApp Group Invite</h5>
+
+                    <div class="row g-3 mb-4 align-items-end">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="waRegion" onchange="loadWaBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="waBatch">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label>WhatsApp Group Invite Link</label>
+                            <input type="text" class="form-control" id="waInviteLink" placeholder="Paste invite link here">
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="buildWaInviteList()">Generate Links</button>
+                        </div>
+                    </div>
+
+                    <div id="waInviteResults"></div>
+                </div>
+            </div>
         </div>
 
         <div id="attendanceTab" style="display: none;">
@@ -353,23 +458,60 @@
             if (tab === 'students') {
                 document.getElementById('studentsTab').style.display = 'block';
                 document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 loadFilterRegions();
             } else if (tab === 'users') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'block';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+            } else if (tab === 'markattendance') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'block';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
+                loadAdminMarkRegions();
+            } else if (tab === 'viewdaily') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'block';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
+                loadAdminViewRegions();
+            } else if (tab === 'whatsapp') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'block';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
+                loadWaRegions();
             } else if (tab === 'attendance') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'block';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 loadAttRegions();
             } else if (tab === 'dailywork') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'block';
             }
@@ -589,7 +731,414 @@
             window.location.href = '/';
         }
 
-        // ===== STUDENT FILTER FUNCTIONS =====
+        
+        
+        // ===== WHATSAPP INVITE =====
+        async function loadWaRegions() {
+            const res = await fetch('/api/students/regions/all', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const regions = await res.json();
+            const select = document.getElementById('waRegion');
+            if (!select) return;
+            select.innerHTML = '<option value="">Select Region</option>';
+            regions.forEach(region => {
+                select.innerHTML += `<option value="${region}">${region}</option>`;
+            });
+            const batchSelect = document.getElementById('waBatch');
+            if (batchSelect) batchSelect.innerHTML = '<option value="">Select Batch</option>';
+            document.getElementById('waInviteResults').innerHTML = '';
+        }
+
+        async function loadWaBatches() {
+            const region = document.getElementById('waRegion').value;
+            const select = document.getElementById('waBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('waInviteResults').innerHTML = '';
+                return;
+            }
+
+            const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const batches = await res.json();
+            select.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(batch => {
+                select.innerHTML += `<option value="${batch}">${batch}</option>`;
+            });
+            document.getElementById('waInviteResults').innerHTML = '';
+        }
+
+        async function buildWaInviteList() {
+            const region = document.getElementById('waRegion').value;
+            const batch = document.getElementById('waBatch').value;
+            const inviteLink = document.getElementById('waInviteLink').value.trim();
+
+            if (!region || !batch) {
+                alert('Please select region and batch');
+                return;
+            }
+            if (!inviteLink) {
+                alert('Please paste the WhatsApp group invite link');
+                return;
+            }
+
+            const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const students = await res.json();
+
+            if (!students || students.length === 0) {
+                document.getElementById('waInviteResults').innerHTML =
+                    '<div class="alert alert-warning">No students found in this batch</div>';
+                return;
+            }
+
+            let html = `
+                <div class="alert alert-info">
+                    Click each link to open WhatsApp and send the invite.
+                </div>
+                <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Mobile</th>
+                            <th>Send Invite</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            students.forEach((student, index) => {
+                const mobile = String(student.mobile || '').trim();
+                const message = `Please join the WhatsApp group: ${inviteLink}`;
+                const phone = mobile.replace(/\D/g, '');
+                const waUrl = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '';
+
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${student.name}</td>
+                        <td>${student.mobile || '-'}</td>
+                        <td>
+                            ${waUrl ? `<a class="btn btn-success btn-sm" target="_blank" href="${waUrl}">Send</a>` : '<span class="text-muted">No number</span>'}
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+
+            document.getElementById('waInviteResults').innerHTML = html;
+        }
+
+        // ===== ADMIN VIEW DAILY =====
+        async function loadAdminViewRegions() {
+            const res = await fetch('/api/students/regions/all', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const regions = await res.json();
+            const select = document.getElementById('adminViewRegion');
+            if (!select) return;
+            select.innerHTML = '<option value="">Select Region</option>';
+            regions.forEach(region => {
+                select.innerHTML += `<option value="${region}">${region}</option>`;
+            });
+            const batchSelect = document.getElementById('adminViewBatch');
+            if (batchSelect) batchSelect.innerHTML = '<option value="">Select Batch</option>';
+            const dateEl = document.getElementById('adminViewDate');
+            if (dateEl) {
+                dateEl.value = new Date().toISOString().split('T')[0];
+            }
+            document.getElementById('adminViewResults').innerHTML = '';
+        }
+
+        async function loadAdminViewBatches() {
+            const region = document.getElementById('adminViewRegion').value;
+            const select = document.getElementById('adminViewBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('adminViewResults').innerHTML = '';
+                return;
+            }
+
+            const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const batches = await res.json();
+            select.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(batch => {
+                select.innerHTML += `<option value="${batch}">${batch}</option>`;
+            });
+            document.getElementById('adminViewResults').innerHTML = '';
+        }
+
+        async function viewAdminDailyAttendance() {
+            const region = document.getElementById('adminViewRegion').value;
+            const batch = document.getElementById('adminViewBatch').value;
+            const date = document.getElementById('adminViewDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const students = await res.json();
+                if (!students || students.length === 0) {
+                    document.getElementById('adminViewResults').innerHTML =
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                let present = 0, absent = 0, notMarked = 0;
+
+                let html = `
+                    <table class="table table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                students.forEach((student, index) => {
+                    let statusBadge, markedBy;
+                    if (student.attendance) {
+                        if (student.attendance.status === 'present') {
+                            statusBadge = '<span class="badge bg-success">PRESENT</span>';
+                            present++;
+                        } else {
+                            statusBadge = '<span class="badge bg-danger">ABSENT</span>';
+                            absent++;
+                        }
+                        markedBy = student.attendance.markedBy;
+                    } else {
+                        statusBadge = '<span class="badge bg-secondary">NOT MARKED</span>';
+                        markedBy = '-';
+                        notMarked++;
+                    }
+
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${student.name}</td>
+                            <td>${statusBadge}</td>
+                            <td>${markedBy}</td>
+                        </tr>
+                    `;
+                });
+
+                html += '</tbody></table>';
+
+                const summary = `
+                    <div class="alert alert-info">
+                        <strong>?? Summary:</strong> 
+                        Present: <span class="badge bg-success">${present}</span> | 
+                        Absent: <span class="badge bg-danger">${absent}</span> | 
+                        Not Marked: <span class="badge bg-secondary">${notMarked}</span>
+                    </div>
+                `;
+
+                document.getElementById('adminViewResults').innerHTML = summary + html;
+            } catch (error) {
+                console.error('Error viewing attendance:', error);
+                document.getElementById('adminViewResults').innerHTML =
+                    `<div class="alert alert-danger">Error: ${error.message}</div>`;
+            }
+        }// ===== ADMIN MARK ATTENDANCE =====
+        let adminCurrentStudents = [];
+
+        async function loadAdminMarkRegions() {
+            const res = await fetch('/api/students/regions/all', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const regions = await res.json();
+            const select = document.getElementById('adminMarkRegion');
+            if (!select) return;
+            select.innerHTML = '<option value="">Select Region</option>';
+            regions.forEach(region => {
+                select.innerHTML += `<option value="${region}">${region}</option>`;
+            });
+            document.getElementById('adminMarkBatch').innerHTML = '<option value="">Select Batch</option>';
+            const dateEl = document.getElementById('adminMarkDate');
+            if (dateEl) {
+                dateEl.value = new Date().toISOString().split('T')[0];
+            }
+            document.getElementById('adminStudentsTable').innerHTML = '';
+        }
+
+        async function loadAdminMarkBatches() {
+            const region = document.getElementById('adminMarkRegion').value;
+            const select = document.getElementById('adminMarkBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('adminStudentsTable').innerHTML = '';
+                return;
+            }
+
+            const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const batches = await res.json();
+            select.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(batch => {
+                select.innerHTML += `<option value="${batch}">${batch}</option>`;
+            });
+            document.getElementById('adminStudentsTable').innerHTML = '';
+        }
+
+        async function loadAdminMarkStudents() {
+            const region = document.getElementById('adminMarkRegion').value;
+            const batch = document.getElementById('adminMarkBatch').value;
+            const date = document.getElementById('adminMarkDate').value;
+
+            if (!region || !batch || !date) return;
+
+            const res = await fetch(
+                `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (!res.ok) {
+                alert('Failed to load students');
+                return;
+            }
+            adminCurrentStudents = await res.json();
+
+            if (!adminCurrentStudents || adminCurrentStudents.length === 0) {
+                document.getElementById('adminStudentsTable').innerHTML =
+                    '<div class="alert alert-warning">No students found in this batch</div>';
+                return;
+            }
+
+            let html = `
+                <table class="table table-sm table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            adminCurrentStudents.forEach((student, index) => {
+                const isPresent = student.attendance && student.attendance.status === 'present';
+                const isAbsent = student.attendance && student.attendance.status === 'absent';
+                html += `
+                    <tr>
+                        <td class="align-middle">${index + 1}</td>
+                        <td class="align-middle fw-semibold">${student.name}</td>
+                        <td class="align-middle">
+                            <div class="d-flex justify-content-center gap-3">
+                                <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
+                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="present" ${isPresent ? 'checked' : ''}>
+                                    <span class="fw-semibold text-success">present</span>
+                                </label>
+                                <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
+                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="absent" ${isAbsent ? 'checked' : ''}>
+                                    <span class="fw-semibold text-danger">absent</span>
+                                </label>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+                <button class="btn btn-success btn-lg mt-3" onclick="submitAdminAttendance()">Submit Attendance</button>
+            `;
+
+            document.getElementById('adminStudentsTable').innerHTML = html;
+        }
+
+        async function submitAdminAttendance() {
+            const region = document.getElementById('adminMarkRegion').value;
+            const batch = document.getElementById('adminMarkBatch').value;
+            const date = document.getElementById('adminMarkDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            const attendanceRecords = [];
+            adminCurrentStudents.forEach(student => {
+                const presentRadio = document.querySelector(`input[name="admin_status_${student._id}"][value="present"]`);
+                const absentRadio = document.querySelector(`input[name="admin_status_${student._id}"][value="absent"]`);
+                if (presentRadio && presentRadio.checked) {
+                    attendanceRecords.push({ studentId: student._id, status: 'present' });
+                } else if (absentRadio && absentRadio.checked) {
+                    attendanceRecords.push({ studentId: student._id, status: 'absent' });
+                }
+            });
+
+            if (attendanceRecords.length === 0) {
+                alert('Please mark at least one student');
+                return;
+            }
+
+            if (attendanceRecords.length < adminCurrentStudents.length) {
+                const confirmSubmit = window.confirm(
+                    `You have marked ${attendanceRecords.length} out of ${adminCurrentStudents.length} students. Submit anyway?`
+                );
+                if (!confirmSubmit) return;
+            }
+
+            const savingBanner = document.getElementById('adminSavingBanner');
+            if (savingBanner) savingBanner.classList.remove('d-none');
+
+            try {
+                const res = await fetch('/api/attendance/mark', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ date, attendanceRecords })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Attendance saved. Marked: ${data.results?.successful || 0}`);
+                    loadAdminMarkStudents();
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to submit'));
+                }
+            } catch (error) {
+                console.error('Error submitting attendance:', error);
+                alert('Failed to submit attendance');
+            } finally {
+                if (savingBanner) savingBanner.classList.add('d-none');
+            }
+        }// ===== STUDENT FILTER FUNCTIONS =====
         async function loadFilterRegions() {
             const res = await fetch('/api/students/regions/all', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -923,3 +1472,8 @@
     </script>
 </body>
 </html>
+
+
+
+
+
