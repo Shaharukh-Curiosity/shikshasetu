@@ -128,7 +128,24 @@
                     </div>
                 </div>
             </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="text-muted">Active Students</h6>
+                        <h2 id="activeStudents">0</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="text-muted">Inactive Students</h6>
+                        <h2 id="inactiveStudents">0</h2>
+                    </div>
+                </div>
+            </div>
         </div>
+        
         <div class="card mb-4">
             <div class="card-body">
                 <div class="row g-3 align-items-end">
@@ -436,6 +453,8 @@
                             <div class="d-grid gap-2">
                                 <button class="btn btn-primary w-100" onclick="viewResult()">View</button>
                                 <button class="btn btn-success w-100" onclick="viewTop3()">Top 3</button>
+                                <button class="btn btn-outline-primary w-100" onclick="downloadPassedStudentsCSV()">Download Passed</button>
+                                <button class="btn btn-outline-danger w-100" onclick="viewExamMissed()">Exam Missed</button>
                             </div>
                         </div>
                     </div>
@@ -614,6 +633,10 @@
                 const data = await res.json();
                 const totalEl = document.getElementById('totalStudents');
                 if (totalEl) totalEl.textContent = data.total;
+                const activeEl = document.getElementById('activeStudents');
+                if (activeEl) activeEl.textContent = data.active || 0;
+                const inactiveEl = document.getElementById('inactiveStudents');
+                if (inactiveEl) inactiveEl.textContent = data.inactive || 0;
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
@@ -1343,6 +1366,153 @@
                 console.error('❌ Error loading top 3:', error);
                 document.getElementById('resultResults').innerHTML =
                     `<div class="alert alert-danger">Error loading top 3: ${error.message}</div>`;
+            }
+        }
+
+        async function downloadPassedStudentsCSV() {
+            const region = document.getElementById('resultRegion').value;
+            const batch = document.getElementById('resultBatch').value;
+            const date = document.getElementById('resultDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const students = await res.json();
+
+                const passed = students
+                    .filter(s => s.marks && Number(s.marks.totalObtained || 0) > 40)
+                    .map(s => ({
+                        name: s.name,
+                        className: s.standard || '',
+                        schoolName: s.schoolName || '',
+                        batchNumber: s.batchNumber || '',
+                        totalObtained: s.marks.totalObtained,
+                        percentage: s.marks.percentage
+                    }));
+
+                if (passed.length === 0) {
+                    alert('No passed students found for this date');
+                    return;
+                }
+
+                const header = ['Student Name', 'School Name', 'Class', 'Region', 'Batch', 'Total Marks', 'Total Obtained', 'Percentage'];
+                const lines = [header.join(',')];
+                passed.forEach(p => {
+                    const row = [
+                        `"${String(p.name).replace(/\"/g, '""')}"`,
+                        `"${String(p.schoolName).replace(/\"/g, '""')}"`,
+                        `"${String(p.className).replace(/\"/g, '""')}"`,
+                        `"${String(region).replace(/\"/g, '""')}"`,
+                        `"${String(p.batchNumber).replace(/\"/g, '""')}"`,
+                        `"${String(100).replace(/\"/g, '""')}"`,
+                        `"${String(p.totalObtained).replace(/\"/g, '""')}"`,
+                        `"${String(p.percentage).replace(/\"/g, '""')}"`
+                    ];
+                    lines.push(row.join(','));
+                });
+
+                const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `passed_students_${date}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('❌ Error downloading passed students:', error);
+                alert('Failed to download CSV');
+            }
+        }
+
+        async function viewExamMissed() {
+            const region = document.getElementById('resultRegion').value;
+            const batch = document.getElementById('resultBatch').value;
+            const date = document.getElementById('resultDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch(
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const students = await res.json();
+
+                const missed = students.filter(s => {
+                    if (!s.marks) return true;
+                    const theoryMiss = Number(s.marks.theory || 0) <= 0;
+                    const practicalMiss = Number(s.marks.practical || 0) <= 0;
+                    const presentationMiss = Number(s.marks.presentation || 0) <= 0;
+                    return theoryMiss || practicalMiss || presentationMiss;
+                });
+
+                if (missed.length === 0) {
+                    document.getElementById('resultResults').innerHTML =
+                        '<div class="alert alert-success">No missed exams for this date</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-warning">
+                        <strong>Exam Missed</strong> (Date: ${date})
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Batch</th>
+                                <th>Theory</th>
+                                <th>Practical</th>
+                                <th>Presentation</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                missed.forEach((s, index) => {
+                    const m = s.marks || {};
+                    const theoryMiss = !m.theory || Number(m.theory) <= 0;
+                    const practicalMiss = !m.practical || Number(m.practical) <= 0;
+                    const presentationMiss = !m.presentation || Number(m.presentation) <= 0;
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${s.name}</td>
+                            <td>${s.batchNumber || '-'}</td>
+                            <td>${theoryMiss ? '<span class="badge bg-danger">MISSED</span>' : '<span class="badge bg-success">OK</span>'}</td>
+                            <td>${practicalMiss ? '<span class="badge bg-danger">MISSED</span>' : '<span class="badge bg-success">OK</span>'}</td>
+                            <td>${presentationMiss ? '<span class="badge bg-danger">MISSED</span>' : '<span class="badge bg-success">OK</span>'}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('resultResults').innerHTML = html;
+            } catch (error) {
+                console.error('❌ Error loading exam missed:', error);
+                document.getElementById('resultResults').innerHTML =
+                    `<div class="alert alert-danger">Error loading exam missed: ${error.message}</div>`;
             }
         }
 // LOW ATTENDANCE FUNCTIONS

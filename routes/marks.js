@@ -139,6 +139,8 @@ router.get('/by-batch', auth, async (req, res) => {
       return {
         _id: student._id,
         name: student.name,
+        schoolName: student.schoolName,
+        standard: student.standard,
         batchNumber: student.batchNumber,
         marks: m ? {
           theory: m.theory,

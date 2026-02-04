@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const Attendance = require('../models/Attendance');
 const { auth, isAdmin } = require('../middleware/auth');
 
 // ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
@@ -43,6 +44,7 @@ router.get('/stats/dashboard', auth, async (req, res) => {
   try {
     const total = await User.countDocuments({ role: 'student' });
     const active = await User.countDocuments({ role: 'student', isActive: true });
+
     res.json({ total, active, inactive: total - active });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -182,6 +184,7 @@ router.get('/stats/dashboard', auth, async (req, res) => {
   try {
     const total = await User.countDocuments({ role: 'student' });
     const active = await User.countDocuments({ role: 'student', isActive: true });
+
     res.json({ total, active, inactive: total - active });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });

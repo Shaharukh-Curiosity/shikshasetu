@@ -128,7 +128,16 @@
                     </div>
                 </div>
             </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h6 class="text-muted">Inactive Students</h6>
+                        <h2 id="inactiveStudents">0</h2>
+                    </div>
+                </div>
+            </div>
         </div>
+        
 
         <ul class="nav nav-tabs mb-4">
             <li class="nav-item">
@@ -536,6 +545,8 @@
             const data = await res.json();
             document.getElementById('totalStudents').textContent = data.total;
             document.getElementById('activeStudents').textContent = data.active;
+            const inactiveEl = document.getElementById('inactiveStudents');
+            if (inactiveEl) inactiveEl.textContent = data.inactive || 0;
         }
 
         async function loadStudents() {
