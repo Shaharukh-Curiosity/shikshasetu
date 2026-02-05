@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const WorkReport = require('../models/WorkReport');
-const { auth } = require('../middleware/auth');
+const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 
 // @route   POST /api/workReport
 // @desc    Submit a new daily work report
 // @access  Private (Teachers only)
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, isTeacherOrAdmin, async (req, res) => {
     try {
         const { date, region, subject, topicsCovered, assignment, attendanceCount } = req.body;
 
@@ -62,7 +62,7 @@ router.post('/', auth, async (req, res) => {
 // @route   GET /api/workReport
 // @desc    Get all work reports for logged-in teacher with filtering
 // @access  Private (Teachers only)
-router.get('/', auth, async (req, res) => {
+router.get('/', auth, isTeacherOrAdmin, async (req, res) => {
     try {
         const { date, region, startDate, endDate, teacherId } = req.query;
 
@@ -83,8 +83,10 @@ router.get('/', auth, async (req, res) => {
         if (region) {
             filter.region = region;
         }
-        if (teacherId) {
+        if (teacherId && req.user.role === 'admin') {
             filter.teacherId = teacherId;
+        } else if (req.user.role === 'teacher') {
+            filter.teacherId = req.user._id;
         }
 
         const reports = await WorkReport.find(filter)
@@ -101,12 +103,13 @@ router.get('/', auth, async (req, res) => {
 // @route   GET /api/workReport/:id
 // @desc    Get a specific work report by ID
 // @access  Private (Teachers only)
-router.get('/:id', auth, async (req, res) => {
+router.get('/:id', auth, isTeacherOrAdmin, async (req, res) => {
     try {
-        const report = await WorkReport.findOne({
-            _id: req.params.id,
-            teacherId: req.user._id
-        });
+        const filter = { _id: req.params.id };
+        if (req.user.role === 'teacher') {
+            filter.teacherId = req.user._id;
+        }
+        const report = await WorkReport.findOne(filter);
 
         if (!report) {
             return res.status(404).json({ error: 'Report not found' });
@@ -122,12 +125,13 @@ router.get('/:id', auth, async (req, res) => {
 // @route   DELETE /api/workReport/:id
 // @desc    Delete a work report
 // @access  Private (Teachers only)
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, isTeacherOrAdmin, async (req, res) => {
     try {
-        const report = await WorkReport.findOneAndDelete({
-            _id: req.params.id,
-            teacherId: req.user._id
-        });
+        const filter = { _id: req.params.id };
+        if (req.user.role === 'teacher') {
+            filter.teacherId = req.user._id;
+        }
+        const report = await WorkReport.findOneAndDelete(filter);
 
         if (!report) {
             return res.status(404).json({ error: 'Report not found' });

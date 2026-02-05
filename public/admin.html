@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body {
             min-height: 100vh;
@@ -161,6 +162,9 @@
             <li class="nav-item">
                 <button class="nav-link" onclick="showTab('dailywork')">Daily Work</button>
             </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('backup')">Backup/Restore</button>
+            </li>
         </ul>
         <div class="tabs-hint">All tabs are visible on mobile — tap any section below.</div>
 
@@ -171,26 +175,56 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <div class="row g-3">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label>Region</label>
                             <select class="form-select" id="filterRegion" onchange="loadFilterBatches()">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label>Batch</label>
                             <select class="form-select" id="filterBatch" onchange="loadStudents()">
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <label>Quick Search</label>
+                            <input type="text" class="form-control" id="filterSearch" placeholder="Name, Mobile, ID" oninput="loadStudents()">
+                        </div>
+                        <div class="col-md-3">
                             <label>&nbsp;</label>
                             <button class="btn btn-secondary w-100" onclick="resetStudentFilters()">Reset Filters</button>
                         </div>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Bulk Import/Export -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6 class="mb-3">Bulk Import / Export (CSV)</h6>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label>Import Students CSV</label>
+                            <input type="file" class="form-control" id="studentsCsvFile" accept=".csv">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-success w-100" onclick="importStudentsCsv()">Import CSV</button>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-primary w-100" onclick="exportStudentsCsv()">Export CSV</button>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-secondary w-100" onclick="exportStudentsJson()">Export JSON</button>
+                        </div>
+                    </div>
+                    <div id="importResult" class="mt-3"></div>
+                    <p class="text-muted mt-2 mb-0" style="font-size: 12px;">
+                        CSV headers supported: name, region, schoolName, standard, batchNumber, mobile, age.
+                    </p>
+                </div>
+            </div>
+
             <div id="studentsList"></div>
         </div>
 
@@ -224,6 +258,11 @@
                     </div>
 
                     <div id="adminSavingBanner" class="alert alert-info d-none">Saving attendance...</div>
+                    <div class="d-flex gap-2 mb-3">
+                        <button class="btn btn-outline-success btn-sm" onclick="markAllAdminAttendance('present')">Mark All Present</button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="markAllAdminAttendance('absent')">Mark All Absent</button>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="clearAllAdminAttendance()">Clear All</button>
+                    </div>
                     <div id="adminStudentsTable"></div>
                 </div>
             </div>
@@ -445,6 +484,82 @@
             </div>
         </div>
     </div>
+
+    <!-- Edit User Modal -->
+    <div class="modal" id="editUserModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Edit User</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('editUserModal')"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editUserForm">
+                        <input type="hidden" id="editUserId">
+                        <input type="text" class="form-control mb-2" placeholder="Name" id="editUName" required>
+                        <input type="email" class="form-control mb-2" placeholder="Email" id="editUEmail" required>
+                        <input type="password" class="form-control mb-2" placeholder="New Password (leave blank to keep)" id="editUPass">
+                        <select class="form-select mb-2" id="editURole" required>
+                            <option value="teacher">Teacher</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                        <button type="submit" class="btn btn-primary">Update User</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="backupTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Backup / Restore</h5>
+                    <div class="row g-3 mb-3 align-items-end">
+                        <div class="col-md-3">
+                            <label>Download Backup</label>
+                            <select class="form-select" id="backupCollection">
+                                <option value="students">Students</option>
+                                <option value="users">Users (includes password hash)</option>
+                                <option value="attendance">Attendance</option>
+                                <option value="marks">Marks</option>
+                                <option value="workReports">Work Reports</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-primary w-100" onclick="downloadBackup()">Download JSON</button>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label>Restore (JSON Backup)</label>
+                            <input type="file" class="form-control" id="restoreFile" accept=".json">
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-warning w-100" onclick="restoreBackup()">Restore</button>
+                        </div>
+                    </div>
+                    <div id="backupResult" class="mt-3"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Student Profile Modal -->
+    <div class="modal" id="studentProfileModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Student Profile</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('studentProfileModal')"></button>
+                </div>
+                <div class="modal-body" id="studentProfileContent">
+                    Loading...
+                </div>
+            </div>
+        </div>
+    </div>
     <footer class="dashboard-footer">
         <span>© 2026 Digital Literacy for Every Child — All Rights Reserved</span>
     </footer>
@@ -469,16 +584,20 @@
                 document.getElementById('usersTab').style.display = 'none';
                 document.getElementById('markAttendanceTab').style.display = 'none';
                 document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
                 loadFilterRegions();
             } else if (tab === 'users') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'block';
                 document.getElementById('markAttendanceTab').style.display = 'none';
                 document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
             } else if (tab === 'markattendance') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
@@ -487,6 +606,7 @@
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
                 loadAdminMarkRegions();
             } else if (tab === 'viewdaily') {
                 document.getElementById('studentsTab').style.display = 'none';
@@ -496,6 +616,7 @@
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
                 loadAdminViewRegions();
             } else if (tab === 'whatsapp') {
                 document.getElementById('studentsTab').style.display = 'none';
@@ -505,6 +626,7 @@
                 document.getElementById('whatsappInviteTab').style.display = 'block';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
                 loadWaRegions();
             } else if (tab === 'attendance') {
                 document.getElementById('studentsTab').style.display = 'none';
@@ -514,6 +636,7 @@
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'block';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
                 loadAttRegions();
             } else if (tab === 'dailywork') {
                 document.getElementById('studentsTab').style.display = 'none';
@@ -523,6 +646,16 @@
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'block';
+                document.getElementById('backupTab').style.display = 'none';
+            } else if (tab === 'backup') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'block';
             }
         }
 
@@ -552,11 +685,13 @@
         async function loadStudents() {
             const region = document.getElementById('filterRegion').value;
             const batch = document.getElementById('filterBatch').value;
+            const q = document.getElementById('filterSearch').value;
             
             let url = '/api/students';
             const params = new URLSearchParams();
             if (region) params.append('region', region);
             if (batch) params.append('batchNumber', batch);
+            if (q) params.append('q', q);
             if (params.toString()) url += '?' + params.toString();
             
             const res = await fetch(url, {
@@ -564,15 +699,17 @@
             });
             const students = await res.json();
             
-            let html = '<table class="table"><thead><tr><th>Name</th><th>Region</th><th>School</th><th>Batch</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
-            students.forEach(s => {
+            let html = '<table class="table"><thead><tr><th>#</th><th>Name</th><th>Region</th><th>School</th><th>Batch</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
+            students.forEach((s, index) => {
                 html += `<tr>
+                    <td>${index + 1}</td>
                     <td>${s.name}</td>
                     <td>${s.region}</td>
                     <td>${s.schoolName || '-'}</td>
                     <td>${s.batchNumber}</td>
                     <td>${s.mobile || '-'}</td>
                     <td>
+                        <button class="btn btn-sm btn-info" onclick="viewStudentProfile('${s._id}')">View</button>
                         <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.region}', '${s.schoolName || ''}', '${s.mobile || ''}', '${s.age || ''}', '${s.standard || ''}', '${s.batchNumber}')">Edit</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s._id}')">Delete</button>
                     </td>
@@ -594,7 +731,11 @@
                     <td>${u.name}</td>
                     <td>${u.email}</td>
                     <td>${u.role}</td>
-                    <td><button class="btn btn-sm btn-danger" onclick="deleteUser('${u._id}')">Delete</button></td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="editUser('${u._id}', '${u.name}', '${u.email}', '${u.role}')">Edit</button>
+                        <button class="btn btn-sm btn-secondary" onclick="resetUserPasswordPrompt('${u._id}', '${u.name}')">Reset Password</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u._id}')">Delete</button>
+                    </td>
                 </tr>`;
             });
             html += '</tbody></table>';
@@ -670,6 +811,160 @@
                 alert('Error adding user');
             }
         });
+
+        function editUser(id, name, email, role) {
+            document.getElementById('editUserId').value = id;
+            document.getElementById('editUName').value = name;
+            document.getElementById('editUEmail').value = email;
+            document.getElementById('editURole').value = role;
+            document.getElementById('editUPass').value = '';
+            new bootstrap.Modal(document.getElementById('editUserModal')).show();
+        }
+
+        document.getElementById('editUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editUserId').value;
+            const data = {
+                name: document.getElementById('editUName').value,
+                email: document.getElementById('editUEmail').value,
+                role: document.getElementById('editURole').value
+            };
+            const pass = document.getElementById('editUPass').value;
+            if (pass) data.password = pass;
+
+            const res = await fetch(`/api/users/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                alert('User updated successfully!');
+                closeModal('editUserModal');
+                e.target.reset();
+                loadUsers();
+            } else {
+                const error = await res.json();
+                alert('Error updating user: ' + (error.message || 'Unknown error'));
+            }
+        });
+
+        async function resetUserPasswordPrompt(id, name) {
+            const newPass = window.prompt(`Enter new password for ${name}`);
+            if (!newPass) return;
+
+            try {
+                const res = await fetch(`/api/users/${id}/reset-password`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ password: newPass })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Failed to reset password');
+                alert('Password reset successfully');
+            } catch (error) {
+                alert('Error resetting password: ' + error.message);
+            }
+        }
+
+        async function viewStudentProfile(studentId) {
+            const contentEl = document.getElementById('studentProfileContent');
+            if (contentEl) contentEl.innerHTML = 'Loading...';
+            new bootstrap.Modal(document.getElementById('studentProfileModal')).show();
+
+            try {
+                const res = await fetch(`/api/students/profile/${studentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.message || 'Failed to load profile');
+                }
+                const data = await res.json();
+                const s = data.student;
+                const attendance = data.attendance || {};
+                const marks = data.marks || [];
+
+                const attendanceRows = (attendance.records || []).map(r => `
+                    <tr>
+                        <td>${r.date}</td>
+                        <td>${r.status}</td>
+                        <td>${r.markedByName || '-'}</td>
+                        <td>${r.markedAt ? formatDateTime(r.markedAt) : '-'}</td>
+                    </tr>
+                `).join('');
+
+                const marksRows = marks.map(m => `
+                    <tr>
+                        <td>${m.date}</td>
+                        <td>${m.totalObtained || 0}/${m.totalMarks || 0}</td>
+                        <td>${m.percentage || 0}%</td>
+                        <td>${m.markedByName || '-'}</td>
+                    </tr>
+                `).join('');
+
+                const html = `
+                    <div class="mb-3">
+                        <h6>${s.name}</h6>
+                        <div class="text-muted">${s.schoolName || '-'} | ${s.region || '-'} | Batch: ${s.batchNumber || '-'}</div>
+                        <div>Standard: ${s.standard || '-'} | Mobile: ${s.mobile || '-'} | Age: ${s.age || '-'}</div>
+                        <div>Status: ${s.isActive ? 'Active' : 'Inactive'}</div>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Attendance Summary:</strong>
+                        Present: ${attendance.presentCount || 0} |
+                        Absent: ${attendance.absentCount || 0} |
+                        Total Marked: ${attendance.totalMarked || 0}
+                    </div>
+                    <div class="mb-3">
+                        <h6>Recent Attendance</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Marked By</th>
+                                        <th>Last Updated</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${attendanceRows || '<tr><td colspan="4">No records</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div>
+                        <h6>Recent Marks</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Score</th>
+                                        <th>%</th>
+                                        <th>Marked By</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${marksRows || '<tr><td colspan="4">No records</td></tr>'}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+
+                if (contentEl) contentEl.innerHTML = html;
+            } catch (error) {
+                if (contentEl) contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+            }
+        }
 
         // Edit Student Functions
         function editStudent(id, name, region, school, mobile, age, standard, batch) {
@@ -931,6 +1226,7 @@
                                 <th>Name</th>
                                 <th>Status</th>
                                 <th>Marked By</th>
+                                <th>Last Updated</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -938,6 +1234,7 @@
 
                 students.forEach((student, index) => {
                     let statusBadge, markedBy;
+                    let markedAt = '-';
                     if (student.attendance) {
                         if (student.attendance.status === 'present') {
                             statusBadge = '<span class="badge bg-success">PRESENT</span>';
@@ -947,6 +1244,9 @@
                             absent++;
                         }
                         markedBy = student.attendance.markedBy;
+                        if (student.attendance.markedAt) {
+                            markedAt = formatDateTime(student.attendance.markedAt);
+                        }
                     } else {
                         statusBadge = '<span class="badge bg-secondary">NOT MARKED</span>';
                         markedBy = '-';
@@ -959,6 +1259,7 @@
                             <td>${student.name}</td>
                             <td>${statusBadge}</td>
                             <td>${markedBy}</td>
+                            <td>${markedAt}</td>
                         </tr>
                     `;
                 });
@@ -1062,10 +1363,14 @@
             adminCurrentStudents.forEach((student, index) => {
                 const isPresent = student.attendance && student.attendance.status === 'present';
                 const isAbsent = student.attendance && student.attendance.status === 'absent';
+                const prevAbsent = student.previousDay && student.previousDay.status === 'absent';
+                const prevIcon = prevAbsent
+                    ? '<span class="ms-2 text-warning" title="Absent yesterday"><i class="bi bi-moon-stars-fill"></i></span>'
+                    : '';
                 html += `
                     <tr>
                         <td class="align-middle">${index + 1}</td>
-                        <td class="align-middle fw-semibold">${student.name}</td>
+                        <td class="align-middle fw-semibold">${student.name}${prevIcon}</td>
                         <td class="align-middle">
                             <div class="d-flex justify-content-center gap-3">
                                 <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
@@ -1149,7 +1454,32 @@
             } finally {
                 if (savingBanner) savingBanner.classList.add('d-none');
             }
-        }// ===== STUDENT FILTER FUNCTIONS =====
+        }
+        function markAllAdminAttendance(status) {
+            if (!adminCurrentStudents || adminCurrentStudents.length === 0) {
+                alert('No students loaded');
+                return;
+            }
+            adminCurrentStudents.forEach(student => {
+                const input = document.querySelector(`input[name="admin_status_${student._id}"][value="${status}"]`);
+                if (input) input.checked = true;
+            });
+        }
+
+        function clearAllAdminAttendance() {
+            if (!adminCurrentStudents || adminCurrentStudents.length === 0) {
+                alert('No students loaded');
+                return;
+            }
+            adminCurrentStudents.forEach(student => {
+                const presentInput = document.querySelector(`input[name="admin_status_${student._id}"][value="present"]`);
+                const absentInput = document.querySelector(`input[name="admin_status_${student._id}"][value="absent"]`);
+                if (presentInput) presentInput.checked = false;
+                if (absentInput) absentInput.checked = false;
+            });
+        }
+
+        // ===== STUDENT FILTER FUNCTIONS =====
         async function loadFilterRegions() {
             const res = await fetch('/api/students/regions/all', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1182,9 +1512,124 @@
             loadStudents();
         }
 
+        async function importStudentsCsv() {
+            const fileInput = document.getElementById('studentsCsvFile');
+            const resultEl = document.getElementById('importResult');
+            if (!fileInput?.files?.length) {
+                alert('Please choose a CSV file');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            if (resultEl) resultEl.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/students/import', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Import failed');
+                if (resultEl) {
+                    resultEl.innerHTML = `<div class="alert alert-success">Import completed. Created: ${data.created}, Skipped: ${data.skipped}</div>`;
+                }
+                loadStudents();
+                loadStats();
+            } catch (error) {
+                if (resultEl) {
+                    resultEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                }
+            }
+        }
+
+        async function downloadFile(url, filename) {
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.message || 'Download failed');
+                }
+                const blob = await res.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(link.href);
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        // ===== BACKUP / RESTORE =====
+        function downloadBackup() {
+            const collection = document.getElementById('backupCollection').value;
+            downloadFile(`/api/backup?collection=${encodeURIComponent(collection)}&download=1`, `${collection}-backup.json`);
+        }
+
+        async function restoreBackup() {
+            const fileInput = document.getElementById('restoreFile');
+            const resultEl = document.getElementById('backupResult');
+            if (!fileInput?.files?.length) {
+                alert('Please choose a JSON backup file');
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            if (resultEl) resultEl.innerHTML = '';
+
+            try {
+                const res = await fetch('/api/backup/restore', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Restore failed');
+                if (resultEl) {
+                    resultEl.innerHTML = `
+                        <div class="alert alert-success">
+                            Restore completed. Students created: ${data.createdStudents || 0}, Users created: ${data.createdUsers || 0}.
+                        </div>
+                    `;
+                }
+                loadStudents();
+                loadUsers();
+                loadStats();
+            } catch (error) {
+                if (resultEl) {
+                    resultEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                }
+            }
+        }
+
+        function exportStudentsCsv() {
+            const region = document.getElementById('filterRegion').value;
+            const batch = document.getElementById('filterBatch').value;
+            const params = new URLSearchParams({ format: 'csv' });
+            if (region) params.append('region', region);
+            if (batch) params.append('batchNumber', batch);
+            downloadFile(`/api/students/export?${params.toString()}`, 'students.csv');
+        }
+
+        function exportStudentsJson() {
+            const region = document.getElementById('filterRegion').value;
+            const batch = document.getElementById('filterBatch').value;
+            const params = new URLSearchParams({ format: 'json' });
+            if (region) params.append('region', region);
+            if (batch) params.append('batchNumber', batch);
+            downloadFile(`/api/students/export?${params.toString()}`, 'students.json');
+        }
+
         function resetStudentFilters() {
             document.getElementById('filterRegion').value = '';
             document.getElementById('filterBatch').value = '';
+            const searchEl = document.getElementById('filterSearch');
+            if (searchEl) searchEl.value = '';
             loadStudents();
         }
 
@@ -1477,8 +1922,16 @@
             window.print();
         }
 
+        function formatDateTime(value) {
+            const dt = new Date(value);
+            if (Number.isNaN(dt.getTime())) return '-';
+            return dt.toISOString().replace('T', ' ').slice(0, 16);
+        }
+
         loadStats();
         loadUsers();
+                loadFilterRegions();
+                loadStudents();
         updateAttFilterUI();
     </script>
 </body>

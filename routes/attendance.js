@@ -3,6 +3,7 @@ const router = express.Router();
 const Attendance = require('../models/Attendance');
 const User = require('../models/User');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 // ============================================
 // MARK ATTENDANCE - SIMPLEST POSSIBLE
@@ -114,6 +115,19 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
       response.warning = `⚠️ ${conflicts.length} student(s) already marked by another teacher`;
     }
 
+    await logAudit({
+      req,
+      action: 'attendance_mark',
+      entity: 'attendance',
+      meta: {
+        date: dateOnly,
+        total: attendanceRecords.length,
+        successful: success,
+        errors: errors,
+        conflicts: conflicts.length
+      }
+    });
+
     res.json(response);
 
   } catch (error) {
@@ -125,7 +139,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 // ============================================
 // VIEW ATTENDANCE - SIMPLEST POSSIBLE
 // ============================================
-router.get('/by-batch', auth, async (req, res) => {
+router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const { region, batchNumber, date, markedByRole } = req.query;
 
@@ -142,6 +156,11 @@ router.get('/by-batch', auth, async (req, res) => {
     // Extract just the date part: "YYYY-MM-DD"
     const dateOnly = date.substring(0, 10);
     console.log('Date (YYYY-MM-DD):', dateOnly);
+
+    // Compute previous day (YYYY-MM-DD)
+    const prevDateObj = new Date(dateOnly);
+    prevDateObj.setDate(prevDateObj.getDate() - 1);
+    const prevDate = prevDateObj.toISOString().split('T')[0];
 
     // Get all students in this batch/region
     const studentsQuery = {
@@ -174,6 +193,14 @@ router.get('/by-batch', auth, async (req, res) => {
 
     console.log('Found attendance records:', attendanceRecords.length);
 
+    // Get previous day attendance for these students
+    const studentIds = students.map(s => String(s._id));
+    const prevAttendanceRecords = await Attendance.find({
+      studentId: { $in: studentIds },
+      date: prevDate
+    }).lean();
+    const prevMap = new Map(prevAttendanceRecords.map(r => [String(r.studentId), r]));
+
     // Create a map of studentId -> attendance
     const attendanceMap = {};
     attendanceRecords.forEach(att => {
@@ -200,6 +227,9 @@ router.get('/by-batch', auth, async (req, res) => {
         batchNumber: student.batchNumber,
         mobile: student.mobile,
         standard: student.standard,
+        previousDay: prevMap.get(studentIdStr)
+          ? { status: prevMap.get(studentIdStr).status, date: prevDate }
+          : null,
         attendance: attendance ? {
           status: attendance.status,
           markedBy: attendance.markedByName,
@@ -228,7 +258,7 @@ router.get('/by-batch', auth, async (req, res) => {
 // ============================================
 // ATTENDANCE SUMMARY - Month/Date wise Report
 // ============================================
-router.get('/summary', auth, async (req, res) => {
+router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const { region, batchNumber, startDate, endDate, filterType } = req.query;
 
@@ -346,7 +376,7 @@ router.get('/summary', auth, async (req, res) => {
 // ============================================
 // LOW ATTENDANCE - Absent 3+ classes (any days)
 // ============================================
-router.get('/low-attendance', auth, async (req, res) => {
+router.get('/low-attendance', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const { region, batchNumber, minAbsent, days } = req.query;
 

@@ -1,8 +1,56 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const { parse } = require('csv-parse/sync');
+const { Parser } = require('json2csv');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
-const { auth, isAdmin } = require('../middleware/auth');
+const Marks = require('../models/Marks');
+const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+function normalizeHeader(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function mapRowToStudent(row) {
+  const mapped = {};
+  Object.keys(row || {}).forEach(key => {
+    const norm = normalizeHeader(key);
+    const value = typeof row[key] === 'string' ? row[key].trim() : row[key];
+    if (value === undefined || value === null || value === '') return;
+
+    if (['name', 'studentname', 'studentsname'].includes(norm)) mapped.name = value;
+    if (['region', 'location'].includes(norm)) mapped.region = value;
+    if (['schoolname', 'school'].includes(norm)) mapped.schoolName = value;
+    if (['standard', 'class', 'grade'].includes(norm)) mapped.standard = value;
+    if (['batchnumber', 'batch', 'batchno'].includes(norm)) mapped.batchNumber = value;
+    if (['mobile', 'phone', 'phonenumber'].includes(norm)) mapped.mobile = value;
+    if (['age'].includes(norm)) mapped.age = Number(value);
+  });
+  return mapped;
+}
+
+async function findDuplicateStudent({ name, schoolName, batchNumber, mobile }, excludeId) {
+  const or = [];
+  if (mobile) or.push({ mobile, role: 'student' });
+  if (name && schoolName && batchNumber) {
+    or.push({ name, schoolName, batchNumber, role: 'student' });
+  }
+  if (or.length === 0) return null;
+
+  const query = { $or: or };
+  if (excludeId) query._id = { $ne: excludeId };
+  return User.findOne(query);
+}
 
 // ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
 // Get all regions
@@ -65,16 +113,210 @@ router.get('/batches/:region', auth, async (req, res) => {
   }
 });
 
+// Student profile (attendance + marks)
+router.get('/profile/:id', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const student = await User.findOne({ _id: id, role: 'student' }).lean();
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const attendanceRecords = await Attendance.find({ studentId: String(id) })
+      .sort({ date: -1 })
+      .limit(60)
+      .lean();
+
+    const marksRecords = await Marks.find({ studentId: String(id) })
+      .sort({ date: -1 })
+      .limit(30)
+      .lean();
+
+    const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
+    const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
+
+    res.json({
+      student: {
+        _id: student._id,
+        name: student.name,
+        region: student.region,
+        schoolName: student.schoolName,
+        batchNumber: student.batchNumber,
+        standard: student.standard,
+        mobile: student.mobile,
+        age: student.age,
+        isActive: student.isActive
+      },
+      attendance: {
+        presentCount,
+        absentCount,
+        totalMarked: presentCount + absentCount,
+        records: attendanceRecords
+      },
+      marks: marksRecords
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load profile', details: error.message });
+  }
+});
+
+// Export students (CSV or JSON)
+router.get('/export', auth, isAdmin, async (req, res) => {
+  try {
+    const { format = 'csv', region, schoolName, batchNumber } = req.query;
+    const query = { role: 'student' };
+    if (region) query.region = region;
+    if (schoolName) query.schoolName = schoolName;
+    if (batchNumber) query.batchNumber = batchNumber;
+
+    const students = await User.find(query).select('-password').lean();
+
+    if (format === 'json') {
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', 'attachment; filename="students.json"');
+      return res.send(JSON.stringify(students, null, 2));
+    }
+
+    const fields = [
+      '_id',
+      'name',
+      'region',
+      'schoolName',
+      'standard',
+      'batchNumber',
+      'mobile',
+      'age',
+      'isActive'
+    ];
+    const parser = new Parser({ fields });
+    const csv = parser.parse(students);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="students.csv"');
+    return res.send(csv);
+  } catch (error) {
+    res.status(500).json({ message: 'Export failed', details: error.message });
+  }
+});
+
+// Import students from CSV
+router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file?.buffer) {
+      return res.status(400).json({ message: 'CSV file is required' });
+    }
+
+    const csvText = req.file.buffer.toString('utf8');
+    const records = parse(csvText, { columns: true, skip_empty_lines: true, trim: true });
+
+    const created = [];
+    const skipped = [];
+    for (const raw of records) {
+      const data = mapRowToStudent(raw);
+      if (!data.name || !data.schoolName || !data.batchNumber || !data.region) {
+        skipped.push({ reason: 'Missing required fields', row: raw });
+        continue;
+      }
+
+      if (data.mobile && !/^[0-9+ -]{7,15}$/.test(String(data.mobile))) {
+        skipped.push({ reason: 'Invalid mobile format', row: raw });
+        continue;
+      }
+
+      const dup = await findDuplicateStudent(data);
+      if (dup) {
+        skipped.push({ reason: 'Duplicate student', row: raw });
+        continue;
+      }
+
+      const student = new User({
+        ...data,
+        role: 'student',
+        isActive: true
+      });
+      await student.save();
+      created.push(student);
+    }
+
+    await logAudit({
+      req,
+      action: 'student_import',
+      entity: 'student',
+      meta: { created: created.length, skipped: skipped.length }
+    });
+
+    res.json({
+      message: 'Import completed',
+      created: created.length,
+      skipped: skipped.length,
+      skippedDetails: skipped.slice(0, 50)
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Import failed', details: error.message });
+  }
+});
+
+// Bulk update by region + batch (safe fields only)
+router.post('/bulk-update', auth, isAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, updates } = req.body || {};
+    if (!region || !batchNumber) {
+      return res.status(400).json({ message: 'Region and batch are required' });
+    }
+
+    const allowed = new Set(['region', 'batchNumber', 'schoolName', 'standard', 'mobile', 'age', 'isActive']);
+    const updatePayload = {};
+    Object.keys(updates || {}).forEach(key => {
+      if (!allowed.has(key)) return;
+      const value = updates[key];
+      if (value === undefined || value === null) return;
+      if (typeof value === 'string' && value.trim() === '') return;
+      updatePayload[key] = value;
+    });
+
+    if (Object.keys(updatePayload).length === 0) {
+      return res.status(400).json({ message: 'No valid fields to update' });
+    }
+
+    const filter = { role: 'student', region, batchNumber };
+    const result = await User.updateMany(filter, { $set: updatePayload });
+
+    await logAudit({
+      req,
+      action: 'student_bulk_update',
+      entity: 'student',
+      meta: { region, batchNumber, updates: updatePayload, matched: result.matchedCount || result.n || 0 }
+    });
+
+    res.json({
+      message: 'Bulk update completed',
+      matched: result.matchedCount || result.n || 0,
+      modified: result.modifiedCount || result.nModified || 0
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Bulk update failed', details: error.message });
+  }
+});
+
 // ⚠️ GENERAL ROUTES LAST (generic routes)
 // Get all students
 router.get('/', auth, async (req, res) => {
   try {
-    const { region, schoolName, batchNumber } = req.query;
+    const { region, schoolName, batchNumber, q } = req.query;
     let query = { role: 'student', isActive: true };
     
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
     if (batchNumber) query.batchNumber = batchNumber;
+    if (q) {
+      const or = [
+        { name: { $regex: q, $options: 'i' } },
+        { mobile: { $regex: q, $options: 'i' } }
+      ];
+      if (/^[a-fA-F0-9]{24}$/.test(q)) {
+        or.push({ _id: q });
+      }
+      query.$or = or;
+    }
     
     const students = await User.find(query).sort({ name: 1 });
     res.json(students);
@@ -96,6 +338,14 @@ router.post('/', auth, isAdmin, async (req, res) => {
     if (!req.body.batchNumber) {
       return res.status(400).json({ message: 'Batch number is required' });
     }
+    if (req.body.mobile && !/^[0-9+ -]{7,15}$/.test(String(req.body.mobile))) {
+      return res.status(400).json({ message: 'Invalid mobile format' });
+    }
+
+    const dup = await findDuplicateStudent(req.body);
+    if (dup) {
+      return res.status(400).json({ message: 'Duplicate student detected' });
+    }
 
     const student = new User({
       ...req.body,
@@ -104,6 +354,14 @@ router.post('/', auth, isAdmin, async (req, res) => {
     });
     
     await student.save();
+    await logAudit({
+      req,
+      action: 'student_add',
+      entity: 'student',
+      entityId: student._id?.toString(),
+      after: { name: student.name, region: student.region, schoolName: student.schoolName }
+    });
+
     res.json({ message: 'Student added successfully', student });
   } catch (error) {
     console.error('❌ Error adding student:', error.message);
@@ -127,6 +385,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
 router.put('/:id', auth, isAdmin, async (req, res) => {
   try {
     const { id } = req.params;
+    const before = await User.findById(id).lean();
     
     // Validate required fields
     if (!req.body.name) {
@@ -137,6 +396,14 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     }
     if (!req.body.batchNumber) {
       return res.status(400).json({ message: 'Batch number is required' });
+    }
+    if (req.body.mobile && !/^[0-9+ -]{7,15}$/.test(String(req.body.mobile))) {
+      return res.status(400).json({ message: 'Invalid mobile format' });
+    }
+
+    const dup = await findDuplicateStudent(req.body, id);
+    if (dup) {
+      return res.status(400).json({ message: 'Duplicate student detected' });
     }
 
     const student = await User.findByIdAndUpdate(
@@ -156,6 +423,23 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
       return res.status(404).json({ message: 'Student not found' });
     }
 
+    await logAudit({
+      req,
+      action: 'student_update',
+      entity: 'student',
+      entityId: student._id?.toString(),
+      before,
+      after: {
+        name: student.name,
+        region: student.region,
+        schoolName: student.schoolName,
+        mobile: student.mobile,
+        standard: student.standard,
+        batchNumber: student.batchNumber,
+        age: student.age
+      }
+    });
+
     res.json({ message: 'Student updated successfully', student });
   } catch (error) {
     console.error('❌ Error updating student:', error.message);
@@ -172,7 +456,17 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
 // Delete student
 router.delete('/:id', auth, isAdmin, async (req, res) => {
   try {
+    const before = await User.findById(req.params.id).lean();
     await User.findByIdAndDelete(req.params.id);
+
+    await logAudit({
+      req,
+      action: 'student_delete',
+      entity: 'student',
+      entityId: req.params.id,
+      before
+    });
+
     res.json({ message: 'Student deleted' });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });

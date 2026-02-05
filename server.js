@@ -23,6 +23,7 @@ app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/marks', require('./routes/marks'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/workReport', require('./routes/workReport'));
+app.use('/api/backup', require('./routes/backup'));
 
 // Serve HTML pages
 app.get('/', (req, res) => {

@@ -105,7 +105,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 // ============================================
 // VIEW MARKS BY BATCH + DATE
 // ============================================
-router.get('/by-batch', auth, async (req, res) => {
+router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const { region, batchNumber, date } = req.query;
 
@@ -165,7 +165,7 @@ router.get('/by-batch', auth, async (req, res) => {
 // ============================================
 // TOP 3 MARKS (BY DATE)
 // ============================================
-router.get('/top', auth, async (req, res) => {
+router.get('/top', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const { date, region } = req.query;
 
