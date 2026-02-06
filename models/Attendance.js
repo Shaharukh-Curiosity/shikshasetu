@@ -7,10 +7,20 @@ const attendanceSchema = new mongoose.Schema({
   schoolName: String,
   batchNumber: String,
   date: String,  // Store as STRING "YYYY-MM-DD" to avoid timezone issues
-  status: String,  // "present" or "absent"
+  status: String,  // "present", "absent", "late", "leave"
+  note: String,    // optional reason/notes
   markedBy: String,  // User ID of who marked
   markedByName: String,  // Name of teacher/admin who marked (e.g., "John Admin", "Jane Teacher")
-  markedAt: { type: Date, default: Date.now }
+  markedAt: { type: Date, default: Date.now },
+  history: [
+    {
+      status: String,
+      note: String,
+      markedBy: String,
+      markedByName: String,
+      markedAt: Date
+    }
+  ]
 });
 
 // Index for fast queries

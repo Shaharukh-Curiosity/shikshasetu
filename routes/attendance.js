@@ -5,6 +5,9 @@ const User = require('../models/User');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 
+const VALID_STATUSES = new Set(['present', 'absent', 'late', 'leave']);
+const PRESENT_STATUSES = new Set(['present', 'late', 'leave']);
+
 // ============================================
 // MARK ATTENDANCE - SIMPLEST POSSIBLE
 // ============================================
@@ -62,6 +65,13 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         continue;
       }
 
+      const statusRaw = String(record.status || '').toLowerCase();
+      if (!VALID_STATUSES.has(statusRaw)) {
+        console.log('❌ Invalid status:', statusRaw, 'for', student.name);
+        errors++;
+        continue;
+      }
+
       const doc = {
         studentId: studentId,
         studentName: student.name,
@@ -69,7 +79,8 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         schoolName: student.schoolName,
         batchNumber: student.batchNumber,
         date: dateOnly,
-        status: record.status.toLowerCase(),
+        status: statusRaw,
+        note: record.note ? String(record.note).trim().slice(0, 200) : '',
         markedBy: String(req.user._id),
         markedByName: req.user.name,
         markedAt: now
@@ -79,12 +90,23 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         bulkOps.push({
           updateOne: {
             filter: { studentId: studentId, date: dateOnly },
-            update: { $set: doc },
+            update: {
+              $set: doc,
+              $push: {
+                history: {
+                  status: existingRecord.status,
+                  note: existingRecord.note || '',
+                  markedBy: existingRecord.markedBy,
+                  markedByName: existingRecord.markedByName,
+                  markedAt: existingRecord.markedAt
+                }
+              }
+            },
             upsert: true
           }
         });
       } else {
-        bulkOps.push({ insertOne: { document: doc } });
+        bulkOps.push({ insertOne: { document: { ...doc, history: [] } } });
       }
     }
 
@@ -162,6 +184,10 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     prevDateObj.setDate(prevDateObj.getDate() - 1);
     const prevDate = prevDateObj.toISOString().split('T')[0];
 
+    const prev2DateObj = new Date(dateOnly);
+    prev2DateObj.setDate(prev2DateObj.getDate() - 2);
+    const prev2Date = prev2DateObj.toISOString().split('T')[0];
+
     // Get all students in this batch/region
     const studentsQuery = {
       role: 'student',
@@ -193,19 +219,48 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
 
     console.log('Found attendance records:', attendanceRecords.length);
 
-    // Get previous day attendance for these students
+    // Get previous 1-2 days attendance for these students
     const studentIds = students.map(s => String(s._id));
     const prevAttendanceRecords = await Attendance.find({
       studentId: { $in: studentIds },
       date: prevDate
     }).lean();
     const prevMap = new Map(prevAttendanceRecords.map(r => [String(r.studentId), r]));
+    const prev2AttendanceRecords = await Attendance.find({
+      studentId: { $in: studentIds },
+      date: prev2Date
+    }).lean();
+    const prev2Map = new Map(prev2AttendanceRecords.map(r => [String(r.studentId), r]));
 
     // Create a map of studentId -> attendance
     const attendanceMap = {};
     attendanceRecords.forEach(att => {
       attendanceMap[att.studentId] = att;
       console.log('  ', att.studentId, '→', att.status, '(marked by:', att.markedByName, ')');
+    });
+
+    // Recent history (last 7 days)
+    const recentStartObj = new Date(dateOnly);
+    recentStartObj.setDate(recentStartObj.getDate() - 7);
+    const recentStart = recentStartObj.toISOString().split('T')[0];
+    const recentRecords = await Attendance.find({
+      studentId: { $in: studentIds },
+      date: { $gte: recentStart, $lte: dateOnly }
+    }).sort({ date: -1 }).lean();
+    const recentMap = new Map();
+    recentRecords.forEach(r => {
+      const key = String(r.studentId);
+      const list = recentMap.get(key) || [];
+      if (list.length < 5) {
+        list.push({
+          date: r.date,
+          status: r.status,
+          note: r.note || '',
+          markedByName: r.markedByName,
+          markedAt: r.markedAt
+        });
+        recentMap.set(key, list);
+      }
     });
 
     // Combine students with their attendance
@@ -230,8 +285,13 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
         previousDay: prevMap.get(studentIdStr)
           ? { status: prevMap.get(studentIdStr).status, date: prevDate }
           : null,
+        previousTwoDays: prev2Map.get(studentIdStr)
+          ? { status: prev2Map.get(studentIdStr).status, date: prev2Date }
+          : null,
+        recent: recentMap.get(studentIdStr) || [],
         attendance: attendance ? {
           status: attendance.status,
+          note: attendance.note || '',
           markedBy: attendance.markedByName,
           markedAt: attendance.markedAt
         } : null
@@ -312,7 +372,9 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
       const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr);
       
       // Count present and absent
-      const presentCount = studentRecords.filter(r => r.status === 'present').length;
+      const presentCount = studentRecords.filter(r => PRESENT_STATUSES.has(r.status)).length;
+      const lateCount = studentRecords.filter(r => r.status === 'late').length;
+      const leaveCount = studentRecords.filter(r => r.status === 'leave').length;
       const absentCount = studentRecords.filter(r => r.status === 'absent').length;
       const totalMarked = presentCount + absentCount;
 
@@ -337,6 +399,8 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
         totalClasses: uniqueDates.length,        // Total number of classes held
         totalMarked: totalMarked,                // Number of times student was marked
         present: presentCount,
+        late: lateCount,
+        leave: leaveCount,
         absent: absentCount,
         markedBy: markedByList,                  // NEW: Teachers/Admins who marked
         percentage: totalMarked > 0 ? ((presentCount / totalMarked) * 100).toFixed(2) : 0
@@ -450,6 +514,49 @@ router.get('/low-attendance', auth, isTeacherOrAdmin, async (req, res) => {
       dateRange: { start: startDate, end: endDateStr },
       results
     });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// UNDO ATTENDANCE (by teacher for date/batch)
+// ============================================
+router.post('/undo', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, date, studentIds } = req.body;
+    if (!region || !date) {
+      return res.status(400).json({ message: 'Missing region/date' });
+    }
+    const dateOnly = date.substring(0, 10);
+    const query = {
+      region,
+      date: dateOnly,
+      markedBy: String(req.user._id)
+    };
+    if (batchNumber && batchNumber !== 'all') {
+      query.batchNumber = batchNumber;
+    }
+    if (Array.isArray(studentIds) && studentIds.length > 0) {
+      query.studentId = { $in: studentIds.map(String) };
+    }
+
+    const result = await Attendance.deleteMany(query);
+
+    await logAudit({
+      req,
+      action: 'attendance_undo',
+      entity: 'attendance',
+      meta: {
+        region,
+        batchNumber: batchNumber || 'all',
+        date: dateOnly,
+        deleted: result.deletedCount
+      }
+    });
+
+    res.json({ message: 'Undo complete', deleted: result.deletedCount });
   } catch (error) {
     console.error('FATAL ERROR:', error);
     res.status(500).json({ message: 'Server error' });

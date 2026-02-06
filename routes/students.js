@@ -132,7 +132,7 @@ router.get('/profile/:id', auth, isTeacherOrAdmin, async (req, res) => {
       .limit(30)
       .lean();
 
-    const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
+    const presentCount = attendanceRecords.filter(r => ['present', 'late', 'leave'].includes(r.status)).length;
     const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
 
     res.json({

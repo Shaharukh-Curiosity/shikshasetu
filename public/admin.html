@@ -1364,8 +1364,10 @@
                 const isPresent = student.attendance && student.attendance.status === 'present';
                 const isAbsent = student.attendance && student.attendance.status === 'absent';
                 const prevAbsent = student.previousDay && student.previousDay.status === 'absent';
-                const prevIcon = prevAbsent
-                    ? '<span class="ms-2 text-warning" title="Absent yesterday"><i class="bi bi-moon-stars-fill"></i></span>'
+                const prevTwoAbsent = student.previousTwoDays && student.previousTwoDays.status === 'absent';
+                const consecutiveAbsent = prevAbsent && prevTwoAbsent;
+                const prevIcon = consecutiveAbsent
+                    ? '<span class="ms-2 text-warning" title="Absent last 2 days"><i class="bi bi-moon-stars-fill"></i></span>'
                     : '';
                 html += `
                     <tr>
