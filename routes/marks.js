@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Marks = require('../models/Marks');
+const Presentation = require('../models/Presentation');
 const User = require('../models/User');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 
@@ -133,15 +134,35 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     }).lean();
 
     const marksMap = new Map(marksRecords.map(r => [String(r.studentId), r]));
+    const presentationRecords = await Presentation.find({
+      region,
+      batchNumber,
+      date: dateOnly
+    }).lean();
+    const presentationMap = new Map(presentationRecords.map(r => [String(r.studentId), r]));
 
     const results = students.map(student => {
       const m = marksMap.get(String(student._id));
+      const p = presentationMap.get(String(student._id));
+      let presentationPrefill = null;
+      if (p) {
+        if (Number.isFinite(p.presentationMarks)) {
+          presentationPrefill = p.presentationMarks;
+        } else if (p.evaluation) {
+          const content = Number(p.evaluation.content || 0);
+          const design = Number(p.evaluation.design || 0);
+          const communication = Number(p.evaluation.communication || 0);
+          const sum = content + design + communication;
+          presentationPrefill = Math.max(0, Math.min(20, sum));
+        }
+      }
       return {
         _id: student._id,
         name: student.name,
         schoolName: student.schoolName,
         standard: student.standard,
         batchNumber: student.batchNumber,
+        presentationPrefill,
         marks: m ? {
           theory: m.theory,
           practical: m.practical,

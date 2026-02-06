@@ -508,38 +508,38 @@
                 </div>
             </div>
         </div>
+    </div>
 
-        <div id="backupTab" style="display: none;">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">Backup / Restore</h5>
-                    <div class="row g-3 mb-3 align-items-end">
-                        <div class="col-md-3">
-                            <label>Download Backup</label>
-                            <select class="form-select" id="backupCollection">
-                                <option value="students">Students</option>
-                                <option value="users">Users (includes password hash)</option>
-                                <option value="attendance">Attendance</option>
-                                <option value="marks">Marks</option>
-                                <option value="workReports">Work Reports</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <button class="btn btn-outline-primary w-100" onclick="downloadBackup()">Download JSON</button>
-                        </div>
+    <div id="backupTab" style="display: none;">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Backup / Restore</h5>
+                <div class="row g-3 mb-3 align-items-end">
+                    <div class="col-md-3">
+                        <label>Download Backup</label>
+                        <select class="form-select" id="backupCollection">
+                            <option value="students">Students</option>
+                            <option value="users">Users (includes password hash)</option>
+                            <option value="attendance">Attendance</option>
+                            <option value="marks">Marks</option>
+                            <option value="workReports">Work Reports</option>
+                        </select>
                     </div>
-
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-5">
-                            <label>Restore (JSON Backup)</label>
-                            <input type="file" class="form-control" id="restoreFile" accept=".json">
-                        </div>
-                        <div class="col-md-3">
-                            <button class="btn btn-warning w-100" onclick="restoreBackup()">Restore</button>
-                        </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-outline-primary w-100" onclick="downloadBackup()">Download JSON</button>
                     </div>
-                    <div id="backupResult" class="mt-3"></div>
                 </div>
+
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-5">
+                        <label>Restore (JSON Backup)</label>
+                        <input type="file" class="form-control" id="restoreFile" accept=".json">
+                    </div>
+                    <div class="col-md-3">
+                        <button class="btn btn-warning w-100" onclick="restoreBackup()">Restore</button>
+                    </div>
+                </div>
+                <div id="backupResult" class="mt-3"></div>
             </div>
         </div>
     </div>

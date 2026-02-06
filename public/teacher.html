@@ -184,7 +184,10 @@
                 <button class="nav-link" id="lowTab" onclick="showTab('low')">Low Attendance</button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" id="marksTab" onclick="showTab('marks')">Marks</button>
+                <button class="nav-link" id="presentationTab" onclick="showTab('presentation')">Presentation</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" id="marksTab" onclick="showTab('marks')">Exam</button>
             </li>
             <li class="nav-item">
                 <button class="nav-link" id="resultTab" onclick="showTab('result')">Result</button>
@@ -396,11 +399,61 @@
             </div>
         </div>
 
-        <!-- MARKS -->
+        <!-- PRESENTATION -->
+        <div id="presentationSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Presentation Groups</h5>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="presentationRegion" onchange="loadPresentationBatches()">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="presentationBatch" onchange="loadPresentationStudents()">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Date</label>
+                            <input type="date" class="form-control" id="presentationDate" required onchange="loadPresentationStudents()">
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-outline-primary w-100" onclick="loadPresentationStudents()">Load PPT</button>
+                                <button class="btn btn-outline-secondary w-100" onclick="loadPresentationTopics()">Presentation Topics Load</button>
+                                <button class="btn btn-outline-dark w-100" onclick="loadPresentationEvaluation()">Presentation Evaluation</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 align-items-start">
+                        <div class="col-md-4">
+                            <label>Presentation Topic</label>
+                            <input type="text" class="form-control mb-3" id="presentationTopic1" placeholder="Select two students first" disabled>
+                            <div id="presentationGroupCounts" class="text-muted"></div>
+
+                        </div>
+                        <div class="col-md-8">
+                            <div id="presentationTable"></div>
+                            <div id="presentationTopicsTable" class="mt-3"></div>
+                            <div id="presentationEvaluationTable" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- EXAM (Marks) -->
         <div id="marksSection" style="display: none;">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Enter Marks</h5>
+                    <h5 class="card-title">Enter Exam Marks</h5>
 
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
@@ -612,6 +665,8 @@
         document.getElementById('viewDate').value = today;
         document.getElementById('marksDate').value = today;
         document.getElementById('resultDate').value = today;
+        const presentationDateEl = document.getElementById('presentationDate');
+        if (presentationDateEl) presentationDateEl.value = today;
         const workDateEl = document.getElementById('workDate');
         const workViewDateEl = document.getElementById('workViewDate');
         if (workDateEl) workDateEl.value = today;
@@ -628,6 +683,8 @@
         loadWorkViewTeachers();
 
         let currentStudents = [];
+        let presentationCurrentStudents = [];
+        let presentationEvaluationStudents = [];
         let lastViewAttendance = null;
         let analysisChart = null;
         
@@ -659,184 +716,78 @@
         }
 
         function showTab(tab) {
+            const sections = [
+                'markSection',
+                'viewSection',
+                'studentsSection',
+                'reportSection',
+                'workSection',
+                'lowSection',
+                'analysisSection',
+                'marksSection',
+                'resultSection',
+                'presentationSection'
+            ];
+            const tabs = [
+                'markTab',
+                'viewTab',
+                'studentsTab',
+                'reportTab',
+                'workTab',
+                'lowTab',
+                'analysisTab',
+                'marksTab',
+                'resultTab',
+                'presentationTab'
+            ];
+
+            sections.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            tabs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.classList.remove('active');
+            });
+
             if (tab === 'mark') {
                 document.getElementById('markSection').style.display = 'block';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
                 document.getElementById('markTab').classList.add('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'view') {
-                document.getElementById('markSection').style.display = 'none';
                 document.getElementById('viewSection').style.display = 'block';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
                 document.getElementById('viewTab').classList.add('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadRegions();
             } else if (tab === 'students') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
                 document.getElementById('studentsSection').style.display = 'block';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
                 document.getElementById('studentsTab').classList.add('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadStudentsRegions();
             } else if (tab === 'report') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
                 document.getElementById('reportSection').style.display = 'block';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
                 document.getElementById('reportTab').classList.add('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadReportRegions();
             } else if (tab === 'work') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
                 document.getElementById('workSection').style.display = 'block';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
                 document.getElementById('workTab').classList.add('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
+            } else if (tab === 'presentation') {
+                document.getElementById('presentationSection').style.display = 'block';
+                document.getElementById('presentationTab').classList.add('active');
+                loadPresentationRegions();
             } else if (tab === 'marks') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
                 document.getElementById('marksSection').style.display = 'block';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
                 document.getElementById('marksTab').classList.add('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadMarksRegions();
             } else if (tab === 'result') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
                 document.getElementById('resultSection').style.display = 'block';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
                 document.getElementById('resultTab').classList.add('active');
                 loadResultRegions();
             } else if (tab === 'analysis') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
-                document.getElementById('lowSection').style.display = 'none';
                 document.getElementById('analysisSection').style.display = 'block';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
-                document.getElementById('lowTab').classList.remove('active');
                 document.getElementById('analysisTab').classList.add('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadAnalysisRegions();
             } else if (tab === 'low') {
-                document.getElementById('markSection').style.display = 'none';
-                document.getElementById('viewSection').style.display = 'none';
-                document.getElementById('studentsSection').style.display = 'none';
-                document.getElementById('reportSection').style.display = 'none';
-                document.getElementById('workSection').style.display = 'none';
                 document.getElementById('lowSection').style.display = 'block';
-                document.getElementById('analysisSection').style.display = 'none';
-                document.getElementById('marksSection').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                document.getElementById('markTab').classList.remove('active');
-                document.getElementById('viewTab').classList.remove('active');
-                document.getElementById('studentsTab').classList.remove('active');
-                document.getElementById('reportTab').classList.remove('active');
-                document.getElementById('workTab').classList.remove('active');
                 document.getElementById('lowTab').classList.add('active');
-                document.getElementById('analysisTab').classList.remove('active');
-                document.getElementById('marksTab').classList.remove('active');
-                document.getElementById('resultTab').classList.remove('active');
                 loadLowRegions();
             }
         }
@@ -1004,6 +955,674 @@
                 // MARKS FUNCTIONS
         let marksCurrentStudents = [];
 
+        // PRESENTATION FUNCTIONS
+        async function loadPresentationRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const regions = await res.json();
+                const select = document.getElementById('presentationRegion');
+                if (!select) return;
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+                const batchSelect = document.getElementById('presentationBatch');
+                if (batchSelect) batchSelect.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('presentationTable').innerHTML = '';
+                document.getElementById('presentationTopicsTable').innerHTML = '';
+                document.getElementById('presentationEvaluationTable').innerHTML = '';
+                document.getElementById('presentationGroupCounts').innerHTML = '';
+            } catch (error) {
+                console.error('Error loading presentation regions:', error);
+            }
+        }
+
+        async function loadPresentationBatches() {
+            const region = document.getElementById('presentationRegion').value;
+            const select = document.getElementById('presentationBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('presentationTable').innerHTML = '';
+                document.getElementById('presentationTopicsTable').innerHTML = '';
+                document.getElementById('presentationEvaluationTable').innerHTML = '';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const batches = await res.json();
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+                document.getElementById('presentationTable').innerHTML = '';
+                document.getElementById('presentationTopicsTable').innerHTML = '';
+                document.getElementById('presentationEvaluationTable').innerHTML = '';
+            } catch (error) {
+                console.error('Error loading presentation batches:', error);
+            }
+        }
+
+        function computePresentationCounts() {
+            let group1 = 0;
+            const selectedNames = [];
+            presentationCurrentStudents.forEach(student => {
+                const checkbox = document.getElementById(`presentationGroup_${student._id}`);
+                if (checkbox?.checked && !checkbox.disabled) {
+                    group1 += 1;
+                    selectedNames.push(student.name);
+                }
+            });
+            return { group1, selectedNames };
+        }
+
+        function updatePresentationCounts() {
+            const counts = computePresentationCounts();
+            const el = document.getElementById('presentationGroupCounts');
+            const topicInput = document.getElementById('presentationTopic1');
+            const saveBtn = document.getElementById('savePresentationBtn');
+            if (el) {
+                const names = counts.selectedNames.join(' & ');
+                el.textContent = `Selected Students: ${counts.group1}/2${names ? ` (${names})` : ''}`;
+            }
+            const ready = counts.group1 >= 1 && counts.group1 <= 2;
+            if (topicInput) {
+                topicInput.disabled = !ready;
+                if (!ready) {
+                    topicInput.value = '';
+                    topicInput.placeholder = 'Select one or two students first';
+                } else {
+                    topicInput.placeholder = 'Enter presentation topic';
+                }
+            }
+            if (saveBtn) {
+                saveBtn.disabled = !ready;
+            }
+        }
+
+        function handlePresentationGroupChange(studentId) {
+            const checkbox = document.getElementById(`presentationGroup_${studentId}`);
+            if (!checkbox) return;
+            const counts = computePresentationCounts();
+            if (counts.group1 > 2) {
+                checkbox.checked = false;
+                alert('Only two students can be selected.');
+            }
+            updatePresentationCounts();
+        }
+
+        async function loadPresentationStudents() {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) return;
+
+            try {
+                document.getElementById('presentationTopicsTable').innerHTML = '';
+                document.getElementById('presentationEvaluationTable').innerHTML = '';
+                const res = await fetch(
+                    `/api/presentations/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                presentationCurrentStudents = data.students || [];
+
+                const topic1 = document.getElementById('presentationTopic1');
+                if (topic1) {
+                    topic1.value = '';
+                    topic1.disabled = true;
+                    topic1.placeholder = 'Select one or two students first';
+                }
+
+                if (!presentationCurrentStudents || presentationCurrentStudents.length === 0) {
+                    document.getElementById('presentationTable').innerHTML =
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    document.getElementById('presentationTopicsTable').innerHTML = '';
+                    document.getElementById('presentationGroupCounts').innerHTML = '';
+                    return;
+                }
+
+                let html = `
+                    <table class="table table-sm table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th class="text-center">Group (Only 2)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                presentationCurrentStudents.forEach((student, index) => {
+                    const hasSavedTopic = !!student.presentation?.topic;
+                    const labelText = hasSavedTopic ? 'Saved' : 'Select';
+                    html += `
+                        <tr>
+                            <td class="align-middle">${index + 1}</td>
+                            <td class="align-middle fw-semibold">${student.name}</td>
+                            <td class="align-middle text-center">
+                                <div class="form-check d-inline-flex align-items-center gap-2">
+                                    <input class="form-check-input" type="checkbox" id="presentationGroup_${student._id}"
+                                        ${hasSavedTopic ? 'checked disabled' : ''} onchange="handlePresentationGroupChange('${student._id}')">
+                                    <label class="form-check-label" for="presentationGroup_${student._id}">${labelText}</label>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    <button class="btn btn-success btn-lg mt-3" id="savePresentationBtn" onclick="submitPresentations()" disabled>
+                        Save Presentation Group
+                    </button>
+                `;
+
+                document.getElementById('presentationTable').innerHTML = html;
+                updatePresentationCounts();
+            } catch (error) {
+                console.error('Error loading presentation students:', error);
+                document.getElementById('presentationTable').innerHTML =
+                    `<div class="alert alert-danger">Error loading presentations: ${error.message}</div>`;
+            }
+        }
+
+        async function loadPresentationTopics() {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                document.getElementById('presentationTable').innerHTML = '';
+                document.getElementById('presentationGroupCounts').innerHTML = '';
+                document.getElementById('presentationEvaluationTable').innerHTML = '';
+                const res = await fetch(
+                    `/api/presentations/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                const students = data.students || [];
+
+                if (!students.length) {
+                    document.getElementById('presentationTopicsTable').innerHTML =
+                        '<div class="alert alert-warning">No students found in this batch</div>';
+                    return;
+                }
+
+                const totalStudents = students.length;
+                const withPresentation = students.filter(s => s.presentation && s.presentation.groupNumber).length;
+                const withTopic = students.filter(s => s.presentation && s.presentation.topic).length;
+                const missingTopics = totalStudents - withTopic;
+                const missingAssignments = totalStudents - withPresentation;
+
+                const groups = new Map();
+                students.forEach(student => {
+                    const groupNumber = student.presentation?.groupNumber;
+                    if (!groupNumber) return;
+                    if (!groups.has(groupNumber)) {
+                        groups.set(groupNumber, { groupNumber, topic: student.presentation?.topic || '', members: [] });
+                    }
+                    groups.get(groupNumber).members.push(student);
+                });
+
+                const groupList = Array.from(groups.values()).sort((a, b) => a.groupNumber - b.groupNumber);
+
+                let html = `
+                    <div class="alert alert-info">
+                        <div class="fw-semibold">Presentation Topics Summary</div>
+                        <div>Total Students: <strong>${totalStudents}</strong></div>
+                        <div>Assigned to Group: <strong>${withPresentation}</strong></div>
+                        <div>Topics Filled: <strong>${withTopic}</strong></div>
+                        <div class="text-danger">Missing Topics: <strong>${missingTopics}</strong></div>
+                        <div class="text-danger">Missing Assignments: <strong>${missingAssignments}</strong></div>
+                    </div>
+                `;
+
+                if (groupList.length === 0) {
+                    html += '<div class="alert alert-warning">No presentation groups found yet.</div>';
+                    document.getElementById('presentationTopicsTable').innerHTML = html;
+                    return;
+                }
+
+                html += `
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Group</th>
+                                <th>Members</th>
+                                <th>Topic</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                groupList.forEach(group => {
+                    const memberList = group.members.map(m => `
+                        <div class="d-flex align-items-center justify-content-between gap-2">
+                            <span>${m.name}</span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="unassignPresentationStudent('${m._id}')">Unassign</button>
+                        </div>
+                    `).join('');
+                    html += `
+                        <tr>
+                            <td class="fw-semibold">Team ${group.groupNumber}</td>
+                            <td>${memberList}</td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm"
+                                    id="topic_group_${group.groupNumber}" value="${group.topic || ''}" placeholder="Enter topic">
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex gap-2 justify-content-center">
+                                    <button class="btn btn-sm btn-success" onclick="saveGroupTopic(${group.groupNumber})">Save</button>
+                                    <button class="btn btn-sm btn-outline-warning" onclick="clearGroupTopic(${group.groupNumber})">Clear</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('presentationTopicsTable').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading presentation topics:', error);
+                document.getElementById('presentationTopicsTable').innerHTML =
+                    `<div class="alert alert-danger">Error loading topics: ${error.message}</div>`;
+            }
+        }
+
+        async function loadPresentationEvaluation() {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                document.getElementById('presentationTable').innerHTML = '';
+                document.getElementById('presentationTopicsTable').innerHTML = '';
+                document.getElementById('presentationGroupCounts').innerHTML = '';
+                const res = await fetch(
+                    `/api/presentations/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                const students = data.students || [];
+
+                presentationEvaluationStudents = students
+                    .filter(s => s.presentation && s.presentation.topic)
+                    .sort((a, b) => {
+                        const ga = a.presentation?.groupNumber ?? 9999;
+                        const gb = b.presentation?.groupNumber ?? 9999;
+                        if (ga !== gb) return ga - gb;
+                        return (a.name || '').localeCompare(b.name || '');
+                    });
+
+                if (!presentationEvaluationStudents.length) {
+                    document.getElementById('presentationEvaluationTable').innerHTML =
+                        '<div class="alert alert-warning">No presentation topics found to evaluate</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">Presentation Evaluation</div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Topic</th>
+                                <th>Group</th>
+                                <th class="text-center">Content (10)</th>
+                                <th class="text-center">Design (5)</th>
+                                <th class="text-center">Communication (5)</th>
+                                <th class="text-center">Total (20)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                presentationEvaluationStudents.forEach((student, index) => {
+                    const evalData = student.presentation?.evaluation || {};
+                    const content = Number.isFinite(evalData.content) ? evalData.content : '';
+                    const design = Number.isFinite(evalData.design) ? evalData.design : '';
+                    const communication = Number.isFinite(evalData.communication) ? evalData.communication : '';
+                    const topic = student.presentation?.topic || '-';
+                    const groupNumber = student.presentation?.groupNumber || '-';
+                    const locked = !!student.presentation?.evaluationLocked;
+                    const total = (Number(content || 0) + Number(design || 0) + Number(communication || 0));
+
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${student.name}</td>
+                            <td>${topic}</td>
+                            <td>${groupNumber}</td>
+                            <td class="text-center">
+                                <input type="number" class="form-control form-control-sm text-center"
+                                    id="eval_content_${student._id}" min="0" max="10" value="${content}"
+                                    ${locked ? 'disabled' : ''} oninput="updateEvaluationTotal('${student._id}')">
+                            </td>
+                            <td class="text-center">
+                                <input type="number" class="form-control form-control-sm text-center"
+                                    id="eval_design_${student._id}" min="0" max="5" value="${design}"
+                                    ${locked ? 'disabled' : ''} oninput="updateEvaluationTotal('${student._id}')">
+                            </td>
+                            <td class="text-center">
+                                <input type="number" class="form-control form-control-sm text-center"
+                                    id="eval_comm_${student._id}" min="0" max="5" value="${communication}"
+                                    ${locked ? 'disabled' : ''} oninput="updateEvaluationTotal('${student._id}')">
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-info" id="eval_total_${student._id}">${total}</span>
+                                ${locked ? '<div class="mt-1"><span class="badge bg-secondary">Locked</span></div>' : ''}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-success mt-3" onclick="savePresentationEvaluation()">Save Evaluation</button>
+                        <button class="btn btn-outline-secondary mt-3" onclick="lockAllPresentationEvaluations(true)">Lock All Evaluations</button>
+                        <button class="btn btn-outline-warning mt-3" onclick="lockAllPresentationEvaluations(false)">Unlock All Evaluations</button>
+                    </div>
+                `;
+
+                document.getElementById('presentationEvaluationTable').innerHTML = html;
+                document.getElementById('presentationEvaluationTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (error) {
+                console.error('Error loading presentation evaluation:', error);
+                document.getElementById('presentationEvaluationTable').innerHTML =
+                    `<div class="alert alert-danger">Error loading evaluation: ${error.message}</div>`;
+            }
+        }
+
+
+        async function savePresentationEvaluation() {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            if (!presentationEvaluationStudents || presentationEvaluationStudents.length === 0) {
+                alert('No students to evaluate');
+                return;
+            }
+
+            const evaluations = presentationEvaluationStudents.map(student => {
+                const content = Number(document.getElementById(`eval_content_${student._id}`)?.value || '');
+                const design = Number(document.getElementById(`eval_design_${student._id}`)?.value || '');
+                const communication = Number(document.getElementById(`eval_comm_${student._id}`)?.value || '');
+                return {
+                    studentId: student._id,
+                    content: Number.isFinite(content) ? content : null,
+                    design: Number.isFinite(design) ? design : null,
+                    communication: Number.isFinite(communication) ? communication : null
+                };
+            });
+
+            try {
+                const res = await fetch('/api/presentations/evaluate', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        region,
+                        batchNumber: batch,
+                        date,
+                        evaluations
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Save failed');
+                alert('Evaluation saved.');
+                loadPresentationEvaluation();
+            } catch (error) {
+                console.error('Error saving presentation evaluation:', error);
+                alert(error.message);
+            }
+        }
+
+        function updateEvaluationTotal(studentId) {
+            const content = Number(document.getElementById(`eval_content_${studentId}`)?.value || 0);
+            const design = Number(document.getElementById(`eval_design_${studentId}`)?.value || 0);
+            const communication = Number(document.getElementById(`eval_comm_${studentId}`)?.value || 0);
+            const total = Math.max(0, Math.min(20, content + design + communication));
+            const totalEl = document.getElementById(`eval_total_${studentId}`);
+            if (totalEl) totalEl.textContent = String(total);
+        }
+
+        async function lockAllPresentationEvaluations(locked) {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            const ids = (presentationEvaluationStudents || []).map(s => s._id);
+            if (!ids.length) {
+                alert('No students to lock');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/presentations/lock-evaluation', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        region,
+                        batchNumber: batch,
+                        date,
+                        studentIds: ids,
+                        locked: !!locked
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Lock failed');
+                alert(locked ? 'Evaluation locked.' : 'Evaluation unlocked.');
+                loadPresentationEvaluation();
+            } catch (error) {
+                console.error('Error locking evaluation:', error);
+                alert(error.message);
+            }
+        }
+
+        async function submitPresentations() {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            const counts = computePresentationCounts();
+            if (counts.group1 < 1 || counts.group1 > 2) {
+                alert('Please select one or two students for the group.');
+                return;
+            }
+
+            const topicValue = document.getElementById('presentationTopic1')?.value?.trim();
+            if (!topicValue) {
+                alert('Please enter a presentation topic for the selected team.');
+                return;
+            }
+
+            const maxGroup = presentationCurrentStudents.reduce((max, student) => {
+                const groupNum = Number(student.presentation?.groupNumber || 0);
+                return groupNum > max ? groupNum : max;
+            }, 0);
+            const nextGroupNumber = maxGroup + 1;
+
+            const assignments = presentationCurrentStudents
+                .filter(student => {
+                    const groupEl = document.getElementById(`presentationGroup_${student._id}`);
+                    return !!groupEl?.checked && !groupEl?.disabled;
+                })
+                .map(student => ({
+                    studentId: student._id,
+                    groupNumber: nextGroupNumber
+                }));
+
+            const groupTopics = {};
+            groupTopics[nextGroupNumber] = topicValue;
+
+            const payload = {
+                region,
+                batchNumber: batch,
+                date,
+                topic: topicValue,
+                groupTopics,
+                assignments
+            };
+
+            try {
+                const res = await fetch('/api/presentations/save', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Save failed');
+                alert('Presentation saved.');
+                loadPresentationStudents();
+            } catch (error) {
+                console.error('Error saving presentations:', error);
+                alert(error.message);
+            }
+        }
+
+
+        async function saveGroupTopic(groupNumber) {
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+            const input = document.getElementById(`topic_group_${groupNumber}`);
+            const topic = input?.value?.trim() || '';
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/presentations/update-topic', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        region,
+                        batchNumber: batch,
+                        date,
+                        groupNumber,
+                        topic
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Update failed');
+                alert('Topic updated.');
+                loadPresentationTopics();
+            } catch (error) {
+                console.error('Error updating topic:', error);
+                alert(error.message);
+            }
+        }
+
+        async function clearGroupTopic(groupNumber) {
+            if (!confirm('Clear topic for this group?')) return;
+            const input = document.getElementById(`topic_group_${groupNumber}`);
+            if (input) input.value = '';
+            await saveGroupTopic(groupNumber);
+        }
+
+        async function unassignPresentationStudent(studentId) {
+            if (!confirm('Unassign this student from presentation?')) return;
+
+            const region = document.getElementById('presentationRegion').value;
+            const batch = document.getElementById('presentationBatch').value;
+            const date = document.getElementById('presentationDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/presentations/unassign', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        region,
+                        batchNumber: batch,
+                        date,
+                        studentIds: [studentId]
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Unassign failed');
+                alert('Student unassigned.');
+                loadPresentationTopics();
+            } catch (error) {
+                console.error('Error unassigning student:', error);
+                alert(error.message);
+            }
+        }
+
+        // MARKS FUNCTIONS
         async function loadMarksRegions() {
             try {
                 const res = await fetch('/api/students/regions/all', {
@@ -1088,6 +1707,7 @@
 
                 marksCurrentStudents.forEach((student, index) => {
                     const m = student.marks || {};
+                    const presentationValue = m.presentation ?? student.presentationPrefill ?? '';
                     html += `
                         <tr>
                             <td class="align-middle">${index + 1}</td>
@@ -1102,7 +1722,7 @@
                             </td>
                             <td class="align-middle text-center">
                                 <input type="number" class="form-control form-control-sm" min="0" max="20"
-                                    id="presentation_${student._id}" value="${m.presentation ?? ''}">
+                                    id="presentation_${student._id}" value="${presentationValue}">
                             </td>
                         </tr>
                     `;
@@ -1111,7 +1731,7 @@
                 html += `
                         </tbody>
                     </table>
-                    <button class="btn btn-success btn-lg mt-3" onclick="submitMarks()">Submit Marks</button>
+                    <button class="btn btn-success btn-lg mt-3" onclick="submitMarks()">Submit Exam Marks</button>
                 `;
 
                 document.getElementById('marksTable').innerHTML = html;
@@ -1172,7 +1792,7 @@
                 });
                 const data = await res.json();
                 if (res.ok) {
-                    alert(`Marks saved. Successful: ${data.results?.successful || 0}`);
+                    alert(`Exam marks saved. Successful: ${data.results?.successful || 0}`);
                     loadMarksStudents();
                 } else {
                     alert('Error: ' + (data.message || 'Failed to submit marks'));
@@ -1635,6 +2255,7 @@
                                 <th>Mobile</th>
                                 <th>Standard</th>
                                 <th>Absent Dates</th>
+                                <th class="text-center">Follow-up</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1642,6 +2263,12 @@
 
                 results.forEach((student, index) => {
                     const absentDates = (student.absentDates || []).sort().join(', ');
+                    const tel = getTelData(student.mobile);
+                    const callButton = tel
+                        ? `<a class="btn btn-sm btn-outline-primary" href="tel:${tel.phone}" title="Call ${tel.raw}">
+                               <i class="bi bi-telephone"></i> Call
+                           </a>`
+                        : '<span class="text-muted">-</span>';
                     html += `
                         <tr>
                             <td>${index + 1}</td>
@@ -1650,6 +2277,7 @@
                             <td>${student.mobile || '-'}</td>
                             <td>${student.standard || '-'}</td>
                             <td>${absentDates || '-'}</td>
+                            <td class="text-center">${callButton}</td>
                         </tr>
                     `;
                 });
@@ -2153,6 +2781,7 @@
                                 <th>#</th>
                                 <th>Student Name</th>
                                 <th class="text-center">Status</th>
+                                <th class="text-center">Follow-up</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2165,6 +2794,13 @@
                     const prevIcon = prevAbsent
                         ? '<span class="ms-2 text-warning" title="Absent yesterday"><i class="bi bi-moon-stars-fill"></i></span>'
                         : '';
+                    const rawPhone = (student.mobile || '').toString().trim();
+                    const phone = rawPhone.replace(/[^\d+]/g, '');
+                    const callButton = (prevAbsent && phone)
+                        ? `<a class="btn btn-sm btn-outline-primary" href="tel:${phone}" title="Call ${rawPhone}">
+                               <i class="bi bi-telephone"></i> Call
+                           </a>`
+                        : '<span class="text-muted">-</span>';
                     html += `
                         <tr>
   <td class="align-middle">${index + 1}</td>
@@ -2194,6 +2830,9 @@
       </label>
 
     </div>
+  </td>
+  <td class="align-middle text-center">
+    ${callButton}
   </td>
 </tr>
 
@@ -2377,6 +3016,7 @@
                                 <th>Status</th>
                                 <th>Marked By</th>
                                 <th>Last Updated</th>
+                                <th class="text-center">Follow-up</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2385,6 +3025,7 @@
                 students.forEach((student, index) => {
                     let statusBadge, markedBy;
                     let markedAt = '-';
+                    let isAbsent = false;
 
                     if (student.attendance) {
                         if (student.attendance.status === 'present') {
@@ -2393,6 +3034,7 @@
                         } else {
                             statusBadge = '<span class="badge bg-danger">ABSENT</span>';
                             absent++;
+                            isAbsent = true;
                             absentNames.push(student.name);
                         }
                         markedBy = student.attendance.markedBy;
@@ -2405,6 +3047,13 @@
                         notMarked++;
                     }
 
+                    const tel = getTelData(student.mobile);
+                    const callButton = (isAbsent && tel)
+                        ? `<a class="btn btn-sm btn-outline-primary" href="tel:${tel.phone}" title="Call ${tel.raw}">
+                               <i class="bi bi-telephone"></i> Call
+                           </a>`
+                        : '<span class="text-muted">-</span>';
+
                     html += `
                         <tr>
                             <td>${index + 1}</td>
@@ -2412,6 +3061,7 @@
                             <td>${statusBadge}</td>
                             <td>${markedBy}</td>
                             <td>${markedAt}</td>
+                            <td class="text-center">${callButton}</td>
                         </tr>
                     `;
                 });
@@ -2905,6 +3555,14 @@
             return dt.toISOString().replace('T', ' ').slice(0, 16);
         }
 
+        function getTelData(mobile) {
+            if (!mobile) return null;
+            const raw = String(mobile).trim();
+            const phone = raw.replace(/[^\d+]/g, '');
+            if (!phone) return null;
+            return { raw, phone };
+        }
+
         function closeModal(id) {
             const modal = bootstrap.Modal.getInstance(document.getElementById(id));
             if (modal) modal.hide();
@@ -2978,7 +3636,7 @@
                         </div>
                     </div>
                     <div>
-                        <h6>Recent Marks</h6>
+                        <h6>Recent Exams</h6>
                         <div class="table-responsive">
                             <table class="table table-sm table-bordered">
                                 <thead class="table-light">
