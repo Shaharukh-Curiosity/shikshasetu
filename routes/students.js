@@ -99,6 +99,112 @@ router.get('/stats/dashboard', auth, async (req, res) => {
   }
 });
 
+// Get inactive student names (limited)
+router.get('/inactive-names', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit || 20), 100);
+    const region = req.query.region;
+    const query = { role: 'student', isActive: false };
+    if (region) query.region = region;
+
+    const students = await User.find(query)
+      .select('name region batchNumber mobile')
+      .sort({ name: 1 })
+      .limit(limit)
+      .lean();
+
+    const total = await User.countDocuments(query);
+
+    res.json({ total, students });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get inactive student details with attendance summary
+router.get('/inactive-details', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit || 200), 500);
+    const region = req.query.region;
+    const query = { role: 'student', isActive: false };
+    if (region) query.region = region;
+
+    const students = await User.find(query)
+      .select('name region batchNumber')
+      .sort({ name: 1 })
+      .limit(limit)
+      .lean();
+
+    if (!students.length) {
+      return res.json({ students: [] });
+    }
+
+    const ids = students.map(s => String(s._id));
+    const attendanceAgg = await Attendance.aggregate([
+      { $match: { studentId: { $in: ids } } },
+      {
+        $group: {
+          _id: '$studentId',
+          totalClasses: { $sum: 1 },
+          absentCount: {
+            $sum: {
+              $cond: [{ $eq: ['$status', 'absent'] }, 1, 0]
+            }
+          }
+        }
+      }
+    ]);
+    const statsMap = new Map(attendanceAgg.map(r => [String(r._id), r]));
+
+    const result = students.map(s => {
+      const stats = statsMap.get(String(s._id)) || {};
+      return {
+        studentId: s._id,
+        name: s.name,
+        batchNumber: s.batchNumber,
+        mobile: s.mobile,
+        totalClasses: stats.totalClasses || 0,
+        absentCount: stats.absentCount || 0
+      };
+    });
+
+    res.json({ students: result });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Auto-inactivate students with too many absences
+router.post('/auto-inactivate-absent', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const threshold = Math.max(1, Number(req.body?.threshold || 5));
+
+    const absences = await Attendance.aggregate([
+      { $match: { status: 'absent' } },
+      { $group: { _id: '$studentId', count: { $sum: 1 } } },
+      { $match: { count: { $gt: threshold } } }
+    ]);
+
+    const studentIds = absences.map(a => a._id).filter(Boolean);
+    if (studentIds.length === 0) {
+      return res.json({ threshold, totalAbsentStudents: 0, updated: 0 });
+    }
+
+    const result = await User.updateMany(
+      { _id: { $in: studentIds }, role: 'student', isActive: true },
+      { $set: { isActive: false } }
+    );
+
+    res.json({
+      threshold,
+      totalAbsentStudents: studentIds.length,
+      updated: result.modifiedCount || result.nModified || 0
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Auto-inactivate failed', details: error.message });
+  }
+});
+
 // Get batches for a region (parameterized route)
 router.get('/batches/:region', auth, async (req, res) => {
   try {
@@ -301,8 +407,10 @@ router.post('/bulk-update', auth, isAdmin, async (req, res) => {
 // Get all students
 router.get('/', auth, async (req, res) => {
   try {
-    const { region, schoolName, batchNumber, q } = req.query;
-    let query = { role: 'student', isActive: true };
+    const { region, schoolName, batchNumber, q, status } = req.query;
+    let query = { role: 'student' };
+    if (!status || status === 'active') query.isActive = true;
+    if (status === 'inactive') query.isActive = false;
     
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
@@ -450,6 +558,41 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     }
 
     res.status(500).json({ message: 'Error updating student', details: error.message });
+  }
+});
+
+// Update student active status
+router.patch('/:id/status', auth, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body || {};
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ message: 'isActive must be boolean' });
+    }
+
+    const before = await User.findById(id).lean();
+    const student = await User.findByIdAndUpdate(
+      id,
+      { isActive },
+      { new: true, runValidators: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    await logAudit({
+      req,
+      action: 'student_status_update',
+      entity: 'student',
+      entityId: student._id?.toString(),
+      before,
+      after: { isActive: student.isActive }
+    });
+
+    res.json({ message: 'Student status updated', student });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating status', details: error.message });
   }
 });
 

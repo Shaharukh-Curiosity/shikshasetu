@@ -7,6 +7,7 @@ const { logAudit } = require('../utils/audit');
 
 const VALID_STATUSES = new Set(['present', 'absent', 'late', 'leave']);
 const PRESENT_STATUSES = new Set(['present', 'late', 'leave']);
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 // ============================================
 // MARK ATTENDANCE - SIMPLEST POSSIBLE
@@ -513,6 +514,105 @@ router.get('/low-attendance', auth, isTeacherOrAdmin, async (req, res) => {
       days: daysInt,
       dateRange: { start: startDate, end: endDateStr },
       results
+    });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// ENGAGEMENT - Top Attendance + Most Improved
+// ============================================
+router.get('/engagement', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, days } = req.query;
+    if (!region) {
+      return res.status(400).json({ message: 'Missing region' });
+    }
+
+    const daysInt = Math.max(parseInt(days, 10) || 30, 7);
+    const endDateObj = new Date();
+    const endDate = endDateObj.toISOString().split('T')[0];
+    const startRecentObj = new Date(endDateObj.getTime() - (daysInt - 1) * MS_PER_DAY);
+    const startRecent = startRecentObj.toISOString().split('T')[0];
+    const endPrevObj = new Date(startRecentObj.getTime() - MS_PER_DAY);
+    const startPrevObj = new Date(endPrevObj.getTime() - (daysInt - 1) * MS_PER_DAY);
+    const startPrev = startPrevObj.toISOString().split('T')[0];
+    const endPrev = endPrevObj.toISOString().split('T')[0];
+
+    const studentsQuery = { role: 'student', region, isActive: true };
+    if (batchNumber && batchNumber !== 'all') {
+      studentsQuery.batchNumber = batchNumber;
+    }
+    const students = await User.find(studentsQuery).lean();
+    if (!students.length) {
+      return res.json({ topAttendance: [], mostImproved: [], dateRange: { recent: { start: startRecent, end: endDate }, previous: { start: startPrev, end: endPrev } } });
+    }
+    const studentIds = students.map(s => String(s._id));
+
+    const buildStats = async (start, end) => {
+      const match = {
+        studentId: { $in: studentIds },
+        date: { $gte: start, $lte: end }
+      };
+      if (batchNumber && batchNumber !== 'all') {
+        match.batchNumber = batchNumber;
+      }
+      const rows = await Attendance.aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: '$studentId',
+            total: { $sum: 1 },
+            present: {
+              $sum: {
+                $cond: [{ $in: ['$status', Array.from(PRESENT_STATUSES)] }, 1, 0]
+              }
+            }
+          }
+        }
+      ]);
+      const map = new Map(rows.map(r => [String(r._id), r]));
+      return map;
+    };
+
+    const recentMap = await buildStats(startRecent, endDate);
+    const prevMap = await buildStats(startPrev, endPrev);
+
+    const enriched = students.map(s => {
+      const recent = recentMap.get(String(s._id)) || { total: 0, present: 0 };
+      const prev = prevMap.get(String(s._id)) || { total: 0, present: 0 };
+      const recentRate = recent.total > 0 ? recent.present / recent.total : 0;
+      const prevRate = prev.total > 0 ? prev.present / prev.total : 0;
+      const improvement = recentRate - prevRate;
+      return {
+        studentId: s._id,
+        name: s.name,
+        batchNumber: s.batchNumber,
+        recent: { total: recent.total, present: recent.present, rate: Number((recentRate * 100).toFixed(2)) },
+        previous: { total: prev.total, present: prev.present, rate: Number((prevRate * 100).toFixed(2)) },
+        improvement: Number((improvement * 100).toFixed(2))
+      };
+    });
+
+    const topAttendance = enriched
+      .filter(r => r.recent.total > 0)
+      .sort((a, b) => b.recent.rate - a.recent.rate)
+      .slice(0, 10);
+
+    const mostImproved = enriched
+      .filter(r => r.recent.total > 0 && r.previous.total > 0)
+      .sort((a, b) => b.improvement - a.improvement)
+      .slice(0, 10);
+
+    res.json({
+      topAttendance,
+      mostImproved,
+      dateRange: {
+        recent: { start: startRecent, end: endDate, days: daysInt },
+        previous: { start: startPrev, end: endPrev, days: daysInt }
+      }
     });
   } catch (error) {
     console.error('FATAL ERROR:', error);

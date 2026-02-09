@@ -32,7 +32,10 @@
             gap: 10px;
             flex-wrap: nowrap;
             overflow-x: auto;
+            overflow-y: visible;
             padding-bottom: 6px;
+            position: relative;
+            z-index: 20;
         }
 
         .nav-tabs::-webkit-scrollbar {
@@ -65,6 +68,7 @@
             color: #ffffff;
             box-shadow: 0 10px 20px rgba(14, 165, 164, 0.25);
         }
+
 
         @media (max-width: 768px) {
             .nav-tabs {
@@ -146,6 +150,12 @@
                 </div>
             </div>
         </div>
+        <div class="d-flex align-items-center gap-2 mb-3">
+            <button class="btn btn-sm btn-outline-primary" id="inactiveDetailsLink" onclick="openInactiveDetails()">
+                View Inactive Details
+            </button>
+            <span class="text-muted small" id="inactiveStudentsMeta"></span>
+        </div>
         
         <div class="card mb-4">
             <div class="card-body">
@@ -162,7 +172,7 @@
                 </div>
             </div>
         </div>
-        <ul class="nav nav-tabs mb-4">
+        <ul class="nav nav-tabs mb-3">
             <li class="nav-item">
                 <button class="nav-link active" id="markTab" onclick="showTab('mark')">Mark Attendance</button>
             </li>
@@ -170,9 +180,7 @@
                 <button class="nav-link" id="viewTab" onclick="showTab('view')">View Daily</button>
             </li>
             <li class="nav-item">
-                <button class="nav-link" id="studentsTab" onclick="showTab('students')">Students Details
-
-                </Details></button>
+                <button class="nav-link" id="studentsTab" onclick="showTab('students')">Students Details</button>
             </li>
             <li class="nav-item">
                 <button class="nav-link" id="reportTab" onclick="showTab('report')">View Report</button>
@@ -594,7 +602,10 @@
                         </div>
                         <div class="col-md-3">
                             <label>&nbsp;</label>
-                            <button class="btn btn-primary w-100" onclick="loadLowAttendance()">View Students</button>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary w-100" onclick="loadLowAttendance()">Low Attendance</button>
+                                <button class="btn btn-outline-success w-100" onclick="loadTopAttendance()">Top Attendance</button>
+                            </div>
                         </div>
                     </div>
 
@@ -680,6 +691,21 @@
                 </div>
                 <div class="modal-body" id="studentProfileContent">
                     Loading...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inactive Students Modal -->
+    <div class="modal" id="inactiveStudentsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Inactive Students Details</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('inactiveStudentsModal')"></button>
+                </div>
+                <div class="modal-body" id="inactiveStudentsContent">
+                    <div class="text-muted">Loading...</div>
                 </div>
             </div>
         </div>
@@ -794,6 +820,197 @@
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
+        }
+
+        async function autoInactivateByAbsence() {
+            try {
+                const res = await fetch('/api/students/auto-inactivate-absent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ threshold: 5 })
+                });
+                if (!res.ok) return;
+                await loadStats();
+                await loadInactiveNames();
+            } catch (error) {
+                console.error('Error auto-inactivating students:', error);
+            }
+        }
+
+        async function loadInactiveNames() {
+            const metaEl = document.getElementById('inactiveStudentsMeta');
+            const linkEl = document.getElementById('inactiveDetailsLink');
+            if (!metaEl || !linkEl) return;
+
+            try {
+                const res = await fetch('/api/students/inactive-names?limit=20', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const data = await res.json();
+                const total = data.total || 0;
+                metaEl.textContent = total ? `Total inactive: ${total}` : 'No inactive students';
+                linkEl.disabled = total === 0;
+            } catch (error) {
+                console.error('Error loading inactive students:', error);
+                metaEl.textContent = 'Failed to load';
+                linkEl.disabled = true;
+            }
+        }
+
+        async function openInactiveDetails() {
+            const contentEl = document.getElementById('inactiveStudentsContent');
+            if (contentEl) contentEl.innerHTML = 'Loading...';
+            new bootstrap.Modal(document.getElementById('inactiveStudentsModal')).show();
+
+            try {
+                const res = await fetch('/api/students/inactive-details', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const data = await res.json();
+                const rows = data.students || [];
+                if (!rows.length) {
+                    contentEl.innerHTML = '<div class="alert alert-info">No inactive students found.</div>';
+                    return;
+                }
+
+                const hasAnyPhone = rows.some(s => getTelData(s.mobile));
+                let html = `
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Batch</th>
+                                <th class="text-center">Total Classes</th>
+                                <th class="text-center">Absent</th>
+                                ${hasAnyPhone ? '<th class="text-center">Call</th>' : ''}
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                rows.forEach((s, index) => {
+                    const tel = getTelData(s.mobile);
+                    const callButton = tel
+                        ? `<a class="btn btn-sm btn-outline-primary" href="tel:${tel.phone}" title="Call ${tel.raw}">
+                               <i class="bi bi-telephone"></i> Call
+                           </a>`
+                        : '';
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(s.name)}</td>
+                            <td>${escapeHtml(s.batchNumber || '-')}</td>
+                            <td class="text-center">${s.totalClasses || 0}</td>
+                            <td class="text-center">${s.absentCount || 0}</td>
+                            ${hasAnyPhone ? `<td class="text-center">${callButton}</td>` : ''}
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table></div>';
+                contentEl.innerHTML = html;
+            } catch (error) {
+                if (contentEl) {
+                    contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+                }
+            }
+        }
+
+        let lastEngagement = null;
+
+        function renderEngagementTable(rows, mode) {
+            if (!rows || rows.length === 0) return '';
+            let html = `
+                <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Batch</th>
+                            <th class="text-center">${mode === 'improvement' ? 'Improvement' : 'Attendance'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            rows.forEach((s, index) => {
+                const value = mode === 'improvement' ? `+${s.improvement}%` : `${s.recent.rate}%`;
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(s.name)}</td>
+                        <td>${escapeHtml(s.batchNumber || '-')}</td>
+                        <td class="text-center">${value}</td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        async function loadTopAttendance() {
+            const region = document.getElementById('lowRegion')?.value;
+            const batch = document.getElementById('lowBatch')?.value || 'all';
+            const days = document.getElementById('lowDays')?.value || '30';
+            const resultsEl = document.getElementById('lowResults');
+            if (!resultsEl) return;
+
+            if (!region) {
+                alert('Please select region');
+                return;
+            }
+
+            try {
+                resultsEl.innerHTML = '<div class="text-muted">Loading...</div>';
+                const res = await fetch(
+                    `/api/attendance/engagement?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&days=${encodeURIComponent(days)}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                lastEngagement = data;
+
+                const topAttendance = data.topAttendance || [];
+                if (!topAttendance.length) {
+                    resultsEl.innerHTML = '<div class="alert alert-info">No attendance data found for this period.</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-success">
+                        <strong>Top Attendance</strong> (Last ${days} days)
+                    </div>
+                    ${renderEngagementTable(topAttendance, 'rate')}
+                    <button class="btn btn-outline-success mt-2" onclick="shareTopAttendance()">Share Top Attendance</button>
+                `;
+                resultsEl.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading top attendance:', error);
+                resultsEl.innerHTML = `<div class="alert alert-danger">Failed to load top attendance: ${error.message}</div>`;
+            }
+        }
+
+        function shareTopAttendance() {
+            if (!lastEngagement) {
+                alert('Please load top attendance first.');
+                return;
+            }
+            const top = lastEngagement.topAttendance || [];
+            const lines = top.map((s, i) => `${i + 1}. ${s.name} (${s.recent.rate}%)`).slice(0, 10);
+            const message = [
+                'Top Attendance',
+                ...(lines.length ? lines : ['No data'])
+            ].join('\n');
+            window.open(buildWhatsAppLink(message), '_blank');
         }
 
         function showTab(tab) {
@@ -3516,7 +3733,7 @@
 
             try {
                 console.log('👥 Loading students for region:', region, 'batch:', batch);
-                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
+                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&status=all`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -3863,6 +4080,10 @@
             return { raw, phone };
         }
 
+        function buildWhatsAppLink(message) {
+            return `https://wa.me/?text=${encodeURIComponent(message)}`;
+        }
+
         function escapeHtml(value) {
             return String(value || '')
                 .replace(/&/g, '&amp;')
@@ -4002,6 +4223,8 @@
 
         // Initialize
         loadStats();
+        loadInactiveNames();
+        autoInactivateByAbsence();
         loadRegions();
         loadSummaryRegions();
         updateFilterUI();

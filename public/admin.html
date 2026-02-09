@@ -187,11 +187,19 @@
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label>Status</label>
+                            <select class="form-select" id="filterStatus" onchange="loadStudents()">
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="all">All</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label>Quick Search</label>
                             <input type="text" class="form-control" id="filterSearch" placeholder="Name, Mobile, ID" oninput="loadStudents()">
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label>&nbsp;</label>
                             <button class="btn btn-secondary w-100" onclick="resetStudentFilters()">Reset Filters</button>
                         </div>
@@ -686,12 +694,14 @@
             const region = document.getElementById('filterRegion').value;
             const batch = document.getElementById('filterBatch').value;
             const q = document.getElementById('filterSearch').value;
+            const status = document.getElementById('filterStatus')?.value;
             
             let url = '/api/students';
             const params = new URLSearchParams();
             if (region) params.append('region', region);
             if (batch) params.append('batchNumber', batch);
             if (q) params.append('q', q);
+            if (status && status !== 'active') params.append('status', status);
             if (params.toString()) url += '?' + params.toString();
             
             const res = await fetch(url, {
@@ -699,8 +709,14 @@
             });
             const students = await res.json();
             
-            let html = '<table class="table"><thead><tr><th>#</th><th>Name</th><th>Region</th><th>School</th><th>Batch</th><th>Mobile</th><th>Actions</th></tr></thead><tbody>';
+            let html = '<table class="table"><thead><tr><th>#</th><th>Name</th><th>Region</th><th>School</th><th>Batch</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
             students.forEach((s, index) => {
+                const isActive = !!s.isActive;
+                const statusBadge = isActive
+                    ? '<span class="badge bg-success">Active</span>'
+                    : '<span class="badge bg-secondary">Inactive</span>';
+                const toggleLabel = isActive ? 'Deactivate' : 'Activate';
+                const toggleBtnClass = isActive ? 'btn-outline-danger' : 'btn-outline-success';
                 html += `<tr>
                     <td>${index + 1}</td>
                     <td>${s.name}</td>
@@ -708,15 +724,44 @@
                     <td>${s.schoolName || '-'}</td>
                     <td>${s.batchNumber}</td>
                     <td>${s.mobile || '-'}</td>
+                    <td>${statusBadge}</td>
                     <td>
                         <button class="btn btn-sm btn-info" onclick="viewStudentProfile('${s._id}')">View</button>
                         <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.region}', '${s.schoolName || ''}', '${s.mobile || ''}', '${s.age || ''}', '${s.standard || ''}', '${s.batchNumber}')">Edit</button>
+                        <button class="btn btn-sm ${toggleBtnClass}" onclick="toggleStudentStatus('${s._id}', ${isActive})">${toggleLabel}</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s._id}')">Delete</button>
                     </td>
                 </tr>`;
             });
             html += '</tbody></table>';
             document.getElementById('studentsList').innerHTML = html;
+        }
+
+        async function toggleStudentStatus(studentId, isActive) {
+            const nextStatus = !isActive;
+            const confirmMsg = nextStatus
+                ? 'Activate this student?'
+                : 'Deactivate this student?';
+            if (!confirm(confirmMsg)) return;
+
+            try {
+                const res = await fetch(`/api/students/${studentId}/status`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ isActive: nextStatus })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.message || 'Failed to update status');
+                }
+                loadStudents();
+                loadStats();
+            } catch (error) {
+                alert('Error updating status: ' + error.message);
+            }
         }
 
         async function loadUsers() {
@@ -1630,6 +1675,8 @@
         function resetStudentFilters() {
             document.getElementById('filterRegion').value = '';
             document.getElementById('filterBatch').value = '';
+            const statusEl = document.getElementById('filterStatus');
+            if (statusEl) statusEl.value = 'active';
             const searchEl = document.getElementById('filterSearch');
             if (searchEl) searchEl.value = '';
             loadStudents();
