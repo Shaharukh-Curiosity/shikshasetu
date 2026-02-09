@@ -184,6 +184,115 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
 });
 
 // ============================================
+// VIEW MISSED EXAMS BY BATCH + DATE
+// ============================================
+router.get('/missed', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber } = req.query;
+
+    if (!region || !batchNumber) {
+      return res.status(400).json({ message: 'Missing parameters' });
+    }
+
+    const students = await User.find({
+      role: 'student',
+      region,
+      batchNumber,
+      isActive: true
+    }).lean();
+
+    if (!students || students.length === 0) {
+      return res.json([]);
+    }
+
+    const marksRecords = await Marks.find({
+      region,
+      batchNumber
+    }).lean();
+    const marksMap = new Map(marksRecords.map(r => [String(r.studentId), r]));
+
+    const presentationRecords = await Presentation.find({
+      region,
+      batchNumber
+    }).lean();
+    const presentationMap = new Map(presentationRecords.map(r => [String(r.studentId), r]));
+
+    const byStudent = new Map();
+    const ensure = (student) => {
+      const key = String(student._id);
+      if (!byStudent.has(key)) {
+        byStudent.set(key, {
+          studentId: student._id,
+          name: student.name,
+          batchNumber: student.batchNumber,
+          took: { theory: false, practical: false, presentation: false },
+          last: { theory: null, practical: null, presentation: null }
+        });
+      }
+      return byStudent.get(key);
+    };
+
+    students.forEach(s => ensure(s));
+
+    marksRecords.forEach(m => {
+      const entry = byStudent.get(String(m.studentId));
+      if (!entry) return;
+      if (Number(m.theory || 0) > 0) {
+        entry.took.theory = true;
+        entry.last.theory = m.date;
+      }
+      if (Number(m.practical || 0) > 0) {
+        entry.took.practical = true;
+        entry.last.practical = m.date;
+      }
+      if (Number(m.presentation || 0) > 0) {
+        entry.took.presentation = true;
+        entry.last.presentation = m.date;
+      }
+    });
+
+    presentationRecords.forEach(p => {
+      const entry = byStudent.get(String(p.studentId));
+      if (!entry) return;
+      let presentationScore = null;
+      if (Number.isFinite(p.presentationMarks)) {
+        presentationScore = Number(p.presentationMarks || 0);
+      } else if (p.evaluation) {
+        const content = Number(p.evaluation.content || 0);
+        const design = Number(p.evaluation.design || 0);
+        const communication = Number(p.evaluation.communication || 0);
+        const hasAny = [p.evaluation.content, p.evaluation.design, p.evaluation.communication]
+          .some(v => Number.isFinite(v));
+        if (hasAny) {
+          presentationScore = content + design + communication;
+        }
+      }
+      if (Number(presentationScore || 0) > 0) {
+        entry.took.presentation = true;
+        entry.last.presentation = p.date;
+      }
+    });
+
+    const results = Array.from(byStudent.values()).map(entry => ({
+      studentId: entry.studentId,
+      name: entry.name,
+      batchNumber: entry.batchNumber,
+      missed: {
+        theory: !entry.took.theory,
+        practical: !entry.took.practical,
+        presentation: !entry.took.presentation
+      },
+      lastAppeared: entry.last
+    }));
+
+    res.json(results);
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
 // TOP 3 MARKS (BY DATE)
 // ============================================
 router.get('/top', auth, isTeacherOrAdmin, async (req, res) => {

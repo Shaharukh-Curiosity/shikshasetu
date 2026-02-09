@@ -246,15 +246,11 @@
                                 <option value="all">All</option>
                                 <option value="not_marked">Not Marked</option>
                                 <option value="present">Present</option>
-                                <option value="late">Late</option>
-                                <option value="leave">Leave</option>
                                 <option value="absent">Absent</option>
                             </select>
                         </div>
                         <div class="col-md-5 d-flex align-items-end gap-2 flex-wrap">
                             <button class="btn btn-outline-success btn-sm" onclick="bulkSetStatus('present')">All Present</button>
-                            <button class="btn btn-outline-warning btn-sm" onclick="bulkSetStatus('late')">All Late</button>
-                            <button class="btn btn-outline-info btn-sm" onclick="bulkSetStatus('leave')">All Leave</button>
                             <button class="btn btn-outline-danger btn-sm" onclick="bulkSetStatus('absent')">All Absent</button>
                             <button class="btn btn-outline-secondary btn-sm" onclick="bulkClearStatus()">Clear All</button>
                         </div>
@@ -1981,7 +1977,10 @@
 
                 students.forEach((student, index) => {
                     const m = student.marks;
-                    if (!m) {
+                    const presentationPrefill = Number.isFinite(student.presentationPrefill)
+                        ? Number(student.presentationPrefill)
+                        : null;
+                    if (!m && presentationPrefill === null) {
                         html += `
                             <tr>
                                 <td>${index + 1}</td>
@@ -1989,6 +1988,21 @@
                                 <td class="text-center">100</td>
                                 <td class="text-center">-</td>
                                 <td class="text-center"><span class="badge bg-secondary">NOT MARKED</span></td>
+                            </tr>
+                        `;
+                        return;
+                    }
+                    if (!m && presentationPrefill !== null) {
+                        const totalMarks = 20;
+                        const totalObtained = presentationPrefill;
+                        const percentage = totalObtained > 0 ? ((totalObtained / totalMarks) * 100).toFixed(2) : '0.00';
+                        html += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${student.name}</td>
+                                <td class="text-center">${totalMarks}</td>
+                                <td class="text-center">${totalObtained}</td>
+                                <td class="text-center"><span class="badge bg-info">PRESENTATION ${percentage}%</span></td>
                             </tr>
                         `;
                         return;
@@ -2160,28 +2174,20 @@
             const batch = document.getElementById('resultBatch').value;
             const date = document.getElementById('resultDate').value;
 
-            if (!region || !batch || !date) {
-                alert('Please select region, batch, and date');
+            if (!region || !batch) {
+                alert('Please select region and batch');
                 return;
             }
 
             try {
                 const res = await fetch(
-                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    `/api/marks/missed?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const students = await res.json();
 
-                const missed = students.filter(s => {
-                    if (!s.marks) return true;
-                    const theoryMiss = Number(s.marks.theory || 0) <= 0;
-                    const practicalMiss = Number(s.marks.practical || 0) <= 0;
-                    const presentationMiss = Number(s.marks.presentation || 0) <= 0;
-                    return theoryMiss || practicalMiss || presentationMiss;
-                });
-
-                if (missed.length === 0) {
+                if (!students || students.length === 0) {
                     document.getElementById('resultResults').innerHTML =
                         '<div class="alert alert-success">No missed exams for this date</div>';
                     return;
@@ -2189,7 +2195,7 @@
 
                 let html = `
                     <div class="alert alert-warning">
-                        <strong>Exam Missed</strong> (Date: ${date})
+                        <strong>Exam Missed</strong> (All dates)
                     </div>
                     <div class="table-responsive">
                     <table class="table table-bordered table-striped">
@@ -2206,11 +2212,10 @@
                         <tbody>
                 `;
 
-                missed.forEach((s, index) => {
-                    const m = s.marks || {};
-                    const theoryMiss = !m.theory || Number(m.theory) <= 0;
-                    const practicalMiss = !m.practical || Number(m.practical) <= 0;
-                    const presentationMiss = !m.presentation || Number(m.presentation) <= 0;
+                students.forEach((s, index) => {
+                    const theoryMiss = !!s.missed?.theory;
+                    const practicalMiss = !!s.missed?.practical;
+                    const presentationMiss = !!s.missed?.presentation;
                     html += `
                         <tr>
                             <td>${index + 1}</td>
@@ -2336,53 +2341,28 @@
                             <tr>
                                 <th>#</th>
                                 <th>Name</th>
-                                <th>Batch</th>
-                                <th>Mobile</th>
-                                <th>Standard</th>
-                                <th>Absent Dates</th>
-                                <th class="text-center">Follow-up</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                results.forEach((student, index) => {
-                    const absentDates = (student.absentDates || []).sort().join(', ');
-                    const tel = getTelData(student.mobile);
-                    const message = buildFollowupMessage(student, { reason: absentDates ? `Absent dates: ${absentDates}` : '' });
-                    const callButton = tel
-                        ? `<a class="btn btn-sm btn-outline-primary" href="tel:${tel.phone}" title="Call ${tel.raw}">
-                               <i class="bi bi-telephone"></i> Call
-                           </a>`
-                        : '<span class="text-muted">-</span>';
-                    const whatsappButton = tel
-                        ? `<a class="btn btn-sm btn-outline-success" href="${buildWhatsAppLink(message)}" target="_blank" title="WhatsApp">
-                               <i class="bi bi-whatsapp"></i>
-                           </a>`
-                        : '';
-                    const smsButton = tel
-                        ? `<a class="btn btn-sm btn-outline-secondary" href="${buildSmsLink(tel.phone, message)}" title="SMS">
-                               <i class="bi bi-chat-dots"></i>
-                           </a>`
-                        : '';
-                    html += `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${student.name}</td>
-                            <td>${student.batchNumber || '-'}</td>
-                            <td>${student.mobile || '-'}</td>
-                            <td>${student.standard || '-'}</td>
-                            <td>${absentDates || '-'}</td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-2">
-                                    ${callButton}
-                                    ${whatsappButton}
-                                    ${smsButton}
-                                </div>
-                            </td>
+                            <th>Batch</th>
+                            <th>Mobile</th>
+                            <th>Standard</th>
+                            <th>Absent Dates</th>
                         </tr>
-                    `;
-                });
+                    </thead>
+                    <tbody>
+            `;
+
+            results.forEach((student, index) => {
+                const absentDates = (student.absentDates || []).sort().join(', ');
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${student.name}</td>
+                        <td>${student.batchNumber || '-'}</td>
+                        <td>${student.mobile || '-'}</td>
+                        <td>${student.standard || '-'}</td>
+                        <td>${absentDates || '-'}</td>
+                    </tr>
+                `;
+            });
 
                 html += `
                         </tbody>
@@ -2905,11 +2885,6 @@
             markSelections.set(studentId, { ...existing, status: value });
         }
 
-        function updateMarkNote(studentId, value) {
-            const existing = markSelections.get(studentId) || {};
-            markSelections.set(studentId, { ...existing, note: value });
-        }
-
         function applyMarkFilters() {
             const qRaw = (document.getElementById('markSearch')?.value || '').toLowerCase().trim();
             const qPhone = normalizePhone(qRaw);
@@ -3000,10 +2975,7 @@
                         <tr>
                             <th>#</th>
                             <th>Student</th>
-                            <th>Recent</th>
                             <th class="text-center">Status</th>
-                            <th>Note</th>
-                            <th class="text-center">Follow-up</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -3016,8 +2988,6 @@
                     ? selection.status
                     : (student.attendance ? student.attendance.status : '');
                 const isPresent = currentStatus === 'present';
-                const isLate = currentStatus === 'late';
-                const isLeave = currentStatus === 'leave';
                 const isAbsent = currentStatus === 'absent';
                 const prevAbsent = student.previousDay && student.previousDay.status === 'absent';
                 const prevTwoAbsent = student.previousTwoDays && student.previousTwoDays.status === 'absent';
@@ -3032,42 +3002,11 @@
                 const frequentAbsentBadge = recentAbsentCount >= 3
                     ? '<span class="badge bg-danger ms-2" title="3+ absences in last 7 days">Frequent Absence</span>'
                     : '';
-                const historyTitle = (student.recent || [])
-                    .map(r => `${r.date}: ${r.status}${r.note ? ' (' + r.note + ')' : ''}`)
-                    .join('\n');
-                const historyBadge = historyTitle
-                    ? `<span class="badge bg-light text-dark border" title="${escapeHtml(historyTitle)}">History</span>`
-                    : '<span class="text-muted">-</span>';
-                const noteValue = Object.prototype.hasOwnProperty.call(selection, 'note')
-                    ? selection.note
-                    : (student.attendance?.note || '');
-                const safeNoteValue = escapeHtml(noteValue || '');
-                const rawPhone = (student.mobile || '').toString().trim();
-                const phone = rawPhone.replace(/[^\d+]/g, '');
-                const followupEligible = prevAbsent || consecutiveAbsent;
-                const reason = consecutiveAbsent ? 'Absent last 2 days' : (prevAbsent ? 'Absent yesterday' : '');
-                const message = buildFollowupMessage(student, { date: document.getElementById('markDate')?.value, reason });
-                const callButton = (followupEligible && phone)
-                    ? `<a class="btn btn-sm btn-outline-primary" href="tel:${phone}" title="Call ${rawPhone}">
-                           <i class="bi bi-telephone"></i>
-                       </a>`
-                    : '<span class="text-muted">-</span>';
-                const whatsappButton = (followupEligible && phone)
-                    ? `<a class="btn btn-sm btn-outline-success" href="${buildWhatsAppLink(message)}" target="_blank" title="WhatsApp">
-                           <i class="bi bi-whatsapp"></i>
-                       </a>`
-                    : '';
-                const smsButton = (followupEligible && phone)
-                    ? `<a class="btn btn-sm btn-outline-secondary" href="${buildSmsLink(phone, message)}" title="SMS">
-                           <i class="bi bi-chat-dots"></i>
-                       </a>`
-                    : '';
 
                 html += `
                     <tr>
                         <td class="align-middle">${index + 1}</td>
                         <td class="align-middle fw-semibold">${student.name}${prevDayIcon}${consecutiveIcon}${frequentAbsentBadge}</td>
-                        <td class="align-middle">${historyBadge}</td>
                         <td class="align-middle">
                             <div class="d-flex justify-content-center gap-2 flex-wrap">
                                 <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
@@ -3075,28 +3014,9 @@
                                     <span class="fw-semibold text-success">present</span>
                                 </label>
                                 <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
-                                    <input type="radio" class="form-check-input m-0" name="status_${student._id}" value="late" ${isLate ? 'checked' : ''} onchange="updateMarkStatus('${student._id}', this.value)">
-                                    <span class="fw-semibold text-warning">late</span>
-                                </label>
-                                <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
-                                    <input type="radio" class="form-check-input m-0" name="status_${student._id}" value="leave" ${isLeave ? 'checked' : ''} onchange="updateMarkStatus('${student._id}', this.value)">
-                                    <span class="fw-semibold text-info">leave</span>
-                                </label>
-                                <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
                                     <input type="radio" class="form-check-input m-0" name="status_${student._id}" value="absent" ${isAbsent ? 'checked' : ''} onchange="updateMarkStatus('${student._id}', this.value)">
                                     <span class="fw-semibold text-danger">absent</span>
                                 </label>
-                            </div>
-                        </td>
-                        <td class="align-middle">
-                            <input type="text" class="form-control form-control-sm" placeholder="Reason / note" value="${safeNoteValue}"
-                                oninput="updateMarkNote('${student._id}', this.value)">
-                        </td>
-                        <td class="align-middle text-center">
-                            <div class="d-flex justify-content-center gap-2">
-                                ${callButton}
-                                ${whatsappButton}
-                                ${smsButton}
                             </div>
                         </td>
                     </tr>
@@ -3152,14 +3072,10 @@
                 const status = hasSelectionStatus
                     ? selection.status
                     : (student.attendance ? student.attendance.status : '');
-                const note = Object.prototype.hasOwnProperty.call(selection, 'note')
-                    ? selection.note
-                    : (student.attendance?.note || '');
                 if (status) {
                     attendanceRecords.push({
                         studentId: student._id,
-                        status: status,
-                        note: note
+                        status: status
                     });
                 }
             });
@@ -3319,7 +3235,7 @@
                     return;
                 }
 
-                let present = 0, late = 0, leave = 0, absent = 0, notMarked = 0;
+                let present = 0, absent = 0, notMarked = 0;
                 const absentNames = [];
 
                 let html = `
@@ -3329,10 +3245,8 @@
                                 <th>#</th>
                                 <th>Name</th>
                                 <th>Status</th>
-                                <th>Note</th>
                                 <th>Marked By</th>
-                                <th>Last Updated</th>
-                                <th class="text-center">Follow-up</th>
+                                <th class="text-center">Call</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -3340,24 +3254,18 @@
 
                 students.forEach((student, index) => {
                     let statusBadge, markedBy;
-                    let markedAt = '-';
                     let isAbsent = false;
 
                     if (student.attendance) {
                         const status = student.attendance.status;
                         statusBadge = getStatusBadge(status);
-                        if (status === 'present') present++;
-                        if (status === 'late') late++;
-                        if (status === 'leave') leave++;
+                        if (status === 'present' || status === 'late' || status === 'leave') present++;
                         if (status === 'absent') {
                             absent++;
                             isAbsent = true;
                             absentNames.push(student.name);
                         }
                         markedBy = student.attendance.markedBy;
-                        if (student.attendance.markedAt) {
-                            markedAt = formatDateTime(student.attendance.markedAt);
-                        }
                     } else {
                         statusBadge = getStatusBadge('');
                         markedBy = '-';
@@ -3365,38 +3273,19 @@
                     }
 
                     const tel = getTelData(student.mobile);
-                    const message = buildFollowupMessage(student, { date });
                     const callButton = (isAbsent && tel)
                         ? `<a class="btn btn-sm btn-outline-primary" href="tel:${tel.phone}" title="Call ${tel.raw}">
                                <i class="bi bi-telephone"></i> Call
                            </a>`
                         : '<span class="text-muted">-</span>';
-                    const whatsappButton = (isAbsent && tel)
-                        ? `<a class="btn btn-sm btn-outline-success" href="${buildWhatsAppLink(message)}" target="_blank" title="WhatsApp">
-                               <i class="bi bi-whatsapp"></i>
-                           </a>`
-                        : '';
-                    const smsButton = (isAbsent && tel)
-                        ? `<a class="btn btn-sm btn-outline-secondary" href="${buildSmsLink(tel.phone, message)}" title="SMS">
-                               <i class="bi bi-chat-dots"></i>
-                           </a>`
-                        : '';
 
                     html += `
                         <tr>
                             <td>${index + 1}</td>
                             <td>${student.name}</td>
                             <td>${statusBadge}</td>
-                            <td>${student.attendance?.note || '-'}</td>
                             <td>${markedBy}</td>
-                            <td>${markedAt}</td>
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-2">
-                                    ${callButton}
-                                    ${whatsappButton}
-                                    ${smsButton}
-                                </div>
-                            </td>
+                            <td class="text-center">${callButton}</td>
                         </tr>
                     `;
                 });
@@ -3407,8 +3296,6 @@
                     <div class="alert alert-info">
                         <strong>📊 Summary:</strong> 
                         Present: <span class="badge bg-success">${present}</span> |
-                        Late: <span class="badge bg-warning text-dark">${late}</span> |
-                        Leave: <span class="badge bg-info text-dark">${leave}</span> | 
                         Absent: <span class="badge bg-danger">${absent}</span> | 
                         Not Marked: <span class="badge bg-secondary">${notMarked}</span>
                     </div>
@@ -3418,7 +3305,7 @@
                 `;
 
                 document.getElementById('viewResults').innerHTML = summary + html;
-                lastViewAttendance = { region, batch, date, present, late, leave, absent, notMarked, absentNames };
+                lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames };
 
             } catch (error) {
                 console.error('Error viewing attendance:', error);
@@ -3432,14 +3319,12 @@
                 return;
             }
 
-            const { region, batch, date, present, late, leave, absent, notMarked, absentNames } = lastViewAttendance;
+            const { region, batch, date, present, absent, notMarked, absentNames } = lastViewAttendance;
             const header = `Daily Attendance - ${date}`;
             const details = [
                 `Region: ${region}`,
                 `Batch: ${batch}`,
                 `Present: ${present}`,
-                `Late: ${late}`,
-                `Leave: ${leave}`,
                 `Absent: ${absent}`,
                 `Not Marked: ${notMarked}`
             ];
@@ -3893,8 +3778,6 @@
                                 <th class="text-center">Total Classes</th>
                                 <th class="text-center">Marked</th>
                                 <th class="text-center">Present</th>
-                                <th class="text-center">Late</th>
-                                <th class="text-center">Leave</th>
                                 <th class="text-center">Absent</th>
                                 <th class="text-center">Attendance %</th>
                                 <th>Marked By</th>
@@ -3913,15 +3796,14 @@
                     }
 
                     const markedBy = student.markedBy || '-';
+                    const presentTotal = (student.present || 0) + (student.late || 0) + (student.leave || 0);
 
                     html += `
                         <tr>
                             <td>${student.name}</td>
                             <td class="text-center"><strong>${student.totalClasses}</strong></td>
                             <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
-                            <td class="text-center"><span class="badge bg-success">${student.present}</span></td>
-                            <td class="text-center"><span class="badge bg-warning text-dark">${student.late || 0}</span></td>
-                            <td class="text-center"><span class="badge bg-info text-dark">${student.leave || 0}</span></td>
+                            <td class="text-center"><span class="badge bg-success">${presentTotal}</span></td>
                             <td class="text-center"><span class="badge bg-danger">${student.absent}</span></td>
                             <td class="text-center"><span class="badge ${percentBadge}">${student.percentage}%</span></td>
                             <td>${markedBy}</td>
@@ -3963,10 +3845,22 @@
 
         function getStatusBadge(status) {
             if (status === 'present') return '<span class="badge bg-success">PRESENT</span>';
-            if (status === 'late') return '<span class="badge bg-warning text-dark">LATE</span>';
-            if (status === 'leave') return '<span class="badge bg-info text-dark">LEAVE</span>';
+            if (status === 'late' || status === 'leave') return '<span class="badge bg-success">PRESENT</span>';
             if (status === 'absent') return '<span class="badge bg-danger">ABSENT</span>';
             return '<span class="badge bg-secondary">NOT MARKED</span>';
+        }
+
+        function normalizeStatusDisplay(status) {
+            if (status === 'late' || status === 'leave') return 'present';
+            return status || 'not marked';
+        }
+
+        function getTelData(mobile) {
+            if (!mobile) return null;
+            const raw = String(mobile).trim();
+            const phone = raw.replace(/[^\d+]/g, '');
+            if (!phone) return null;
+            return { raw, phone };
         }
 
         function escapeHtml(value) {
@@ -3998,30 +3892,6 @@
             return false;
         }
 
-        function buildFollowupMessage(student, context) {
-            const name = student.name || 'Student';
-            const dateText = context?.date ? ` on ${context.date}` : '';
-            const reason = context?.reason ? ` Reason: ${context.reason}` : '';
-            return `Attendance follow-up${dateText}\nStudent: ${name}${reason}\nPlease contact us to regularize attendance.`;
-        }
-
-        function buildWhatsAppLink(message) {
-            return `https://wa.me/?text=${encodeURIComponent(message)}`;
-        }
-
-        function buildSmsLink(phone, message) {
-            const encoded = encodeURIComponent(message);
-            return phone ? `sms:${phone}?body=${encoded}` : '#';
-        }
-
-        function getTelData(mobile) {
-            if (!mobile) return null;
-            const raw = String(mobile).trim();
-            const phone = raw.replace(/[^\d+]/g, '');
-            if (!phone) return null;
-            return { raw, phone };
-        }
-
         function closeModal(id) {
             const modal = bootstrap.Modal.getInstance(document.getElementById(id));
             if (modal) modal.hide();
@@ -4045,17 +3915,17 @@
                 const attendance = data.attendance || {};
                 const marks = data.marks || [];
 
-                const attendanceRows = (attendance.records || []).map(r => {
-                    const historyCount = Array.isArray(r.history) ? r.history.length : 0;
-                    const lastEdit = historyCount > 0 ? r.history[historyCount - 1] : null;
-                    const editText = historyCount > 0
-                        ? `Edited ${historyCount}x${lastEdit?.markedAt ? ' (last ' + formatDateTime(lastEdit.markedAt) + ')' : ''}${lastEdit?.markedByName ? ' by ' + lastEdit.markedByName : ''}`
-                        : '—';
+                    const attendanceRows = (attendance.records || []).map(r => {
+                        const historyCount = Array.isArray(r.history) ? r.history.length : 0;
+                        const lastEdit = historyCount > 0 ? r.history[historyCount - 1] : null;
+                        const editText = historyCount > 0
+                            ? `Edited ${historyCount}x${lastEdit?.markedAt ? ' (last ' + formatDateTime(lastEdit.markedAt) + ')' : ''}${lastEdit?.markedByName ? ' by ' + lastEdit.markedByName : ''}`
+                            : '—';
+                        const statusLabel = normalizeStatusDisplay(r.status);
                     return `
                         <tr>
                             <td>${r.date}</td>
-                            <td>${r.status}</td>
-                            <td>${r.note || '-'}</td>
+                            <td>${statusLabel}</td>
                             <td>${r.markedByName || '-'}</td>
                             <td>${r.markedAt ? formatDateTime(r.markedAt) : '-'}</td>
                             <td>${editText}</td>
@@ -4093,7 +3963,6 @@
                                     <tr>
                                         <th>Date</th>
                                         <th>Status</th>
-                                        <th>Note</th>
                                         <th>Marked By</th>
                                         <th>Last Updated</th>
                                         <th>Edit History</th>
