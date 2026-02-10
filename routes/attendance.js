@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Attendance = require('../models/Attendance');
+const ContactLog = require('../models/ContactLog');
 const User = require('../models/User');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
@@ -513,6 +514,95 @@ router.get('/low-attendance', auth, isTeacherOrAdmin, async (req, res) => {
       threshold,
       days: daysInt,
       dateRange: { start: startDate, end: endDateStr },
+      results
+    });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// CONTACT LOG - Save teacher outreach
+// ============================================
+router.post('/contact-log', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { studentId, phone, source } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({ message: 'Missing studentId' });
+    }
+
+    const student = await User.findOne({ _id: studentId, role: 'student' }).lean();
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const log = await ContactLog.create({
+      studentId: String(student._id),
+      studentName: student.name,
+      studentMobile: student.mobile || '',
+      teacherId: String(req.user._id),
+      teacherName: req.user.name,
+      region: student.region || '',
+      schoolName: student.schoolName || '',
+      batchNumber: student.batchNumber || '',
+      standard: student.standard || '',
+      phoneDialed: phone ? String(phone) : '',
+      source: source ? String(source).slice(0, 50) : 'unknown'
+    });
+
+    await logAudit({
+      req,
+      action: 'student_contact',
+      entity: 'contact_log',
+      entityId: String(log._id),
+      meta: {
+        studentId: String(student._id),
+        teacherId: String(req.user._id),
+        source: log.source
+      }
+    });
+
+    res.json({ message: 'Contact logged', id: String(log._id) });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// CONTACT LOG - List teacher outreach
+// ============================================
+router.get('/contact-log', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, days } = req.query;
+
+    if (!region) {
+      return res.status(400).json({ message: 'Missing region' });
+    }
+
+    const daysInt = Math.max(parseInt(days, 10) || 30, 1);
+    const endDate = new Date();
+    const startDateObj = new Date(endDate);
+    startDateObj.setDate(endDate.getDate() - (daysInt - 1));
+
+    const query = {
+      region: region,
+      createdAt: { $gte: startDateObj, $lte: endDate }
+    };
+    if (batchNumber && batchNumber !== 'all') {
+      query.batchNumber = batchNumber;
+    }
+
+    const results = await ContactLog.find(query).sort({ createdAt: -1 }).lean();
+
+    res.json({
+      days: daysInt,
+      dateRange: {
+        start: startDateObj.toISOString().split('T')[0],
+        end: endDate.toISOString().split('T')[0]
+      },
       results
     });
   } catch (error) {

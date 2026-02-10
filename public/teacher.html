@@ -605,11 +605,13 @@
                             <div class="d-grid gap-2">
                                 <button class="btn btn-primary w-100" onclick="loadLowAttendance()">Low Attendance</button>
                                 <button class="btn btn-outline-success w-100" onclick="loadTopAttendance()">Top Attendance</button>
+                                <button class="btn btn-outline-info w-100" onclick="loadInquiredStudents()">Students Inquired</button>
                             </div>
                         </div>
                     </div>
 
                     <div id="lowResults"></div>
+                    <div id="lowInquiredResults" class="mt-3"></div>
                 </div>
             </div>
         </div>
@@ -2512,6 +2514,11 @@
             const region = document.getElementById('lowRegion').value;
             const batch = document.getElementById('lowBatch').value;
             const days = document.getElementById('lowDays')?.value;
+            const inquiredEl = document.getElementById('lowInquiredResults');
+
+            if (inquiredEl) {
+                inquiredEl.innerHTML = '';
+            }
 
             if (!region) {
                 alert('Please select region');
@@ -2560,6 +2567,7 @@
                                 <th>Name</th>
                             <th>Batch</th>
                             <th>Mobile</th>
+                            <th class="text-center">Call</th>
                             <th>Standard</th>
                             <th>Absent Dates</th>
                         </tr>
@@ -2569,12 +2577,14 @@
 
             results.forEach((student, index) => {
                 const absentDates = (student.absentDates || []).sort().join(', ');
+                const callButton = buildCallButtonHtml(student.studentId, student.mobile, 'low-attendance');
                 html += `
                     <tr>
                         <td>${index + 1}</td>
                         <td>${student.name}</td>
                         <td>${student.batchNumber || '-'}</td>
                         <td>${student.mobile || '-'}</td>
+                        <td class="text-center">${callButton}</td>
                         <td>${student.standard || '-'}</td>
                         <td>${absentDates || '-'}</td>
                     </tr>
@@ -2592,6 +2602,96 @@
                 console.error('❌ Error loading low attendance:', error);
                 document.getElementById('lowResults').innerHTML =
                     `<div class="alert alert-danger">Error loading results: ${error.message}</div>`;
+            }
+        }
+
+        async function loadInquiredStudents() {
+            const region = document.getElementById('lowRegion').value;
+            const batch = document.getElementById('lowBatch').value;
+            const days = document.getElementById('lowDays')?.value;
+            const target = document.getElementById('lowInquiredResults');
+
+            if (!target) return;
+
+            if (!region) {
+                alert('Please select region');
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.append('region', region);
+            if (batch) {
+                params.append('batchNumber', batch);
+            }
+            if (days) {
+                params.append('days', days);
+            }
+
+            try {
+                target.innerHTML = '<div class="text-muted">Loading inquired students...</div>';
+                const res = await fetch(`/api/attendance/contact-log?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const data = await res.json();
+                const results = data.results || [];
+                const dateRange = data.dateRange || {};
+
+                if (results.length === 0) {
+                    target.innerHTML = '<div class="alert alert-info">No contacted students found for this period.</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">
+                        Students contacted in the last ${data.days || 30} days
+                        ${dateRange.start && dateRange.end ? ` (from ${dateRange.start} to ${dateRange.end})` : ''}
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Date/Time</th>
+                                <th>Student</th>
+                                <th>Batch</th>
+                                <th>Region</th>
+                                <th>Teacher</th>
+                                <th>Phone</th>
+                                <th>Source</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                results.forEach((row, index) => {
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${row.createdAt ? formatDateTime(row.createdAt) : '-'}</td>
+                            <td>${escapeHtml(row.studentName)}</td>
+                            <td>${escapeHtml(row.batchNumber || '-')}</td>
+                            <td>${escapeHtml(row.region || '-')}</td>
+                            <td>${escapeHtml(row.teacherName)}</td>
+                            <td>${escapeHtml(row.phoneDialed || row.studentMobile || '-')}</td>
+                            <td>${escapeHtml(row.source || '-')}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                target.innerHTML = html;
+            } catch (error) {
+                console.error('❌ Error loading contact log:', error);
+                target.innerHTML = `<div class="alert alert-danger">Error loading contact log: ${error.message}</div>`;
             }
         }
 
@@ -3489,11 +3589,8 @@
                         notMarked++;
                     }
 
-                    const tel = getTelData(student.mobile);
-                    const callButton = (isAbsent && tel)
-                        ? `<a class="btn btn-sm btn-outline-primary" href="tel:${tel.phone}" title="Call ${tel.raw}">
-                               <i class="bi bi-telephone"></i> Call
-                           </a>`
+                    const callButton = isAbsent
+                        ? buildCallButtonHtml(student._id, student.mobile, 'view-attendance')
                         : '<span class="text-muted">-</span>';
 
                     html += `
@@ -4078,6 +4175,50 @@
             const phone = raw.replace(/[^\d+]/g, '');
             if (!phone) return null;
             return { raw, phone };
+        }
+
+        function buildCallButtonHtml(studentId, mobile, source) {
+            const tel = getTelData(mobile);
+            if (!tel) return '<span class="text-muted">-</span>';
+            return `
+                <button
+                    type="button"
+                    class="btn btn-sm btn-outline-primary"
+                    data-student-id="${escapeHtml(studentId)}"
+                    data-phone="${escapeHtml(tel.phone)}"
+                    data-source="${escapeHtml(source || 'unknown')}"
+                    onclick="callAndLogStudent(this)"
+                    title="Call ${escapeHtml(tel.raw)}"
+                >
+                    <i class="bi bi-telephone"></i> Call
+                </button>
+            `;
+        }
+
+        async function callAndLogStudent(buttonEl) {
+            if (!buttonEl) return;
+            const studentId = buttonEl.dataset.studentId;
+            const phone = buttonEl.dataset.phone;
+            const source = buttonEl.dataset.source || 'unknown';
+
+            if (!phone) return;
+
+            buttonEl.disabled = true;
+            try {
+                await fetch('/api/attendance/contact-log', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ studentId, phone, source })
+                });
+            } catch (error) {
+                console.error('❌ Error logging contact:', error);
+            } finally {
+                buttonEl.disabled = false;
+                window.location.href = `tel:${phone}`;
+            }
         }
 
         function buildWhatsAppLink(message) {
