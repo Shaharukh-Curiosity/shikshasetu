@@ -335,6 +335,13 @@
                             <label>Search (Name/Phone)</label>
                             <input type="text" class="form-control" id="studentsSearch" placeholder="Type to filter..." oninput="applyStudentsFilters()">
                         </div>
+                        <div class="col-md-4">
+                            <label>Search by Mobile (Fetch)</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="studentsMobileLookup" placeholder="Enter mobile number" onkeydown="handleStudentsMobileEnter(event)">
+                                <button class="btn btn-outline-primary" type="button" onclick="fetchStudentByMobile()">Search</button>
+                            </div>
+                        </div>
                         <div class="col-md-3">
                             <label>Status Filter</label>
                             <select class="form-select" id="studentsStatusFilter" onchange="applyStudentsFilters()">
@@ -572,6 +579,49 @@
                         </div>
                     </div>
 
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-3">
+                            <label>Exam Missed Mode</label>
+                            <select class="form-select" id="examMissedMode" onchange="toggleExamMissedModeFields()">
+                                <option value="single">Single Date</option>
+                                <option value="plan">Exam Plan (3 Dates)</option>
+                                <option value="range">Date Range</option>
+                                <option value="latest">Latest Per Component</option>
+                            </select>
+                        </div>
+                        <div class="col-md-9 d-flex align-items-end">
+                            <small class="text-muted" id="examMissedModeHint">
+                                Single Date: checks theory, practical, and presentation on selected Date.
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-2" id="examMissedPlanFields" style="display:none;">
+                        <div class="col-md-4">
+                            <label>Theory Date</label>
+                            <input type="date" class="form-control" id="examMissedTheoryDate">
+                        </div>
+                        <div class="col-md-4">
+                            <label>Practical Date</label>
+                            <input type="date" class="form-control" id="examMissedPracticalDate">
+                        </div>
+                        <div class="col-md-4">
+                            <label>Presentation Date</label>
+                            <input type="date" class="form-control" id="examMissedPresentationDate">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-3" id="examMissedRangeFields" style="display:none;">
+                        <div class="col-md-4">
+                            <label>Start Date</label>
+                            <input type="date" class="form-control" id="examMissedStartDate">
+                        </div>
+                        <div class="col-md-4">
+                            <label>End Date</label>
+                            <input type="date" class="form-control" id="examMissedEndDate">
+                        </div>
+                    </div>
+
                     <div id="resultResults"></div>
                 </div>
             </div>
@@ -744,6 +794,16 @@
         document.getElementById('viewDate').value = today;
         document.getElementById('marksDate').value = today;
         document.getElementById('resultDate').value = today;
+        const examMissedTheoryDateEl = document.getElementById('examMissedTheoryDate');
+        const examMissedPracticalDateEl = document.getElementById('examMissedPracticalDate');
+        const examMissedPresentationDateEl = document.getElementById('examMissedPresentationDate');
+        const examMissedStartDateEl = document.getElementById('examMissedStartDate');
+        const examMissedEndDateEl = document.getElementById('examMissedEndDate');
+        if (examMissedTheoryDateEl) examMissedTheoryDateEl.value = today;
+        if (examMissedPracticalDateEl) examMissedPracticalDateEl.value = today;
+        if (examMissedPresentationDateEl) examMissedPresentationDateEl.value = today;
+        if (examMissedStartDateEl) examMissedStartDateEl.value = today;
+        if (examMissedEndDateEl) examMissedEndDateEl.value = today;
         const presentationDateEl = document.getElementById('presentationDate');
         if (presentationDateEl) presentationDateEl.value = today;
         const workDateEl = document.getElementById('workDate');
@@ -767,6 +827,11 @@
                 'reportEndDate',
                 'marksDate',
                 'resultDate',
+                'examMissedTheoryDate',
+                'examMissedPracticalDate',
+                'examMissedPresentationDate',
+                'examMissedStartDate',
+                'examMissedEndDate',
                 'presentationDate',
                 'workDate',
                 'workViewDate',
@@ -779,6 +844,7 @@
             });
         }
         setMaxDates();
+        toggleExamMissedModeFields();
         updateWorkViewFilterUI();
         loadWorkViewTeachers();
 
@@ -1977,13 +2043,31 @@
 
             if (!region || !batch || !date) return;
 
-            try {
-                const res = await fetch(
-                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
+                try {
+                    const res = await fetch(
+                        `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 marksCurrentStudents = await res.json();
+
+                let attendanceMap = new Map();
+                try {
+                    const attRes = await fetch(
+                        `/api/marks/exam-attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    if (attRes.ok) {
+                        const attendanceRows = await attRes.json();
+                        attendanceRows.forEach(row => {
+                            if (row && row.studentId) {
+                                attendanceMap.set(String(row.studentId), row.appeared);
+                            }
+                        });
+                    }
+                } catch (attError) {
+                    console.warn('Exam attendance lookup failed, continuing without it.', attError);
+                }
 
                 if (!marksCurrentStudents || marksCurrentStudents.length === 0) {
                     document.getElementById('marksTable').innerHTML =
@@ -1991,54 +2075,158 @@
                     return;
                 }
 
-                let html = `
-                    <table class="table table-sm table-striped">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Student Name</th>
-                                <th class="text-center">Theory (40)</th>
-                                <th class="text-center">Practical (40)</th>
-                                <th class="text-center">Presentation (20)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                marksCurrentStudents.forEach((student, index) => {
-                    const m = student.marks || {};
-                    const presentationValue = m.presentation ?? student.presentationPrefill ?? '';
-                    html += `
-                        <tr>
-                            <td class="align-middle">${index + 1}</td>
-                            <td class="align-middle fw-semibold">${student.name}</td>
-                            <td class="align-middle text-center">
-                                <input type="number" class="form-control form-control-sm" min="0" max="40"
-                                    id="theory_${student._id}" value="${m.theory ?? ''}">
-                            </td>
-                            <td class="align-middle text-center">
-                                <input type="number" class="form-control form-control-sm" min="0" max="40"
-                                    id="practical_${student._id}" value="${m.practical ?? ''}">
-                            </td>
-                            <td class="align-middle text-center">
-                                <input type="number" class="form-control form-control-sm" min="0" max="20"
-                                    id="presentation_${student._id}" value="${presentationValue}">
-                            </td>
-                        </tr>
-                    `;
-                });
-
-                html += `
-                        </tbody>
-                    </table>
-                    <button class="btn btn-success btn-lg mt-3" onclick="submitMarks()">Submit Exam Marks</button>
-                `;
-
-                document.getElementById('marksTable').innerHTML = html;
+                marksAttendanceMap = attendanceMap;
+                renderMarksTable();
             } catch (error) {
                 console.error('? Error loading marks:', error);
                 document.getElementById('marksTable').innerHTML =
                     `<div class="alert alert-danger">Error loading marks: ${error.message}</div>`;
+            }
+        }
+
+        let marksAttendanceMap = new Map();
+
+        function renderMarksTable() {
+            const showAbsentOnly = document.getElementById('marksAbsentOnly')?.checked;
+            const students = Array.isArray(marksCurrentStudents) ? marksCurrentStudents : [];
+            const rows = showAbsentOnly
+                ? students.filter(s => marksAttendanceMap.get(String(s._id)) === false)
+                : students;
+
+            if (rows.length === 0) {
+                document.getElementById('marksTable').innerHTML =
+                    '<div class="alert alert-warning">No students match the current filter</div>';
+                return;
+            }
+
+            let html = `
+                <div class="alert alert-info py-2">
+                    Tip: Leave a component blank to mark it as missed.
+                </div>
+                <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
+                    <div class="d-flex align-items-center gap-2">
+                        <input class="form-check-input" type="checkbox" id="marksAbsentOnly" onchange="renderMarksTable()">
+                        <label class="form-check-label" for="marksAbsentOnly">Show only absent students</label>
+                    </div>
+                    <button class="btn btn-outline-primary btn-sm" onclick="saveExamAttendance()">Save Exam Attendance</button>
+                </div>
+                <table class="table table-sm table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th class="text-center">Appeared</th>
+                            <th class="text-center">Theory (40)</th>
+                            <th class="text-center">Practical (40)</th>
+                            <th class="text-center">Presentation (20)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            rows.forEach((student, index) => {
+                const m = student.marks || {};
+                const presentationValue = m.presentation ?? student.presentationPrefill ?? '';
+                const appeared = marksAttendanceMap.get(String(student._id));
+                const isAbsent = appeared === false;
+                const isUnknown = appeared === null || appeared === undefined;
+                const absentAttr = (isAbsent || isUnknown) ? 'data-absent="1" disabled placeholder="ABSENT"' : '';
+                const checkboxChecked = appeared === true ? 'checked' : '';
+                html += `
+                    <tr>
+                        <td class="align-middle">${index + 1}</td>
+                        <td class="align-middle fw-semibold">${student.name}</td>
+                        <td class="align-middle text-center">
+                            <input type="checkbox" class="form-check-input"
+                                data-exam-attendance="1"
+                                data-student-id="${student._id}"
+                                ${checkboxChecked}
+                                onchange="handleExamAttendanceToggle('${student._id}', this.checked)">
+                        </td>
+                        <td class="align-middle text-center">
+                            <input type="number" class="form-control form-control-sm" min="0" max="40"
+                                id="theory_${student._id}" value="${m.theory ?? ''}" ${absentAttr}>
+                        </td>
+                        <td class="align-middle text-center">
+                            <input type="number" class="form-control form-control-sm" min="0" max="40"
+                                id="practical_${student._id}" value="${m.practical ?? ''}" ${absentAttr}>
+                        </td>
+                        <td class="align-middle text-center">
+                            <input type="number" class="form-control form-control-sm" min="0" max="20"
+                                id="presentation_${student._id}" value="${presentationValue}" ${absentAttr}>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-success btn-lg" onclick="submitMarks()">Submit Exam Marks</button>
+                    <button class="btn btn-outline-secondary btn-lg" onclick="enableAbsentMarksInputs()">Enable Absent Entries</button>
+                </div>
+            `;
+
+            document.getElementById('marksTable').innerHTML = html;
+        }
+
+        function enableAbsentMarksInputs() {
+            const inputs = document.querySelectorAll('#marksTable input[data-absent="1"]');
+            if (!inputs || inputs.length === 0) {
+                alert('No absent inputs to enable.');
+                return;
+            }
+            inputs.forEach(input => {
+                input.disabled = false;
+                input.removeAttribute('placeholder');
+            });
+        }
+
+        async function handleExamAttendanceToggle(studentId, appeared) {
+            marksAttendanceMap.set(String(studentId), appeared);
+            renderMarksTable();
+        }
+
+        async function saveExamAttendance() {
+            const region = document.getElementById('marksRegion').value;
+            const batch = document.getElementById('marksBatch').value;
+            const date = document.getElementById('marksDate').value;
+
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
+                return;
+            }
+
+            const records = [];
+            marksCurrentStudents.forEach(student => {
+                const appeared = marksAttendanceMap.get(String(student._id));
+                records.push({ studentId: student._id, appeared: !!appeared });
+            });
+
+            if (records.length === 0) {
+                alert('No exam attendance changes to save');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/marks/exam-attendance/mark', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ date, records })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(`Exam attendance saved. Successful: ${data.results?.successful || 0}`);
+                } else {
+                    alert('Error: ' + (data.message || 'Failed to save exam attendance'));
+                }
+            } catch (error) {
+                console.error('Error saving exam attendance:', error);
+                alert('Failed to save exam attendance');
             }
         }
 
@@ -2064,9 +2252,9 @@
 
                 if (!hasValue) return;
 
-                const theory = Number(theoryEl.value || 0);
-                const practical = Number(practicalEl.value || 0);
-                const presentation = Number(presentationEl.value || 0);
+                const theory = theoryEl.value === '' ? null : Number(theoryEl.value || 0);
+                const practical = practicalEl.value === '' ? null : Number(practicalEl.value || 0);
+                const presentation = presentationEl.value === '' ? null : Number(presentationEl.value || 0);
 
                 marksRecords.push({
                     studentId: student._id,
@@ -2141,10 +2329,11 @@
                 });
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const batches = await res.json();
-                select.innerHTML = '<option value="">Select Batch</option>';
+                select.innerHTML = '<option value="all">All Batches</option>';
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
+                select.value = 'all';
             } catch (error) {
                 console.error('? Error loading result batches:', error);
             }
@@ -2155,7 +2344,7 @@
             const batch = document.getElementById('resultBatch').value;
             const date = document.getElementById('resultDate').value;
 
-            if (!region || !batch || !date) {
+            if (!region || !date || !batch) {
                 alert('Please select region, batch, and date');
                 return;
             }
@@ -2170,14 +2359,23 @@
 
                 if (!students || students.length === 0) {
                     document.getElementById('resultResults').innerHTML =
-                        '<div class="alert alert-warning">No students found in this batch</div>';
+                        '<div class="alert alert-warning">No students found for selected filters</div>';
                     return;
                 }
+
+                const batchLabel = (batch === 'all') ? 'All Batches' : batch;
+                const studentsSorted = [...students].sort((a, b) => {
+                    if (batch === 'all') {
+                        const batchCmp = String(a.batchNumber || '').localeCompare(String(b.batchNumber || ''));
+                        if (batchCmp !== 0) return batchCmp;
+                    }
+                    return String(a.name || '').localeCompare(String(b.name || ''));
+                });
 
                 let html = `
                     <div class="alert alert-info">
                         <strong>Region:</strong> ${region} &nbsp; | &nbsp;
-                        <strong>Batch:</strong> ${batch} &nbsp; | &nbsp;
+                        <strong>Batch:</strong> ${batchLabel} &nbsp; | &nbsp;
                         <strong>Date:</strong> ${date}
                     </div>
                     <div class="table-responsive">
@@ -2194,7 +2392,7 @@
                         <tbody>
                 `;
 
-                students.forEach((student, index) => {
+                studentsSorted.forEach((student, index) => {
                     const m = student.marks;
                     const presentationPrefill = Number.isFinite(student.presentationPrefill)
                         ? Number(student.presentationPrefill)
@@ -2253,6 +2451,7 @@
 
         async function viewTop3() {
             const region = document.getElementById('resultRegion').value;
+            const batch = document.getElementById('resultBatch').value;
             const date = document.getElementById('resultDate').value;
 
             if (!date) {
@@ -2263,6 +2462,7 @@
             const params = new URLSearchParams();
             params.append('date', date);
             if (region) params.append('region', region);
+            if (batch) params.append('batchNumber', batch);
 
             try {
                 const res = await fetch(`/api/marks/top?${params.toString()}`, {
@@ -2277,9 +2477,12 @@
                     return;
                 }
 
+                const batchLabel = !batch || batch === 'all' ? 'All Batches' : batch;
+
                 let html = `
                     <div class="alert alert-info">
-                        <strong>Top 3 Students</strong> (Date: ${date})
+                        <strong>Top 3 Students</strong> (Date: ${date})<br>
+                        <strong>Batch Filter:</strong> ${batchLabel}
                     </div>
                     <div class="table-responsive">
                     <table class="table table-bordered table-striped">
@@ -2387,75 +2590,202 @@
                 alert('Failed to download CSV');
             }
         }
+        function toggleExamMissedModeFields() {
+            const mode = document.getElementById('examMissedMode')?.value || 'single';
+            const planEl = document.getElementById('examMissedPlanFields');
+            const rangeEl = document.getElementById('examMissedRangeFields');
+            const hintEl = document.getElementById('examMissedModeHint');
+
+            if (planEl) planEl.style.display = mode === 'plan' ? '' : 'none';
+            if (rangeEl) rangeEl.style.display = mode === 'range' ? '' : 'none';
+
+            if (hintEl) {
+                if (mode === 'single') {
+                    hintEl.textContent = 'Single Date: checks theory, practical, and presentation on selected Date.';
+                } else if (mode === 'plan') {
+                    hintEl.textContent = 'Exam Plan: use separate dates for theory, practical, and presentation.';
+                } else if (mode === 'range') {
+                    hintEl.textContent = 'Date Range: checks if each student completed each component anytime in the range.';
+                } else {
+                    hintEl.textContent = 'Latest Per Component: uses latest available date of theory, practical, and presentation.';
+                }
+            }
+        }
 
         async function viewExamMissed() {
             const region = document.getElementById('resultRegion').value;
             const batch = document.getElementById('resultBatch').value;
+            const mode = document.getElementById('examMissedMode')?.value || 'single';
             const date = document.getElementById('resultDate').value;
+            const theoryDate = document.getElementById('examMissedTheoryDate')?.value;
+            const practicalDate = document.getElementById('examMissedPracticalDate')?.value;
+            const presentationDate = document.getElementById('examMissedPresentationDate')?.value;
+            const startDate = document.getElementById('examMissedStartDate')?.value;
+            const endDate = document.getElementById('examMissedEndDate')?.value;
 
             if (!region || !batch) {
                 alert('Please select region and batch');
                 return;
             }
 
+            if (mode === 'single' && !date) {
+                alert('Please select Date for Single Date mode');
+                return;
+            }
+            if (mode === 'plan' && (!theoryDate || !practicalDate || !presentationDate)) {
+                alert('Please select Theory Date, Practical Date, and Presentation Date');
+                return;
+            }
+            if (mode === 'range' && (!startDate || !endDate)) {
+                alert('Please select Start Date and End Date');
+                return;
+            }
+            if (mode === 'range' && startDate > endDate) {
+                alert('Start Date cannot be after End Date');
+                return;
+            }
+
             try {
+                const params = new URLSearchParams({
+                    region,
+                    batchNumber: batch,
+                    mode
+                });
+                if (mode === 'single') params.set('date', date);
+                if (mode === 'plan') {
+                    params.set('theoryDate', theoryDate);
+                    params.set('practicalDate', practicalDate);
+                    params.set('presentationDate', presentationDate);
+                }
+                if (mode === 'range') {
+                    params.set('startDate', startDate);
+                    params.set('endDate', endDate);
+                }
+
                 const res = await fetch(
-                    `/api/marks/missed?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`,
+                    `/api/marks/missed?${params.toString()}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
-                const students = await res.json();
+                const payload = await res.json();
+                const students = Array.isArray(payload) ? payload : (payload.students || []);
+                const usedDates = Array.isArray(payload) ? {} : (payload.usedDates || {});
+
+                const basisText = mode === 'single'
+                    ? `Date: ${usedDates.singleDate || date}`
+                    : mode === 'plan'
+                        ? `Theory: ${usedDates.theoryDate || theoryDate} | Practical: ${usedDates.practicalDate || practicalDate} | Presentation: ${usedDates.presentationDate || presentationDate}`
+                        : mode === 'range'
+                            ? `Range: ${usedDates.startDate || startDate} to ${usedDates.endDate || endDate}`
+                            : `Latest dates - Theory: ${usedDates.theoryDate || '-'} | Practical: ${usedDates.practicalDate || '-'} | Presentation: ${usedDates.presentationDate || '-'}`;
 
                 if (!students || students.length === 0) {
                     document.getElementById('resultResults').innerHTML =
-                        '<div class="alert alert-success">No missed exams for this date</div>';
+                        `<div class="alert alert-success">No missed exams found. (${basisText})</div>`;
                     return;
                 }
 
-                let html = `
-                    <div class="alert alert-warning">
-                        <strong>Exam Missed</strong> (All dates)
-                    </div>
-                    <div class="table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>#</th>
-                                <th>Student Name</th>
-                                <th>Batch</th>
-                                <th>Theory</th>
-                                <th>Practical</th>
-                                <th>Presentation</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
+                const missedCount = {
+                    theory: students.filter(s => s.missed?.theory).length,
+                    practical: students.filter(s => s.missed?.practical).length,
+                    presentation: students.filter(s => s.missed?.presentation).length
+                };
 
-                students.forEach((s, index) => {
-                    const theoryMiss = !!s.missed?.theory;
-                    const practicalMiss = !!s.missed?.practical;
-                    const presentationMiss = !!s.missed?.presentation;
-                    html += `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${s.name}</td>
-                            <td>${s.batchNumber || '-'}</td>
-                            <td>${theoryMiss ? '<span class="badge bg-danger">MISSED</span>' : '<span class="badge bg-success">OK</span>'}</td>
-                            <td>${practicalMiss ? '<span class="badge bg-danger">MISSED</span>' : '<span class="badge bg-success">OK</span>'}</td>
-                            <td>${presentationMiss ? '<span class="badge bg-danger">MISSED</span>' : '<span class="badge bg-success">OK</span>'}</td>
-                        </tr>
+                const renderMissedTable = (filterType = 'all') => {
+                    const rows = students.filter(s => {
+                        if (filterType === 'all') return true;
+                        if (filterType === 'theory') return !!s.missed?.theory;
+                        if (filterType === 'practical') return !!s.missed?.practical;
+                        if (filterType === 'presentation') return !!s.missed?.presentation;
+                        return true;
+                    });
+
+                    let html = `
+                        <div class="alert alert-warning">
+                            <strong>Exam Missed Report</strong><br>
+                            <span class="small">${basisText}</span><br>
+                            Theory Missed: <strong>${missedCount.theory}</strong> |
+                            Practical Missed: <strong>${missedCount.practical}</strong> |
+                            Presentation Missed: <strong>${missedCount.presentation}</strong>
+                        </div>
+                        <div class="d-flex align-items-center gap-2 mb-2">
+                            <label class="form-label mb-0" for="examMissedFilter">Filter:</label>
+                            <select class="form-select form-select-sm w-auto" id="examMissedFilter">
+                                <option value="all">All Missed Students</option>
+                                <option value="theory">Theory Missed</option>
+                                <option value="practical">Practical Missed</option>
+                                <option value="presentation">Presentation Missed</option>
+                            </select>
+                        </div>
                     `;
-                });
 
-                html += `
-                        </tbody>
-                    </table>
-                    </div>
-                `;
+                    if (!rows.length) {
+                        html += '<div class="alert alert-info">No students match the selected filter.</div>';
+                        document.getElementById('resultResults').innerHTML = html;
+                        const filterEl = document.getElementById('examMissedFilter');
+                        if (filterEl) {
+                            filterEl.value = filterType;
+                            filterEl.onchange = () => renderMissedTable(filterEl.value);
+                        }
+                        return;
+                    }
 
-                document.getElementById('resultResults').innerHTML = html;
+                    html += `
+                        <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Student Name</th>
+                                    <th>Batch</th>
+                                    <th class="text-center">Theory</th>
+                                    <th class="text-center">Practical</th>
+                                    <th class="text-center">Presentation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    rows.forEach((s, index) => {
+                        const theoryBadge = s.missed?.theory
+                            ? '<span class="badge bg-danger">MISSED</span>'
+                            : '<span class="badge bg-success">DONE</span>';
+                        const practicalBadge = s.missed?.practical
+                            ? '<span class="badge bg-danger">MISSED</span>'
+                            : '<span class="badge bg-success">DONE</span>';
+                        const presentationBadge = s.missed?.presentation
+                            ? '<span class="badge bg-danger">MISSED</span>'
+                            : '<span class="badge bg-success">DONE</span>';
+
+                        html += `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${s.name}</td>
+                                <td>${s.batchNumber || '-'}</td>
+                                <td class="text-center">${theoryBadge}</td>
+                                <td class="text-center">${practicalBadge}</td>
+                                <td class="text-center">${presentationBadge}</td>
+                            </tr>
+                        `;
+                    });
+
+                    html += `
+                            </tbody>
+                        </table>
+                        </div>
+                    `;
+
+                    document.getElementById('resultResults').innerHTML = html;
+                    const filterEl = document.getElementById('examMissedFilter');
+                    if (filterEl) {
+                        filterEl.value = filterType;
+                        filterEl.onchange = () => renderMissedTable(filterEl.value);
+                    }
+                };
+
+                renderMissedTable('all');
             } catch (error) {
-                console.error('❌ Error loading exam missed:', error);
+                console.error('Error loading exam missed:', error);
                 document.getElementById('resultResults').innerHTML =
                     `<div class="alert alert-danger">Error loading exam missed: ${error.message}</div>`;
             }
@@ -3879,6 +4209,51 @@
             });
             studentsPage = 1;
             renderStudentsTable();
+        }
+
+        async function fetchStudentByMobile() {
+            const mobileRaw = document.getElementById('studentsMobileLookup')?.value || '';
+            const mobileDigits = normalizePhone(mobileRaw);
+            const mobile = mobileDigits.replace(/^0+/, '');
+            if (!mobile) {
+                alert('Please enter a mobile number');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students?q=${encodeURIComponent(mobile)}&status=all`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const students = await res.json();
+
+                if (!students || students.length === 0) {
+                    document.getElementById('studentsResults').innerHTML =
+                        '<div class="alert alert-warning">No students found for this mobile number</div>';
+                    return;
+                }
+
+                const studentsSearch = document.getElementById('studentsSearch');
+                const studentsStatusFilter = document.getElementById('studentsStatusFilter');
+                if (studentsSearch) studentsSearch.value = '';
+                if (studentsStatusFilter) studentsStatusFilter.value = 'all';
+
+                studentsData = students.slice();
+                studentsFiltered = students.slice();
+                studentsPage = 1;
+                renderStudentsTable();
+            } catch (error) {
+                console.error('❌ Error searching student by mobile:', error);
+                document.getElementById('studentsResults').innerHTML =
+                    `<div class="alert alert-danger">Error searching student: ${error.message}</div>`;
+            }
+        }
+
+        function handleStudentsMobileEnter(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                fetchStudentByMobile();
+            }
         }
 
         function setStudentsPage(page) {

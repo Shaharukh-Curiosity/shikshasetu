@@ -6,9 +6,9 @@ const marksSchema = new mongoose.Schema({
   region: { type: String, required: true },
   batchNumber: { type: String, required: true },
   date: { type: String, required: true }, // YYYY-MM-DD
-  theory: { type: Number, required: true },
-  practical: { type: Number, required: true },
-  presentation: { type: Number, required: true },
+  theory: { type: Number, default: null },
+  practical: { type: Number, default: null },
+  presentation: { type: Number, default: null },
   totalMarks: { type: Number, required: true },
   totalObtained: { type: Number, required: true },
   percentage: { type: Number, required: true },
