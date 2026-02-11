@@ -130,7 +130,7 @@ router.get('/inactive-details', auth, isTeacherOrAdmin, async (req, res) => {
     if (region) query.region = region;
 
     const students = await User.find(query)
-      .select('name region batchNumber')
+      .select('name region batchNumber mobile')
       .sort({ name: 1 })
       .limit(limit)
       .lean();
