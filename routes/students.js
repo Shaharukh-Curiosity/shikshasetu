@@ -8,6 +8,8 @@ const Attendance = require('../models/Attendance');
 const Marks = require('../models/Marks');
 const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
+const PRESENT_STATUSES = ['present', 'late', 'leave'];
+const ATTENDANCE_ACTIVE_THRESHOLD = 50;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -52,6 +54,53 @@ async function findDuplicateStudent({ name, schoolName, batchNumber, mobile }, e
   return User.findOne(query);
 }
 
+async function buildAttendanceStatsMap(studentIds) {
+  if (!studentIds || studentIds.length === 0) {
+    return new Map();
+  }
+
+  const rows = await Attendance.aggregate([
+    { $match: { studentId: { $in: studentIds } } },
+    {
+      $group: {
+        _id: '$studentId',
+        totalMarked: { $sum: 1 },
+        presentCount: {
+          $sum: {
+            $cond: [{ $in: ['$status', PRESENT_STATUSES] }, 1, 0]
+          }
+        },
+        absentCount: {
+          $sum: {
+            $cond: [{ $eq: ['$status', 'absent'] }, 1, 0]
+          }
+        }
+      }
+    }
+  ]);
+
+  const map = new Map();
+  rows.forEach(r => {
+    const totalMarked = Number(r.totalMarked || 0);
+    const presentCount = Number(r.presentCount || 0);
+    const absentCount = Number(r.absentCount || 0);
+    const attendancePercentage = totalMarked > 0 ? (presentCount / totalMarked) * 100 : 0;
+
+    map.set(String(r._id), {
+      totalMarked,
+      presentCount,
+      absentCount,
+      attendancePercentage
+    });
+  });
+
+  return map;
+}
+
+function isAttendanceActive(stats) {
+  return Number(stats?.attendancePercentage || 0) >= ATTENDANCE_ACTIVE_THRESHOLD;
+}
+
 // ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
 // Get all regions
 router.get('/regions/all', auth, async (req, res) => {
@@ -90,8 +139,12 @@ router.get('/schools/:region', auth, async (req, res) => {
 // Get stats
 router.get('/stats/dashboard', auth, async (req, res) => {
   try {
-    const total = await User.countDocuments({ role: 'student' });
-    const active = await User.countDocuments({ role: 'student', isActive: true });
+    const students = await User.find({ role: 'student' }).select('_id').lean();
+    const total = students.length;
+    const ids = students.map(s => String(s._id));
+    const statsMap = await buildAttendanceStatsMap(ids);
+
+    const active = students.filter(s => isAttendanceActive(statsMap.get(String(s._id)))).length;
 
     res.json({ total, active, inactive: total - active });
   } catch (error) {
@@ -104,18 +157,20 @@ router.get('/inactive-names', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit || 20), 100);
     const region = req.query.region;
-    const query = { role: 'student', isActive: false };
+    const query = { role: 'student' };
     if (region) query.region = region;
 
     const students = await User.find(query)
       .select('name region batchNumber mobile')
       .sort({ name: 1 })
-      .limit(limit)
       .lean();
 
-    const total = await User.countDocuments(query);
+    const ids = students.map(s => String(s._id));
+    const statsMap = await buildAttendanceStatsMap(ids);
+    const inactiveStudents = students.filter(s => !isAttendanceActive(statsMap.get(String(s._id))));
+    const total = inactiveStudents.length;
 
-    res.json({ total, students });
+    res.json({ total, students: inactiveStudents.slice(0, limit) });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -126,13 +181,12 @@ router.get('/inactive-details', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const limit = Math.min(Number(req.query.limit || 200), 500);
     const region = req.query.region;
-    const query = { role: 'student', isActive: false };
+    const query = { role: 'student' };
     if (region) query.region = region;
 
     const students = await User.find(query)
       .select('name region batchNumber mobile')
       .sort({ name: 1 })
-      .limit(limit)
       .lean();
 
     if (!students.length) {
@@ -140,33 +194,20 @@ router.get('/inactive-details', auth, isTeacherOrAdmin, async (req, res) => {
     }
 
     const ids = students.map(s => String(s._id));
-    const attendanceAgg = await Attendance.aggregate([
-      { $match: { studentId: { $in: ids } } },
-      {
-        $group: {
-          _id: '$studentId',
-          totalClasses: { $sum: 1 },
-          absentCount: {
-            $sum: {
-              $cond: [{ $eq: ['$status', 'absent'] }, 1, 0]
-            }
-          }
-        }
-      }
-    ]);
-    const statsMap = new Map(attendanceAgg.map(r => [String(r._id), r]));
+    const statsMap = await buildAttendanceStatsMap(ids);
 
-    const result = students.map(s => {
+    const result = students.filter(s => !isAttendanceActive(statsMap.get(String(s._id)))).map(s => {
       const stats = statsMap.get(String(s._id)) || {};
       return {
         studentId: s._id,
         name: s.name,
         batchNumber: s.batchNumber,
         mobile: s.mobile,
-        totalClasses: stats.totalClasses || 0,
-        absentCount: stats.absentCount || 0
+        totalClasses: stats.totalMarked || 0,
+        absentCount: stats.absentCount || 0,
+        attendancePercentage: Number(stats.attendancePercentage || 0).toFixed(2)
       };
-    });
+    }).slice(0, limit);
 
     res.json({ students: result });
   } catch (error) {
@@ -409,8 +450,7 @@ router.get('/', auth, async (req, res) => {
   try {
     const { region, schoolName, batchNumber, q, status } = req.query;
     let query = { role: 'student' };
-    if (!status || status === 'active') query.isActive = true;
-    if (status === 'inactive') query.isActive = false;
+    const normalizedStatus = String(status || 'active').toLowerCase();
     
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
@@ -426,8 +466,34 @@ router.get('/', auth, async (req, res) => {
       query.$or = or;
     }
     
-    const students = await User.find(query).sort({ name: 1 });
-    res.json(students);
+    const students = await User.find(query).sort({ name: 1 }).lean();
+    const ids = students.map(s => String(s._id));
+    const statsMap = await buildAttendanceStatsMap(ids);
+
+    const studentsWithAttendanceStatus = students.map(student => {
+      const stats = statsMap.get(String(student._id)) || {};
+      const attendancePercentage = Number(stats.attendancePercentage || 0);
+      const attendanceActive = isAttendanceActive(stats);
+
+      return {
+        ...student,
+        isActive: attendanceActive,
+        attendanceStatus: attendanceActive ? 'active' : 'inactive',
+        attendancePercentage: Number(attendancePercentage.toFixed(2))
+      };
+    });
+
+    if (normalizedStatus === 'all') {
+      return res.json(studentsWithAttendanceStatus);
+    }
+
+    if (normalizedStatus !== 'active' && normalizedStatus !== 'inactive') {
+      return res.json(studentsWithAttendanceStatus);
+    }
+
+    const filtered = studentsWithAttendanceStatus.filter(s => s.attendanceStatus === normalizedStatus);
+
+    res.json(filtered);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -619,8 +685,12 @@ router.delete('/:id', auth, isAdmin, async (req, res) => {
 // Get stats
 router.get('/stats/dashboard', auth, async (req, res) => {
   try {
-    const total = await User.countDocuments({ role: 'student' });
-    const active = await User.countDocuments({ role: 'student', isActive: true });
+    const students = await User.find({ role: 'student' }).select('_id').lean();
+    const total = students.length;
+    const ids = students.map(s => String(s._id));
+    const statsMap = await buildAttendanceStatsMap(ids);
+
+    const active = students.filter(s => isAttendanceActive(statsMap.get(String(s._id)))).length;
 
     res.json({ total, active, inactive: total - active });
   } catch (error) {
