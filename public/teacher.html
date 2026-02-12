@@ -328,6 +328,11 @@
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button class="btn btn-success w-100" onclick="exportStudentsDetails()">
+                                Export Students Details
+                            </button>
+                        </div>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -765,6 +770,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
         // DEBUG: Check authentication on page load
         console.log('🔐 TEACHER DASHBOARD INITIALIZATION');
@@ -4132,10 +4138,12 @@
                 
                 const select = document.getElementById('studentsBatch');
                 select.innerHTML = '<option value="">Select Batch</option>';
+                select.innerHTML += '<option value="__all__">All Batches</option>';
                 
                 if (!batches || batches.length === 0) {
                     console.warn('⚠️ No batches found');
-                    select.innerHTML += '<option disabled>No batches available</option>';
+                    select.value = '__all__';
+                    loadStudentsData();
                     return;
                 }
                 
@@ -4158,7 +4166,15 @@
 
             try {
                 console.log('👥 Loading students for region:', region, 'batch:', batch);
-                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&status=all`, {
+                const query = new URLSearchParams({
+                    region,
+                    status: 'all'
+                });
+                if (batch && batch !== '__all__') {
+                    query.set('batchNumber', batch);
+                }
+
+                const res = await fetch(`/api/students?${query.toString()}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -4171,7 +4187,7 @@
                 
                 if (!students || students.length === 0) {
                     document.getElementById('studentsResults').innerHTML = 
-                        '<div class="alert alert-warning">No students found in this batch</div>';
+                        '<div class="alert alert-warning">No students found for this selection</div>';
                     return;
                 }
 
@@ -4189,6 +4205,86 @@
                 console.error('❌ Error loading students:', error);
                 document.getElementById('studentsResults').innerHTML = 
                     `<div class="alert alert-danger">Error loading students: ${error.message}</div>`;
+            }
+        }
+
+        async function exportStudentsDetails() {
+            const region = document.getElementById('studentsRegion').value;
+            const batch = document.getElementById('studentsBatch').value;
+
+            if (!region) {
+                alert('Please select a region first');
+                return;
+            }
+            if (!batch) {
+                alert('Please select a batch or choose All Batches');
+                return;
+            }
+
+            try {
+                const query = new URLSearchParams({
+                    region,
+                    status: 'all'
+                });
+                if (batch && batch !== '__all__') {
+                    query.set('batchNumber', batch);
+                }
+
+                const res = await fetch(`/api/students?${query.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const students = await res.json();
+                if (!students || students.length === 0) {
+                    alert('No students found for export');
+                    return;
+                }
+
+                const rows = students.map((student, index) => ({
+                    'S.No': index + 1,
+                    'Student ID': student._id || '',
+                    'Student Name': student.name || '',
+                    'Region': student.region || '',
+                    'Batch': student.batchNumber || '',
+                    'School Name': student.schoolName || '',
+                    'Standard': student.standard || '',
+                    'Mobile': student.mobile || '',
+                    'Age': student.age ?? '',
+                    'Status': student.isActive ? 'Active' : 'Inactive'
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(rows);
+                ws['!cols'] = [
+                    { wch: 8 },
+                    { wch: 28 },
+                    { wch: 28 },
+                    { wch: 18 },
+                    { wch: 14 },
+                    { wch: 34 },
+                    { wch: 14 },
+                    { wch: 18 },
+                    { wch: 10 },
+                    { wch: 12 }
+                ];
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Students');
+
+                const today = new Date().toISOString().slice(0, 10);
+                const safeRegion = region.replace(/[^\w-]+/g, '_');
+                const batchLabel = (!batch || batch === '__all__')
+                    ? 'all_batches'
+                    : batch.replace(/[^\w-]+/g, '_');
+                const fileName = `students_details_${safeRegion}_${batchLabel}_${today}.xlsx`;
+
+                XLSX.writeFile(wb, fileName);
+            } catch (error) {
+                console.error('❌ Error exporting students details:', error);
+                alert(`Export failed: ${error.message}`);
             }
         }
 
@@ -4291,6 +4387,7 @@
                             <th>Mobile</th>
                             <th>Age</th>
                             <th>Status</th>
+                            <th>Contact</th>
                             <th>Profile</th>
                         </tr>
                     </thead>
@@ -4307,6 +4404,7 @@
                         <td>${student.mobile || '-'}</td>
                         <td>${student.age || '-'}</td>
                         <td>${student.isActive ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-secondary">Inactive</span>'}</td>
+                        <td>${buildCallButtonHtml(student._id, student.mobile, 'students-details', 'Call Parent')}</td>
                         <td><button class="btn btn-sm btn-info" onclick="viewStudentProfile('${student._id}')">View</button></td>
                     </tr>
                 `;

@@ -133,7 +133,17 @@
                 <div class="card">
                     <div class="card-body">
                         <h6 class="text-muted">Inactive Students</h6>
-                        <h2 id="inactiveStudents">0</h2>
+                        <h2 class="mb-1">
+                            <button
+                                id="inactiveStudents"
+                                type="button"
+                                class="btn btn-link p-0 text-decoration-underline"
+                                onclick="openInactiveStudentsModal()"
+                            >
+                                0
+                            </button>
+                        </h2>
+                        <small class="text-muted">Click to view details</small>
                     </div>
                 </div>
             </div>
@@ -568,6 +578,21 @@
             </div>
         </div>
     </div>
+
+    <!-- Inactive Students Modal -->
+    <div class="modal" id="inactiveStudentsModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5>Inactive Students Details</h5>
+                    <button type="button" class="btn-close" onclick="closeModal('inactiveStudentsModal')"></button>
+                </div>
+                <div class="modal-body" id="inactiveStudentsContent">
+                    <div class="text-muted">Loading...</div>
+                </div>
+            </div>
+        </div>
+    </div>
     <footer class="dashboard-footer">
         <span>© 2026 Digital Literacy for Every Child — All Rights Reserved</span>
     </footer>
@@ -579,11 +604,13 @@
         if (!token || !user.role) {
             localStorage.clear();
             window.location.href = '/';
+            throw new Error('Authentication required. Redirecting to login.');
         }
         if (user.role !== 'admin') {
             alert('Admin access required. Please login with an admin account.');
             localStorage.clear();
             window.location.href = '/';
+            throw new Error('Admin access required. Redirecting to login.');
         }
 
         function showTab(tab) {
@@ -688,6 +715,113 @@
             document.getElementById('activeStudents').textContent = data.active;
             const inactiveEl = document.getElementById('inactiveStudents');
             if (inactiveEl) inactiveEl.textContent = data.inactive || 0;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function normalizePhoneForTel(mobile) {
+            const raw = String(mobile || '').trim();
+            if (!raw) return null;
+            const normalized = raw.replace(/[^0-9+]/g, '');
+            const plusCount = (normalized.match(/\+/g) || []).length;
+            if (plusCount > 1) return null;
+            if (normalized.includes('+') && !normalized.startsWith('+')) return null;
+            const digits = normalized.replace(/\+/g, '');
+            if (digits.length < 7) return null;
+            return normalized;
+        }
+
+        function getInactiveCallButtonHtml(mobile) {
+            const tel = normalizePhoneForTel(mobile);
+            if (!tel) {
+                return '<button class="btn btn-sm btn-outline-secondary" disabled>No Number</button>';
+            }
+            return `<a class="btn btn-sm btn-outline-success" href="tel:${tel}" title="Call Parent">Call Parent</a>`;
+        }
+
+        async function openInactiveStudentsModal() {
+            const contentEl = document.getElementById('inactiveStudentsContent');
+            if (contentEl) {
+                contentEl.innerHTML = '<div class="text-muted">Loading...</div>';
+            }
+            new bootstrap.Modal(document.getElementById('inactiveStudentsModal')).show();
+            await loadInactiveStudentsDetails();
+        }
+
+        async function loadInactiveStudentsDetails() {
+            const contentEl = document.getElementById('inactiveStudentsContent');
+            if (!contentEl) return;
+
+            try {
+                const res = await fetch('/api/students?status=inactive', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.message || 'Failed to load inactive students');
+                }
+
+                const students = await res.json();
+                if (!students || students.length === 0) {
+                    contentEl.innerHTML = '<div class="alert alert-info mb-0">No inactive students found.</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Total Inactive Students: ${students.length}</h6>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Name</th>
+                                    <th>Region</th>
+                                    <th>Batch</th>
+                                    <th>School</th>
+                                    <th>Mobile</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                students.forEach((s, index) => {
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(s.name)}</td>
+                            <td>${escapeHtml(s.region || '-')}</td>
+                            <td>${escapeHtml(s.batchNumber || '-')}</td>
+                            <td>${escapeHtml(s.schoolName || '-')}</td>
+                            <td>${escapeHtml(s.mobile || '-')}</td>
+                            <td class="d-flex gap-1 flex-wrap">
+                                <button class="btn btn-sm btn-info" onclick="viewStudentProfile('${s._id}')">View</button>
+                                ${getInactiveCallButtonHtml(s.mobile)}
+                                <button class="btn btn-sm btn-danger" onclick="deleteInactiveStudent('${s._id}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                contentEl.innerHTML = html;
+            } catch (error) {
+                contentEl.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+            }
         }
 
         async function loadStudents() {
@@ -1060,10 +1194,31 @@
 
         async function deleteStudent(id) {
             if (!confirm('Delete this student?')) return;
-            await fetch(`/api/students/${id}`, {
+            const res = await fetch(`/api/students/${id}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Failed to delete student');
+                return;
+            }
+            loadStudents();
+            loadStats();
+        }
+
+        async function deleteInactiveStudent(id) {
+            if (!confirm('Delete this inactive student?')) return;
+            const res = await fetch(`/api/students/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                alert(data.message || 'Failed to delete student');
+                return;
+            }
+            await loadInactiveStudentsDetails();
             loadStudents();
             loadStats();
         }

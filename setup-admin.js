@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const readline = require('readline');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const User = require('./models/User');
 
@@ -18,7 +19,12 @@ async function setup() {
   try {
     console.log('\n🎓 Setup Admin Account\n');
     
-    await mongoose.connect(process.env.MONGODB_URI);
+    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+    if (!mongoUri) {
+      throw new Error('Missing MongoDB URI. Set MONGODB_URI in attendance-final/.env');
+    }
+
+    await mongoose.connect(mongoUri);
     console.log('✅ Connected to MongoDB\n');
     
     const name = await question('Admin name: ');

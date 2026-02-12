@@ -1,9 +1,16 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const User = require('./models/User');
 
-mongoose.connect(process.env.MONGODB_URI).then(async () => {
+const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+if (!mongoUri) {
+  console.error('Missing MongoDB URI. Set MONGODB_URI in attendance-final/.env');
+  process.exit(1);
+}
+
+mongoose.connect(mongoUri).then(async () => {
   try {
     // Create a test teacher account
     const password = 'teacher123';
