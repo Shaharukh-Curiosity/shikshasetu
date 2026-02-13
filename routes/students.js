@@ -31,6 +31,7 @@ function mapRowToStudent(row) {
     if (value === undefined || value === null || value === '') return;
 
     if (['name', 'studentname', 'studentsname'].includes(norm)) mapped.name = value;
+    if (['district', 'districtname'].includes(norm)) mapped.district = value;
     if (['region', 'location'].includes(norm)) mapped.region = value;
     if (['schoolname', 'school'].includes(norm)) mapped.schoolName = value;
     if (['standard', 'class', 'grade'].includes(norm)) mapped.standard = value;
@@ -102,10 +103,40 @@ function isAttendanceActive(stats) {
 }
 
 // ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
+// Get all districts
+router.get('/districts/all', auth, async (req, res) => {
+  try {
+    const onlyActive = String(req.query.onlyActive || '').toLowerCase() === 'true';
+    const query = { role: 'student' };
+    if (onlyActive) query.isActive = true;
+    const districts = await User.distinct('district', query);
+    res.json(districts.filter(d => d));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Get all regions
 router.get('/regions/all', auth, async (req, res) => {
   try {
-    const regions = await User.distinct('region', { role: 'student', isActive: true });
+    const onlyActive = String(req.query.onlyActive || '').toLowerCase() === 'true';
+    const query = { role: 'student' };
+    if (req.query.district) query.district = req.query.district;
+    if (onlyActive) query.isActive = true;
+    const regions = await User.distinct('region', query);
+    res.json(regions.filter(r => r));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get regions by district
+router.get('/regions/by-district/:district', auth, async (req, res) => {
+  try {
+    const onlyActive = String(req.query.onlyActive || '').toLowerCase() === 'true';
+    const query = { role: 'student', district: req.params.district };
+    if (onlyActive) query.isActive = true;
+    const regions = await User.distinct('region', query);
     res.json(regions.filter(r => r));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -115,7 +146,10 @@ router.get('/regions/all', auth, async (req, res) => {
 // Get schools
 router.get('/schools', auth, async (req, res) => {
   try {
-    const schools = await User.distinct('schoolName', { role: 'student', isActive: true });
+    const onlyActive = String(req.query.onlyActive || '').toLowerCase() === 'true';
+    const query = { role: 'student' };
+    if (onlyActive) query.isActive = true;
+    const schools = await User.distinct('schoolName', query);
     res.json(schools.filter(s => s));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -125,11 +159,13 @@ router.get('/schools', auth, async (req, res) => {
 // Get schools by region
 router.get('/schools/:region', auth, async (req, res) => {
   try {
-    const schools = await User.distinct('schoolName', {
+    const onlyActive = String(req.query.onlyActive || '').toLowerCase() === 'true';
+    const query = {
       role: 'student',
-      region: req.params.region,
-      isActive: true
-    });
+      region: req.params.region
+    };
+    if (onlyActive) query.isActive = true;
+    const schools = await User.distinct('schoolName', query);
     res.json(schools.filter(s => s));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -249,11 +285,14 @@ router.post('/auto-inactivate-absent', auth, isTeacherOrAdmin, async (req, res) 
 // Get batches for a region (parameterized route)
 router.get('/batches/:region', auth, async (req, res) => {
   try {
-    const batches = await User.distinct('batchNumber', {
+    const onlyActive = String(req.query.onlyActive || '').toLowerCase() === 'true';
+    const query = {
       role: 'student',
-      region: req.params.region,
-      isActive: true
-    });
+      region: req.params.region
+    };
+    if (req.query.district) query.district = req.query.district;
+    if (onlyActive) query.isActive = true;
+    const batches = await User.distinct('batchNumber', query);
     res.json(batches.filter(b => b));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -310,8 +349,9 @@ router.get('/profile/:id', auth, isTeacherOrAdmin, async (req, res) => {
 // Export students (CSV or JSON)
 router.get('/export', auth, isAdmin, async (req, res) => {
   try {
-    const { format = 'csv', region, schoolName, batchNumber } = req.query;
+    const { format = 'csv', district, region, schoolName, batchNumber } = req.query;
     const query = { role: 'student' };
+    if (district) query.district = district;
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
     if (batchNumber) query.batchNumber = batchNumber;
@@ -327,6 +367,7 @@ router.get('/export', auth, isAdmin, async (req, res) => {
     const fields = [
       '_id',
       'name',
+      'district',
       'region',
       'schoolName',
       'standard',
@@ -410,7 +451,7 @@ router.post('/bulk-update', auth, isAdmin, async (req, res) => {
       return res.status(400).json({ message: 'Region and batch are required' });
     }
 
-    const allowed = new Set(['region', 'batchNumber', 'schoolName', 'standard', 'mobile', 'age', 'isActive']);
+    const allowed = new Set(['district', 'region', 'batchNumber', 'schoolName', 'standard', 'mobile', 'age', 'isActive']);
     const updatePayload = {};
     Object.keys(updates || {}).forEach(key => {
       if (!allowed.has(key)) return;
@@ -448,10 +489,11 @@ router.post('/bulk-update', auth, isAdmin, async (req, res) => {
 // Get all students
 router.get('/', auth, async (req, res) => {
   try {
-    const { region, schoolName, batchNumber, q, status } = req.query;
+    const { district, region, schoolName, batchNumber, q, status } = req.query;
     let query = { role: 'student' };
-    const normalizedStatus = String(status || 'active').toLowerCase();
+    const normalizedStatus = String(status || 'all').toLowerCase();
     
+    if (district) query.district = district;
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
     if (batchNumber) query.batchNumber = batchNumber;
@@ -477,7 +519,6 @@ router.get('/', auth, async (req, res) => {
 
       return {
         ...student,
-        isActive: attendanceActive,
         attendanceStatus: attendanceActive ? 'active' : 'inactive',
         attendancePercentage: Number(attendancePercentage.toFixed(2))
       };
@@ -491,7 +532,11 @@ router.get('/', auth, async (req, res) => {
       return res.json(studentsWithAttendanceStatus);
     }
 
-    const filtered = studentsWithAttendanceStatus.filter(s => s.attendanceStatus === normalizedStatus);
+    const filtered = studentsWithAttendanceStatus.filter(s => {
+      if (normalizedStatus === 'active') return !!s.isActive;
+      if (normalizedStatus === 'inactive') return !s.isActive;
+      return true;
+    });
 
     res.json(filtered);
   } catch (error) {
@@ -584,6 +629,8 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
       id,
       {
         name: req.body.name,
+        district: req.body.district,
+        region: req.body.region,
         age: req.body.age,
         schoolName: req.body.schoolName,
         mobile: req.body.mobile,
@@ -605,6 +652,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
       before,
       after: {
         name: student.name,
+        district: student.district,
         region: student.region,
         schoolName: student.schoolName,
         mobile: student.mobile,

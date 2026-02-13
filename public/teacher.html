@@ -1035,7 +1035,6 @@
             const days = document.getElementById('lowDays')?.value || '30';
             const resultsEl = document.getElementById('lowResults');
             if (!resultsEl) return;
-
             if (!region) {
                 alert('Please select region');
                 return;
@@ -1234,7 +1233,6 @@
             const select = document.getElementById('summaryRegion');
             if (!select) return;
             const region = select.value;
-
             if (!region) {
                 document.getElementById('selectedRegionCount').innerHTML = '';
                 return;
@@ -1354,7 +1352,6 @@
             const region = document.getElementById('presentationRegion').value;
             const select = document.getElementById('presentationBatch');
             if (!select) return;
-
             if (!region) {
                 select.innerHTML = '<option value="">Select Batch</option>';
                 document.getElementById('presentationTable').innerHTML = '';
@@ -2017,7 +2014,6 @@
             const region = document.getElementById('marksRegion').value;
             const select = document.getElementById('marksBatch');
             if (!select) return;
-
             if (!region) {
                 select.innerHTML = '<option value="">Select Batch</option>';
                 document.getElementById('marksTable').innerHTML = '';
@@ -2320,7 +2316,6 @@
             const region = document.getElementById('resultRegion').value;
             const select = document.getElementById('resultBatch');
             if (!select) return;
-
             if (!region) {
                 select.innerHTML = '<option value="">Select Batch</option>';
                 document.getElementById('resultResults').innerHTML = '';
@@ -2820,7 +2815,6 @@
             const region = document.getElementById('lowRegion').value;
             const select = document.getElementById('lowBatch');
             if (!select) return;
-
             if (!region) {
                 select.innerHTML = '<option value="">Select Batch</option>';
                 return;
@@ -2853,7 +2847,6 @@
             if (inquiredEl) {
                 inquiredEl.innerHTML = '';
             }
-
             if (!region) {
                 alert('Please select region');
                 return;
@@ -2946,7 +2939,6 @@
             const target = document.getElementById('lowInquiredResults');
 
             if (!target) return;
-
             if (!region) {
                 alert('Please select region');
                 return;
@@ -3058,7 +3050,6 @@
             const region = document.getElementById('analysisRegion').value;
             const select = document.getElementById('analysisBatch');
             if (!select) return;
-
             if (!region) {
                 select.innerHTML = '<option value="">Select Batch</option>';
                 return;
@@ -4083,89 +4074,85 @@
         }
 
         // ===== VIEW STUDENTS FUNCTIONS =====
+        // ===== VIEW STUDENTS FUNCTIONS =====
         async function loadStudentsRegions() {
             try {
-                console.log('📚 Loading regions for students view...');
+                console.log('Loading regions for students view...');
                 const res = await fetch('/api/students/regions/all', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 if (!res.ok) {
                     throw new Error(`API Error: ${res.status}`);
                 }
-                
+
                 const regions = await res.json();
-                console.log('✅ Regions loaded:', regions);
-                
+                console.log('Regions loaded:', regions);
+
                 const select = document.getElementById('studentsRegion');
-                select.innerHTML = '<option value="">Select Region</option>';
-                
+                const batchSelect = document.getElementById('studentsBatch');
+                if (select) select.innerHTML = '<option value="">Select Region</option>';
+                if (batchSelect) batchSelect.innerHTML = '<option value="">Select Batch</option>';
+                document.getElementById('studentsResults').innerHTML = '';
+
                 if (!regions || regions.length === 0) {
-                    console.warn('⚠️ No regions found');
-                    select.innerHTML += '<option disabled>No regions available</option>';
+                    if (select) select.innerHTML += '<option disabled>No regions available</option>';
                     return;
                 }
-                
+
                 regions.forEach(region => {
-                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                    if (select) select.innerHTML += `<option value="${region}">${region}</option>`;
                 });
             } catch (error) {
-                console.error('❌ Error loading regions:', error);
+                console.error('Error loading regions:', error);
             }
         }
 
         async function loadStudentsBatches() {
             const region = document.getElementById('studentsRegion').value;
             if (!region) {
-                console.warn('⚠️ No region selected');
                 document.getElementById('studentsBatch').innerHTML = '<option value="">Select Batch</option>';
                 document.getElementById('studentsResults').innerHTML = '';
                 return;
             }
 
             try {
-                console.log('📚 Loading batches for region:', region);
                 const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 if (!res.ok) {
                     throw new Error(`API Error: ${res.status}`);
                 }
-                
+
                 const batches = await res.json();
-                console.log('✅ Batches loaded:', batches);
-                
                 const select = document.getElementById('studentsBatch');
                 select.innerHTML = '<option value="">Select Batch</option>';
                 select.innerHTML += '<option value="__all__">All Batches</option>';
-                
+
                 if (!batches || batches.length === 0) {
-                    console.warn('⚠️ No batches found');
                     select.value = '__all__';
                     loadStudentsData();
                     return;
                 }
-                
+
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
             } catch (error) {
-                console.error('❌ Error loading batches:', error);
+                console.error('Error loading batches:', error);
             }
         }
 
         async function loadStudentsData() {
             const region = document.getElementById('studentsRegion').value;
             const batch = document.getElementById('studentsBatch').value;
-            
+
             if (!region || !batch) {
-                console.warn('⚠️ Region or batch not selected');
                 return;
             }
 
             try {
-                console.log('👥 Loading students for region:', region, 'batch:', batch);
                 const query = new URLSearchParams({
                     region,
                     status: 'all'
@@ -4177,16 +4164,15 @@
                 const res = await fetch(`/api/students?${query.toString()}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
+
                 if (!res.ok) {
                     throw new Error(`API Error: ${res.status}`);
                 }
-                
+
                 const students = await res.json();
-                console.log('✅ Students loaded:', students.length);
-                
+
                 if (!students || students.length === 0) {
-                    document.getElementById('studentsResults').innerHTML = 
+                    document.getElementById('studentsResults').innerHTML =
                         '<div class="alert alert-warning">No students found for this selection</div>';
                     return;
                 }
@@ -4200,10 +4186,9 @@
                 studentsFiltered = students.slice();
                 studentsPage = 1;
                 renderStudentsTable();
-                console.log('✅ Students table rendered');
             } catch (error) {
-                console.error('❌ Error loading students:', error);
-                document.getElementById('studentsResults').innerHTML = 
+                console.error('Error loading students:', error);
+                document.getElementById('studentsResults').innerHTML =
                     `<div class="alert alert-danger">Error loading students: ${error.message}</div>`;
             }
         }
@@ -4211,7 +4196,6 @@
         async function exportStudentsDetails() {
             const region = document.getElementById('studentsRegion').value;
             const batch = document.getElementById('studentsBatch').value;
-
             if (!region) {
                 alert('Please select a region first');
                 return;
@@ -4273,74 +4257,56 @@
 
                 const wb = XLSX.utils.book_new();
                 XLSX.utils.book_append_sheet(wb, ws, 'Students');
-
-                const today = new Date().toISOString().slice(0, 10);
-                const safeRegion = region.replace(/[^\w-]+/g, '_');
-                const batchLabel = (!batch || batch === '__all__')
-                    ? 'all_batches'
-                    : batch.replace(/[^\w-]+/g, '_');
-                const fileName = `students_details_${safeRegion}_${batchLabel}_${today}.xlsx`;
-
+                const fileName = batch === '__all__'
+                    ? `Students_${region}_AllBatches.xlsx`
+                    : `Students_${region}_${batch}.xlsx`;
                 XLSX.writeFile(wb, fileName);
             } catch (error) {
-                console.error('❌ Error exporting students details:', error);
-                alert(`Export failed: ${error.message}`);
+                console.error('Error exporting students details:', error);
+                alert('Failed to export students details');
             }
         }
 
         function applyStudentsFilters() {
-            const qRaw = (document.getElementById('studentsSearch')?.value || '').toLowerCase().trim();
+            const qRaw = (document.getElementById('studentsSearch')?.value || '').trim().toLowerCase();
             const qPhone = normalizePhone(qRaw);
             const statusFilter = document.getElementById('studentsStatusFilter')?.value || 'all';
-            studentsFiltered = studentsData.filter(student => {
-                const name = (student.name || '').toLowerCase();
-                if (qRaw && !name.includes(qRaw) && !phoneMatchesQuery(student.mobile, qRaw, qPhone)) {
-                    return false;
-                }
+
+            studentsFiltered = (studentsData || []).filter(student => {
+                const name = String(student.name || '').toLowerCase();
+                const matchesText = !qRaw || name.includes(qRaw) || phoneMatchesQuery(student.mobile, qRaw, qPhone);
+                if (!matchesText) return false;
+
                 if (statusFilter === 'active') return !!student.isActive;
                 if (statusFilter === 'inactive') return !student.isActive;
                 return true;
             });
+
             studentsPage = 1;
             renderStudentsTable();
         }
 
-        async function fetchStudentByMobile() {
-            const mobileRaw = document.getElementById('studentsMobileLookup')?.value || '';
-            const mobileDigits = normalizePhone(mobileRaw);
-            const mobile = mobileDigits.replace(/^0+/, '');
-            if (!mobile) {
-                alert('Please enter a mobile number');
+        function fetchStudentByMobile() {
+            const mobileInput = document.getElementById('studentsMobileLookup');
+            const raw = (mobileInput?.value || '').trim();
+            const qPhone = normalizePhone(raw);
+
+            if (!qPhone) {
+                alert('Please enter mobile number');
                 return;
             }
 
-            try {
-                const res = await fetch(`/api/students?q=${encodeURIComponent(mobile)}&status=all`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) throw new Error(`API Error: ${res.status}`);
-                const students = await res.json();
+            const statusFilter = document.getElementById('studentsStatusFilter')?.value || 'all';
+            const matched = (studentsData || []).filter(student => {
+                if (!phoneMatchesQuery(student.mobile, raw.toLowerCase(), qPhone)) return false;
+                if (statusFilter === 'active') return !!student.isActive;
+                if (statusFilter === 'inactive') return !student.isActive;
+                return true;
+            });
 
-                if (!students || students.length === 0) {
-                    document.getElementById('studentsResults').innerHTML =
-                        '<div class="alert alert-warning">No students found for this mobile number</div>';
-                    return;
-                }
-
-                const studentsSearch = document.getElementById('studentsSearch');
-                const studentsStatusFilter = document.getElementById('studentsStatusFilter');
-                if (studentsSearch) studentsSearch.value = '';
-                if (studentsStatusFilter) studentsStatusFilter.value = 'all';
-
-                studentsData = students.slice();
-                studentsFiltered = students.slice();
-                studentsPage = 1;
-                renderStudentsTable();
-            } catch (error) {
-                console.error('❌ Error searching student by mobile:', error);
-                document.getElementById('studentsResults').innerHTML =
-                    `<div class="alert alert-danger">Error searching student: ${error.message}</div>`;
-            }
+            studentsFiltered = matched;
+            studentsPage = 1;
+            renderStudentsTable();
         }
 
         function handleStudentsMobileEnter(event) {
@@ -4837,10 +4803,15 @@
         // Initialize
         loadStats();
         loadInactiveNames();
-        autoInactivateByAbsence();
         loadRegions();
         loadSummaryRegions();
         updateFilterUI();
     </script>
 </body>
 </html>
+
+
+
+
+
+

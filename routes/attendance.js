@@ -165,7 +165,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 // ============================================
 router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { region, batchNumber, date, markedByRole } = req.query;
+    const { region, batchNumber, date, markedByRole, status } = req.query;
 
     console.log('\n======= VIEWING ATTENDANCE =======');
     console.log('Region:', region);
@@ -193,12 +193,14 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     // Get all students in this batch/region
     const studentsQuery = {
       role: 'student',
-      region: region,
-      isActive: true
+      region: region
     };
     if (batchNumber && batchNumber !== 'all') {
       studentsQuery.batchNumber = batchNumber;
     }
+    const normalizedStatus = String(status || 'all').toLowerCase();
+    if (normalizedStatus === 'active') studentsQuery.isActive = true;
+    if (normalizedStatus === 'inactive') studentsQuery.isActive = false;
     const students = await User.find(studentsQuery).lean();
 
     console.log('Found students:', students.length);
@@ -208,21 +210,17 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
       return res.json([]);
     }
 
-    // Get attendance for this region/batch/date
-    let attendanceQuery = {
-      region: region,
-      date: dateOnly
-    };
-    if (batchNumber && batchNumber !== 'all') {
-      attendanceQuery.batchNumber = batchNumber;
-    }
+    const studentIds = students.map(s => String(s._id));
 
-    const attendanceRecords = await Attendance.find(attendanceQuery).lean();
+    // Fetch attendance by enrolled student IDs so batch data stays correct even if batch/status changed later
+    const attendanceRecords = await Attendance.find({
+      studentId: { $in: studentIds },
+      date: dateOnly
+    }).lean();
 
     console.log('Found attendance records:', attendanceRecords.length);
 
     // Get previous 1-2 days attendance for these students
-    const studentIds = students.map(s => String(s._id));
     const prevAttendanceRecords = await Attendance.find({
       studentId: { $in: studentIds },
       date: prevDate
@@ -322,7 +320,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
 // ============================================
 router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { region, batchNumber, startDate, endDate, filterType } = req.query;
+    const { region, batchNumber, startDate, endDate, filterType, status } = req.query;
 
     console.log('\n======= ATTENDANCE SUMMARY =======');
     console.log('Region:', region);
@@ -336,12 +334,16 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     }
 
     // Get all students in this batch/region
-    const students = await User.find({
+    const studentsQuery = {
       role: 'student',
       region: region,
-      batchNumber: batchNumber,
-      isActive: true
-    }).lean();
+      batchNumber: batchNumber
+    };
+    const normalizedStatus = String(status || 'all').toLowerCase();
+    if (normalizedStatus === 'active') studentsQuery.isActive = true;
+    if (normalizedStatus === 'inactive') studentsQuery.isActive = false;
+
+    const students = await User.find(studentsQuery).lean();
 
     console.log('Found students:', students.length);
 
@@ -351,9 +353,9 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     }
 
     // Get attendance records for the date range
+    const studentIds = students.map(s => String(s._id));
     const attendanceRecords = await Attendance.find({
-      region: region,
-      batchNumber: batchNumber,
+      studentId: { $in: studentIds },
       date: {
         $gte: startDate,
         $lte: endDate
