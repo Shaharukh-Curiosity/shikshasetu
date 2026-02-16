@@ -2368,6 +2368,16 @@
                     return;
                 }
 
+                // If no marks/presentation exist for any student, exam was not taken/scheduled for this date.
+                const hasAnyExamData = students.some(student =>
+                    !!student.marks || Number.isFinite(student.presentationPrefill)
+                );
+                if (!hasAnyExamData) {
+                    document.getElementById('resultResults').innerHTML =
+                        '<div class="alert alert-warning">No data found. Exam is not taken or not scheduled for the selected date.</div>';
+                    return;
+                }
+
                 const batchLabel = (batch === 'all') ? 'All Batches' : batch;
                 const studentsSorted = [...students].sort((a, b) => {
                     if (batch === 'all') {
@@ -2407,7 +2417,7 @@
                             <tr>
                                 <td>${index + 1}</td>
                                 <td>${student.name}</td>
-                                <td class="text-center">100</td>
+                                <td class="text-center">-</td>
                                 <td class="text-center">-</td>
                                 <td class="text-center"><span class="badge bg-secondary">NOT MARKED</span></td>
                             </tr>
