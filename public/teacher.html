@@ -3840,7 +3840,6 @@
                 alert('Undo failed: ' + error.message);
             }
         }
-
         // VIEW ATTENDANCE
         async function viewAttendance() {
             const region = document.getElementById('viewRegion').value;
@@ -3856,7 +3855,7 @@
                 return;
             }
 
-            console.log('👀 Viewing attendance for:', { region, batch, date });
+            console.log('Viewing attendance for:', { region, batch, date });
 
             try {
                 const res = await fetch(
@@ -3869,16 +3868,17 @@
                 }
 
                 const students = await res.json();
-                console.log('✅ Attendance records loaded:', students.length);
+                console.log('Attendance records loaded:', students.length);
 
                 if (!students || students.length === 0) {
-                    document.getElementById('viewResults').innerHTML = 
+                    document.getElementById('viewResults').innerHTML =
                         '<div class="alert alert-warning">No students found in this batch</div>';
                     return;
                 }
 
                 let present = 0, absent = 0, notMarked = 0;
                 const absentNames = [];
+                const attendanceRows = [];
 
                 let html = `
                     <table class="table table-bordered">
@@ -3888,6 +3888,8 @@
                                 <th>Name</th>
                                 <th>Status</th>
                                 <th>Marked By</th>
+                                <th>Parent Mobile</th>
+                                <th class="text-center">Share Parent</th>
                                 <th class="text-center">Call</th>
                             </tr>
                         </thead>
@@ -3895,35 +3897,54 @@
                 `;
 
                 students.forEach((student, index) => {
-                    let statusBadge, markedBy;
+                    let statusBadge;
+                    let markedBy = '-';
                     let isAbsent = false;
+                    let statusKey = 'not_marked';
 
                     if (student.attendance) {
                         const status = student.attendance.status;
                         statusBadge = getStatusBadge(status);
-                        if (status === 'present' || status === 'late' || status === 'leave') present++;
-                        if (status === 'absent') {
+                        markedBy = student.attendance.markedBy || '-';
+                        if (status === 'present' || status === 'late' || status === 'leave') {
+                            present++;
+                            statusKey = 'present';
+                        } else if (status === 'absent') {
                             absent++;
                             isAbsent = true;
+                            statusKey = 'absent';
                             absentNames.push(student.name);
                         }
-                        markedBy = student.attendance.markedBy;
                     } else {
                         statusBadge = getStatusBadge('');
-                        markedBy = '-';
                         notMarked++;
                     }
 
                     const callButton = isAbsent
                         ? buildCallButtonHtml(student._id, student.mobile, 'view-attendance')
                         : '<span class="text-muted">-</span>';
+                    const parentMobile = student.mobile ? escapeHtml(student.mobile) : '-';
+                    const shareParentButton = getWhatsAppPhone(student.mobile)
+                        ? `<button class="btn btn-sm btn-outline-success" onclick="shareStudentAttendanceToParent(${index})"><i class="bi bi-whatsapp"></i> Share</button>`
+                        : '<span class="text-muted">-</span>';
+
+                    attendanceRows.push({
+                        index,
+                        studentId: student._id,
+                        name: String(student.name || ''),
+                        mobile: String(student.mobile || ''),
+                        statusKey,
+                        markedBy
+                    });
 
                     html += `
                         <tr>
                             <td>${index + 1}</td>
-                            <td>${student.name}</td>
+                            <td>${escapeHtml(student.name)}</td>
                             <td>${statusBadge}</td>
-                            <td>${markedBy}</td>
+                            <td>${escapeHtml(markedBy)}</td>
+                            <td>${parentMobile}</td>
+                            <td class="text-center">${shareParentButton}</td>
                             <td class="text-center">${callButton}</td>
                         </tr>
                     `;
@@ -3933,23 +3954,98 @@
 
                 const summary = `
                     <div class="alert alert-info">
-                        <strong>📊 Summary:</strong> 
+                        <strong>Summary:</strong>
                         Present: <span class="badge bg-success">${present}</span> |
-                        Absent: <span class="badge bg-danger">${absent}</span> | 
+                        Absent: <span class="badge bg-danger">${absent}</span> |
                         Not Marked: <span class="badge bg-secondary">${notMarked}</span>
                     </div>
-                    <button class="btn btn-success mb-3" onclick="shareAttendanceWhatsApp()">
-                        Share to WhatsApp
-                    </button>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-success" onclick="shareAttendanceWhatsApp()">Share Class Summary</button>
+                        <button class="btn btn-outline-success" onclick="shareAbsentParentsWhatsApp()">Share Absent To Parents</button>
+                    </div>
                 `;
 
                 document.getElementById('viewResults').innerHTML = summary + html;
-                lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames };
+                lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames, records: attendanceRows };
 
             } catch (error) {
                 console.error('Error viewing attendance:', error);
                 alert('Failed to load attendance');
             }
+        }
+
+        function getWhatsAppPhone(mobile) {
+            if (!mobile) return null;
+            const digits = String(mobile).replace(/[^\d]/g, '');
+            if (!digits) return null;
+            if (digits.startsWith('00')) return digits.slice(2);
+            return digits;
+        }
+
+        function buildParentAttendanceMessage(record, summary) {
+            const statusText = record.statusKey === 'present'
+                ? 'Present'
+                : (record.statusKey === 'absent' ? 'Absent' : 'Not Marked');
+            return [
+                'Dear Parent,',
+                `Daily attendance update for ${record.name}`,
+                `Date: ${summary.date}`,
+                `Region: ${summary.region}`,
+                `Batch: ${summary.batch}`,
+                `Status: ${statusText}`,
+                `Marked By: ${record.markedBy || '-'}`,
+                '',
+                `- ${user.name || 'Class Teacher'}`
+            ].join('\n');
+        }
+
+        function shareStudentAttendanceToParent(recordIndex) {
+            if (!lastViewAttendance || !Array.isArray(lastViewAttendance.records)) {
+                alert('Please load attendance first.');
+                return;
+            }
+
+            const record = lastViewAttendance.records[recordIndex];
+            if (!record) {
+                alert('Unable to find student record.');
+                return;
+            }
+
+            const phone = getWhatsAppPhone(record.mobile);
+            if (!phone) {
+                alert(`No valid parent mobile for ${record.name}.`);
+                return;
+            }
+
+            const message = buildParentAttendanceMessage(record, lastViewAttendance);
+            window.open(buildWhatsAppDirectLink(phone, message), '_blank');
+        }
+
+        function shareAbsentParentsWhatsApp() {
+            if (!lastViewAttendance || !Array.isArray(lastViewAttendance.records)) {
+                alert('Please load attendance first.');
+                return;
+            }
+
+            const absentRecords = lastViewAttendance.records.filter(r => r.statusKey === 'absent');
+            if (absentRecords.length === 0) {
+                alert('No absent students found for this date.');
+                return;
+            }
+
+            const shareable = absentRecords.filter(r => getWhatsAppPhone(r.mobile));
+            if (shareable.length === 0) {
+                alert('No valid parent mobile numbers found for absent students.');
+                return;
+            }
+
+            shareable.forEach((record, idx) => {
+                const phone = getWhatsAppPhone(record.mobile);
+                const message = buildParentAttendanceMessage(record, lastViewAttendance);
+                setTimeout(() => {
+                    window.open(buildWhatsAppDirectLink(phone, message), '_blank');
+                }, idx * 450);
+            });
         }
 
         function shareAttendanceWhatsApp() {
@@ -3958,26 +4054,46 @@
                 return;
             }
 
-            const { region, batch, date, present, absent, notMarked, absentNames } = lastViewAttendance;
-            const header = `Daily Attendance - ${date}`;
-            const details = [
-                `Region: ${region}`,
-                `Batch: ${batch}`,
-                `Present: ${present}`,
-                `Absent: ${absent}`,
-                `Not Marked: ${notMarked}`
-            ];
-            let message = `${header}\n${details.join('\n')}`;
-
-            if (absentNames.length > 0) {
-                const list = absentNames.slice(0, 30).join(', ');
-                message += `\nAbsent Students: ${list}`;
-                if (absentNames.length > 30) {
-                    message += ` +${absentNames.length - 30} more`;
-                }
+            const { region, batch, date, records } = lastViewAttendance;
+            if (!Array.isArray(records) || records.length === 0) {
+                alert('No attendance records found to share.');
+                return;
             }
 
-            const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            const rows = records
+                .filter(r => r.statusKey === 'present' || r.statusKey === 'absent')
+                .map(r => ({
+                    id: String(r.studentId || '-'),
+                    name: String(r.name || '-'),
+                    date: String(date || '-'),
+                    status: r.statusKey === 'present' ? 'Present' : 'Absent'
+                }));
+
+            if (rows.length === 0) {
+                alert('No Present/Absent records found to share.');
+                return;
+            }
+
+            const col = (text, width) => String(text).slice(0, width).padEnd(width, ' ');
+            const tableHeader = `${col('Student ID', 24)} | ${col('Name', 20)} | ${col('Date', 10)} | ${col('Status', 7)}`;
+            const tableDivider = `${'-'.repeat(24)}-|-${'-'.repeat(20)}-|-${'-'.repeat(10)}-|-${'-'.repeat(7)}`;
+            const tableRows = rows.map(r =>
+                `${col(r.id, 24)} | ${col(r.name, 20)} | ${col(r.date, 10)} | ${col(r.status, 7)}`
+            );
+
+            const message = [
+                `Daily Attendance`,
+                `Region: ${region}`,
+                `Batch: ${batch}`,
+                '',
+                '```',
+                tableHeader,
+                tableDivider,
+                ...tableRows,
+                '```'
+            ].join('\n');
+
+            const url = buildWhatsAppLink(message);
             window.open(url, '_blank');
         }
 
@@ -4663,6 +4779,10 @@
             return `https://wa.me/?text=${encodeURIComponent(message)}`;
         }
 
+        function buildWhatsAppDirectLink(phone, message) {
+            return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+        }
+
         function escapeHtml(value) {
             return String(value || '')
                 .replace(/&/g, '&amp;')
@@ -4809,6 +4929,7 @@
     </script>
 </body>
 </html>
+
 
 
 
