@@ -399,7 +399,10 @@
                         </div>
                         <div class="col-md-2">
                             <label>&nbsp;</label>
-                            <button class="btn btn-primary w-100" onclick="viewReport()">Generate Report</button>
+                            <div class="d-grid gap-2">
+                                <button class="btn btn-primary w-100" onclick="viewReport()">Generate Report</button>
+                                <button class="btn btn-success w-100" onclick="shareReportToWhatsApp()">Share to WhatsApp</button>
+                            </div>
                         </div>
                     </div>
 
@@ -771,6 +774,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
     <script>
         // DEBUG: Check authentication on page load
         console.log('🔐 TEACHER DASHBOARD INITIALIZATION');
@@ -858,6 +863,7 @@
         let presentationCurrentStudents = [];
         let presentationEvaluationStudents = [];
         let lastViewAttendance = null;
+        let lastReportShareData = null;
         let analysisChart = null;
         let markFiltered = [];
         let markPage = 1;
@@ -3889,7 +3895,6 @@
                                 <th>Status</th>
                                 <th>Marked By</th>
                                 <th>Parent Mobile</th>
-                                <th class="text-center">Share Parent</th>
                                 <th class="text-center">Call</th>
                             </tr>
                         </thead>
@@ -3924,14 +3929,12 @@
                         ? buildCallButtonHtml(student._id, student.mobile, 'view-attendance')
                         : '<span class="text-muted">-</span>';
                     const parentMobile = student.mobile ? escapeHtml(student.mobile) : '-';
-                    const shareParentButton = getWhatsAppPhone(student.mobile)
-                        ? `<button class="btn btn-sm btn-outline-success" onclick="shareStudentAttendanceToParent(${index})"><i class="bi bi-whatsapp"></i> Share</button>`
-                        : '<span class="text-muted">-</span>';
 
                     attendanceRows.push({
                         index,
                         studentId: student._id,
                         name: String(student.name || ''),
+                        batchNumber: String(student.batchNumber || ''),
                         mobile: String(student.mobile || ''),
                         statusKey,
                         markedBy
@@ -3944,7 +3947,6 @@
                             <td>${statusBadge}</td>
                             <td>${escapeHtml(markedBy)}</td>
                             <td>${parentMobile}</td>
-                            <td class="text-center">${shareParentButton}</td>
                             <td class="text-center">${callButton}</td>
                         </tr>
                     `;
@@ -3960,8 +3962,7 @@
                         Not Marked: <span class="badge bg-secondary">${notMarked}</span>
                     </div>
                     <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button class="btn btn-success" onclick="shareAttendanceWhatsApp()">Share Class Summary</button>
-                        <button class="btn btn-outline-success" onclick="shareAbsentParentsWhatsApp()">Share Absent To Parents</button>
+                        <button class="btn btn-success" onclick="shareAttendanceWhatsApp()">Download Attendance PDF</button>
                     </div>
                 `;
 
@@ -3974,80 +3975,6 @@
             }
         }
 
-        function getWhatsAppPhone(mobile) {
-            if (!mobile) return null;
-            const digits = String(mobile).replace(/[^\d]/g, '');
-            if (!digits) return null;
-            if (digits.startsWith('00')) return digits.slice(2);
-            return digits;
-        }
-
-        function buildParentAttendanceMessage(record, summary) {
-            const statusText = record.statusKey === 'present'
-                ? 'Present'
-                : (record.statusKey === 'absent' ? 'Absent' : 'Not Marked');
-            return [
-                'Dear Parent,',
-                `Daily attendance update for ${record.name}`,
-                `Date: ${summary.date}`,
-                `Region: ${summary.region}`,
-                `Batch: ${summary.batch}`,
-                `Status: ${statusText}`,
-                `Marked By: ${record.markedBy || '-'}`,
-                '',
-                `- ${user.name || 'Class Teacher'}`
-            ].join('\n');
-        }
-
-        function shareStudentAttendanceToParent(recordIndex) {
-            if (!lastViewAttendance || !Array.isArray(lastViewAttendance.records)) {
-                alert('Please load attendance first.');
-                return;
-            }
-
-            const record = lastViewAttendance.records[recordIndex];
-            if (!record) {
-                alert('Unable to find student record.');
-                return;
-            }
-
-            const phone = getWhatsAppPhone(record.mobile);
-            if (!phone) {
-                alert(`No valid parent mobile for ${record.name}.`);
-                return;
-            }
-
-            const message = buildParentAttendanceMessage(record, lastViewAttendance);
-            window.open(buildWhatsAppDirectLink(phone, message), '_blank');
-        }
-
-        function shareAbsentParentsWhatsApp() {
-            if (!lastViewAttendance || !Array.isArray(lastViewAttendance.records)) {
-                alert('Please load attendance first.');
-                return;
-            }
-
-            const absentRecords = lastViewAttendance.records.filter(r => r.statusKey === 'absent');
-            if (absentRecords.length === 0) {
-                alert('No absent students found for this date.');
-                return;
-            }
-
-            const shareable = absentRecords.filter(r => getWhatsAppPhone(r.mobile));
-            if (shareable.length === 0) {
-                alert('No valid parent mobile numbers found for absent students.');
-                return;
-            }
-
-            shareable.forEach((record, idx) => {
-                const phone = getWhatsAppPhone(record.mobile);
-                const message = buildParentAttendanceMessage(record, lastViewAttendance);
-                setTimeout(() => {
-                    window.open(buildWhatsAppDirectLink(phone, message), '_blank');
-                }, idx * 450);
-            });
-        }
-
         function shareAttendanceWhatsApp() {
             if (!lastViewAttendance) {
                 alert('Please load attendance first.');
@@ -4056,53 +3983,68 @@
 
             const { region, batch, date, records } = lastViewAttendance;
             if (!Array.isArray(records) || records.length === 0) {
-                alert('No attendance records found to share.');
+                alert('No attendance records found to export.');
                 return;
             }
 
-            const rows = records
-                .filter(r => r.statusKey === 'present' || r.statusKey === 'absent')
-                .map(r => ({
-                    id: String(r.studentId || '-'),
-                    name: String(r.name || '-'),
-                    date: String(date || '-'),
-                    status: r.statusKey === 'present' ? 'Present' : 'Absent'
-                }));
-
-            if (rows.length === 0) {
-                alert('No Present/Absent records found to share.');
+            const jsPdfLib = window.jspdf;
+            if (!jsPdfLib || !jsPdfLib.jsPDF) {
+                alert('PDF library not loaded. Please refresh and try again.');
                 return;
             }
 
-            const col = (text, width) => String(text).slice(0, width).padEnd(width, ' ');
-            const tableHeader = `${col('Student ID', 24)} | ${col('Name', 20)} | ${col('Date', 10)} | ${col('Status', 7)}`;
-            const tableDivider = `${'-'.repeat(24)}-|-${'-'.repeat(20)}-|-${'-'.repeat(10)}-|-${'-'.repeat(7)}`;
-            const tableRows = rows.map(r =>
-                `${col(r.id, 24)} | ${col(r.name, 20)} | ${col(r.date, 10)} | ${col(r.status, 7)}`
-            );
+            const presentCount = records.filter(r => r.statusKey === 'present').length;
+            const absentRecords = records.filter(r => r.statusKey === 'absent');
+            const notMarkedCount = records.filter(r => r.statusKey === 'not_marked').length;
 
-            const message = [
-                `Daily Attendance`,
-                `Region: ${region}`,
-                `Batch: ${batch}`,
-                '',
-                '```',
-                tableHeader,
-                tableDivider,
-                ...tableRows,
-                '```'
-            ].join('\n');
+            const statusLabel = (statusKey) => {
+                if (statusKey === 'present') return 'Present';
+                if (statusKey === 'absent') return 'Absent';
+                return 'Not Marked';
+            };
 
-            const url = buildWhatsAppLink(message);
-            window.open(url, '_blank');
+            const rows = records.map((r, index) => ([
+                String(index + 1),
+                String(r.name || '-'),
+                String(r.batchNumber || batch || '-'),
+                statusLabel(r.statusKey)
+            ]));
+
+            const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+            doc.setFontSize(16);
+            doc.text('Daily Attendance Report', 40, 44);
+
+            doc.setFontSize(11);
+            doc.text(`Date: ${date}`, 40, 68);
+            doc.text(`Region: ${region}`, 40, 84);
+            doc.text(`Batch: ${batch}`, 40, 100);
+            doc.text(`Total Students: ${records.length}`, 40, 116);
+            doc.text(`Present: ${presentCount}   Absent: ${absentRecords.length}   Not Marked: ${notMarkedCount}`, 40, 132);
+            doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 148);
+
+            doc.autoTable({
+                startY: 168,
+                head: [['S.No', 'Student Name', 'Batch Number', 'Status']],
+                body: rows,
+                styles: { fontSize: 10, cellPadding: 6 },
+                headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
+                alternateRowStyles: { fillColor: [245, 250, 250] },
+                theme: 'grid'
+            });
+
+            const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
+            const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
+            const safeDate = String(date || new Date().toISOString().split('T')[0]);
+            doc.save(`Daily_Attendance_${safeRegion}_${safeBatch}_${safeDate}.pdf`);
         }
 
         async function shareDailySummaryAllBatches() {
             const region = document.getElementById('viewRegion').value;
+            const batch = document.getElementById('viewBatch').value;
             const date = document.getElementById('viewDate').value;
 
-            if (!region || !date) {
-                alert('Please select region and date');
+            if (!region || !batch || !date) {
+                alert('Please select region, batch, and date');
                 return;
             }
             if (isFutureDate(date)) {
@@ -4111,22 +4053,35 @@
             }
 
             try {
-                const batchesRes = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!batchesRes.ok) {
-                    throw new Error(`API Error: ${batchesRes.status}`);
-                }
-                const batches = await batchesRes.json();
-                if (!batches || batches.length === 0) {
-                    alert('No batches found for this region');
+                const jsPdfLib = window.jspdf;
+                if (!jsPdfLib || !jsPdfLib.jsPDF) {
+                    alert('PDF library not loaded. Please refresh and try again.');
                     return;
                 }
 
+                let batchesToFetch = [];
+                if (batch === 'all') {
+                    const batchesRes = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!batchesRes.ok) {
+                        throw new Error(`API Error: ${batchesRes.status}`);
+                    }
+                    const batches = await batchesRes.json();
+                    if (!batches || batches.length === 0) {
+                        alert('No batches found for this region');
+                        return;
+                    }
+                    batchesToFetch = batches;
+                } else {
+                    batchesToFetch = [batch];
+                }
+
+                const batchRows = [];
                 const summaries = await Promise.all(
-                    batches.map(async (batch) => {
+                    batchesToFetch.map(async (b) => {
                         const res = await fetch(
-                            `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                            `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(b)}&date=${date}`,
                             { headers: { 'Authorization': `Bearer ${token}` } }
                         );
                         if (!res.ok) {
@@ -4138,21 +4093,30 @@
                         }
 
                         let present = 0, absent = 0, notMarked = 0;
-                        const absentNames = [];
                         students.forEach((student) => {
+                            let status = 'Not Marked';
                             if (student.attendance) {
                                 if (['present', 'late', 'leave'].includes(student.attendance.status)) {
                                     present++;
+                                    status = 'Present';
                                 } else {
                                     absent++;
-                                    absentNames.push(student.name);
+                                    status = 'Absent';
                                 }
                             } else {
                                 notMarked++;
                             }
+
+                            batchRows.push([
+                                String(batchRows.length + 1),
+                                String(student.name || '-'),
+                                String(student.batchNumber || b || '-'),
+                                status,
+                                String(date)
+                            ]);
                         });
 
-                        return { batch, present, absent, notMarked, total: students.length, absentNames };
+                        return { batch: b, present, absent, notMarked, total: students.length };
                     })
                 );
 
@@ -4162,21 +4126,57 @@
                     return;
                 }
 
-                const header = `Daily Attendance Summary - ${date}`;
-                const col = (text, width) => String(text).padEnd(width, ' ');
-                const tableHeader = `${col('Batch', 12)} ${col('P', 3)} ${col('A', 3)} ${col('NM', 3)} Absent Students`;
-                const tableDivider = `${col('-----', 12)} ${col('--', 3)} ${col('--', 3)} ${col('---', 3)} ---------------`;
-                const lines = cleaned.map(s => {
-                    const names = s.absentNames.length > 0
-                        ? s.absentNames.slice(0, 20).join(', ')
-                        : '-';
-                    const suffix = s.absentNames.length > 20 ? ` +${s.absentNames.length - 20} more` : '';
-                    return `${col(s.batch, 12)} ${col(s.present, 3)} ${col(s.absent, 3)} ${col(s.notMarked, 3)} ${names}${suffix}`;
-                });
-                const message = `${header}\nRegion: ${region}\n\n${tableHeader}\n${tableDivider}\n${lines.join('\n')}`;
+                const totalStudents = cleaned.reduce((sum, s) => sum + s.total, 0);
+                const totalPresent = cleaned.reduce((sum, s) => sum + s.present, 0);
+                const totalAbsent = cleaned.reduce((sum, s) => sum + s.absent, 0);
+                const totalNotMarked = cleaned.reduce((sum, s) => sum + s.notMarked, 0);
 
-                const url = `https://wa.me/?text=${encodeURIComponent(message)}`;
-                window.open(url, '_blank');
+                const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                doc.setFontSize(16);
+                doc.text('Daily Attendance Summary', 40, 44);
+                doc.setFontSize(11);
+                doc.text(`Date: ${date}`, 40, 68);
+                doc.text(`Region: ${region}`, 40, 84);
+                doc.text(`Batch: ${batch === 'all' ? 'All Batches' : batch}`, 40, 100);
+                doc.text(`Total Students: ${totalStudents}`, 40, 116);
+                doc.text(`Present: ${totalPresent}   Absent: ${totalAbsent}   Not Marked: ${totalNotMarked}`, 40, 132);
+                doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 148);
+
+                doc.autoTable({
+                    startY: 168,
+                    head: [['S.No', 'Student Name', 'Batch Number', 'Status', 'Date']],
+                    body: batchRows,
+                    styles: { fontSize: 10, cellPadding: 6 },
+                    headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 250, 250] },
+                    theme: 'grid'
+                });
+
+                const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
+                const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
+                const safeDate = String(date || new Date().toISOString().split('T')[0]);
+                const fileName = `Daily_Summary_${safeRegion}_${safeBatch}_${safeDate}.pdf`;
+                const pdfBlob = doc.output('blob');
+
+                const shareText = `Daily attendance summary (${date}) - ${region}, ${batch === 'all' ? 'All Batches' : `Batch ${batch}`}`;
+                let file = null;
+                try {
+                    file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                } catch (e) {
+                    file = null;
+                }
+
+                if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Daily Attendance Summary',
+                        text: shareText,
+                        files: [file]
+                    });
+                } else {
+                    doc.save(fileName);
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText + '. PDF downloaded. Please attach and send on WhatsApp.')}`;
+                    window.open(waUrl, '_blank');
+                }
             } catch (error) {
                 console.error('Error sharing daily summary:', error);
                 alert('Failed to create summary: ' + error.message);
@@ -4551,12 +4551,25 @@
                 
                 const select = document.getElementById('reportBatch');
                 select.innerHTML = '<option value="">Select Batch</option>';
+                select.innerHTML += '<option value="all">All Batches</option>';
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
+                select.value = 'all';
             } catch (error) {
                 console.error('Error loading batches:', error);
             }
+        }
+
+        async function fetchReportSummaryByBatch(region, batch, startDate, endDate, filterType) {
+            const res = await fetch(
+                `/api/attendance/summary?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            if (!res.ok) {
+                throw new Error(`API Error: ${res.status}`);
+            }
+            return res.json();
         }
 
         function updateFilterUI() {
@@ -4582,7 +4595,6 @@
                 endInput.value = new Date().toISOString().split('T')[0];
             }
         }
-
         async function viewReport() {
             const region = document.getElementById('reportRegion').value;
             const batch = document.getElementById('reportBatch').value;
@@ -4595,42 +4607,75 @@
                 return;
             }
 
-            // Convert month format to date range if needed
             if (filterType === 'month') {
                 const [year, month] = startDate.split('-');
                 startDate = `${year}-${month}-01`;
-                // Get last day of month
                 const lastDay = new Date(year, month, 0).getDate();
                 endDate = `${year}-${month}-${lastDay}`;
-            } else {
-                if (!endDate) {
-                    alert('Please select end date');
-                    return;
-                }
+            } else if (!endDate) {
+                alert('Please select end date');
+                return;
             }
 
             try {
-                const res = await fetch(
-                    `/api/attendance/summary?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&startDate=${startDate}&endDate=${endDate}&filterType=${filterType}`,
-                    { headers: { 'Authorization': `Bearer ${token}` } }
-                );
+                let mergedSummary = [];
+                let stats = null;
 
-                const data = await res.json();
+                if (batch === 'all') {
+                    const batchRes = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!batchRes.ok) {
+                        throw new Error(`API Error: ${batchRes.status}`);
+                    }
+                    const batches = await batchRes.json();
+                    if (!Array.isArray(batches) || batches.length === 0) {
+                        document.getElementById('reportResults').innerHTML =
+                            '<div class="alert alert-warning">No batches found for this region</div>';
+                        lastReportShareData = null;
+                        return;
+                    }
 
-                if (!data.summary || data.summary.length === 0) {
-                    document.getElementById('reportResults').innerHTML = 
+                    const allResponses = await Promise.all(
+                        batches.map(b => fetchReportSummaryByBatch(region, b, startDate, endDate, filterType))
+                    );
+
+                    allResponses.forEach((data, idx) => {
+                        const b = batches[idx];
+                        (data.summary || []).forEach(student => {
+                            mergedSummary.push({ ...student, reportBatch: student.batchNumber || b });
+                        });
+                    });
+
+                    const totalPresent = mergedSummary.reduce((sum, s) => sum + ((s.present || 0) + (s.late || 0) + (s.leave || 0)), 0);
+                    const totalAbsent = mergedSummary.reduce((sum, s) => sum + (s.absent || 0), 0);
+                    const totalClasses = mergedSummary.reduce((sum, s) => sum + (s.totalClasses || 0), 0);
+                    stats = {
+                        totalClasses,
+                        totalStudents: mergedSummary.length,
+                        totalPresent,
+                        totalAbsent,
+                        dateRange: { start: startDate, end: endDate, filterType }
+                    };
+                } else {
+                    const data = await fetchReportSummaryByBatch(region, batch, startDate, endDate, filterType);
+                    mergedSummary = (data.summary || []).map(student => ({ ...student, reportBatch: student.batchNumber || batch }));
+                    stats = data.stats || null;
+                }
+
+                if (!mergedSummary || mergedSummary.length === 0) {
+                    document.getElementById('reportResults').innerHTML =
                         '<div class="alert alert-warning">No attendance records found for the selected period</div>';
+                    lastReportShareData = null;
                     return;
                 }
 
-                const stats = data.stats;
                 let html = `
                     <div class="alert alert-info">
-                        <h6>📊 Summary Statistics</h6>
+                        <h6>Summary Statistics</h6>
                         <div class="row">
                             <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
-                            <div class="col-md-3"
-                            ><strong>Total Stuents:</strong> ${stats.totalStudents}</div>
+                            <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
                             <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
                             <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
                         </div>
@@ -4642,6 +4687,7 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>Student Name</th>
+                                <th>Batch</th>
                                 <th class="text-center">Total Classes</th>
                                 <th class="text-center">Marked</th>
                                 <th class="text-center">Present</th>
@@ -4653,7 +4699,7 @@
                         <tbody>
                 `;
 
-                data.summary.forEach(student => {
+                mergedSummary.forEach(student => {
                     const percentage = parseFloat(student.percentage);
                     let percentBadge = 'bg-danger';
                     if (percentage >= 75) {
@@ -4668,6 +4714,7 @@
                     html += `
                         <tr>
                             <td>${student.name}</td>
+                            <td>${student.reportBatch || '-'}</td>
                             <td class="text-center"><strong>${student.totalClasses}</strong></td>
                             <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
                             <td class="text-center"><span class="badge bg-success">${presentTotal}</span></td>
@@ -4682,18 +4729,104 @@
                         </tbody>
                     </table>
                     </div>
-                    <button class="btn btn-secondary mt-3" onclick="printReport()">🖨️ Print Report</button>
+                    <button class="btn btn-secondary mt-3" onclick="printReport()">Print Report</button>
                 `;
 
                 document.getElementById('reportResults').innerHTML = html;
+                lastReportShareData = {
+                    region,
+                    batch,
+                    filterType,
+                    startDate,
+                    endDate,
+                    stats,
+                    summary: mergedSummary
+                };
 
             } catch (error) {
-                console.error('❌ Error viewing report:', error);
-                document.getElementById('reportResults').innerHTML = 
+                console.error('Error viewing report:', error);
+                document.getElementById('reportResults').innerHTML =
                     `<div class="alert alert-danger">Failed to generate the report: ${error.message}</div>`;
+                lastReportShareData = null;
             }
         }
 
+        async function shareReportToWhatsApp() {
+            if (!lastReportShareData || !Array.isArray(lastReportShareData.summary) || lastReportShareData.summary.length === 0) {
+                alert('Please generate report first.');
+                return;
+            }
+
+            const jsPdfLib = window.jspdf;
+            if (!jsPdfLib || !jsPdfLib.jsPDF) {
+                alert('PDF library not loaded. Please refresh and try again.');
+                return;
+            }
+
+            try {
+                const { region, batch, filterType, startDate, endDate, summary } = lastReportShareData;
+                const totalPresent = summary.reduce((sum, s) => sum + ((s.present || 0) + (s.late || 0) + (s.leave || 0)), 0);
+                const totalAbsent = summary.reduce((sum, s) => sum + (s.absent || 0), 0);
+
+                const rows = summary.map((s, idx) => ([
+                    String(idx + 1),
+                    String(s.name || '-'),
+                    String(s.reportBatch || s.batchNumber || '-'),
+                    String(s.totalClasses || 0),
+                    String((s.present || 0) + (s.late || 0) + (s.leave || 0)),
+                    String(s.absent || 0)
+                ]));
+
+                const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                doc.setFontSize(16);
+                doc.text('Attendance Report Summary', 40, 44);
+                doc.setFontSize(11);
+                doc.text(`Region: ${region}`, 40, 68);
+                doc.text(`Batch: ${batch === 'all' ? 'All Batches' : batch}`, 40, 84);
+                doc.text(`Filter: ${filterType === 'month' ? 'Month' : 'Date Range'}`, 40, 100);
+                doc.text(`Period: ${startDate} to ${endDate}`, 40, 116);
+                doc.text(`Total Students: ${summary.length}   Present: ${totalPresent}   Absent: ${totalAbsent}`, 40, 132);
+                doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 148);
+
+                doc.autoTable({
+                    startY: 168,
+                    head: [['S.No', 'Student Name', 'Batch Number', 'Total Classes', 'Total Present', 'Total Absent']],
+                    body: rows,
+                    styles: { fontSize: 10, cellPadding: 6 },
+                    headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 250, 250] },
+                    theme: 'grid'
+                });
+
+                const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
+                const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
+                const fileName = `Report_Summary_${safeRegion}_${safeBatch}_${startDate}_to_${endDate}.pdf`;
+                const pdfBlob = doc.output('blob');
+
+                let file = null;
+                try {
+                    file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                } catch (e) {
+                    file = null;
+                }
+
+                const shareText = `Attendance report (${startDate} to ${endDate}) - ${region}, ${batch === 'all' ? 'All Batches' : `Batch ${batch}`}`;
+                if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Attendance Report',
+                        text: shareText,
+                        files: [file]
+                    });
+                } else {
+                    doc.save(fileName);
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText + '. PDF downloaded. Please attach and send on WhatsApp.')}`;
+                    window.open(waUrl, '_blank');
+                }
+            } catch (error) {
+                console.error('Error sharing report to WhatsApp:', error);
+                alert('Failed to share report: ' + error.message);
+            }
+        }
         function printReport() {
             window.print();
         }
@@ -4929,6 +5062,7 @@
     </script>
 </body>
 </html>
+
 
 
 
