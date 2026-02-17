@@ -400,6 +400,7 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
         batchNumber: student.batchNumber,
         standard: student.standard,
         mobile: student.mobile,
+        enrollmentDate: student.createdAt,
         totalClasses: uniqueDates.length,        // Total number of classes held
         totalMarked: totalMarked,                // Number of times student was marked
         present: presentCount,

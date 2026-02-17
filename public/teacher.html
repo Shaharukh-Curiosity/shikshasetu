@@ -4777,14 +4777,21 @@
                 const { region, batch, filterType, startDate, endDate, summary } = lastReportShareData;
                 const totalPresent = summary.reduce((sum, s) => sum + ((s.present || 0) + (s.late || 0) + (s.leave || 0)), 0);
                 const totalAbsent = summary.reduce((sum, s) => sum + (s.absent || 0), 0);
+                const formatJoinDate = (value) => {
+                    if (!value) return '-';
+                    const d = new Date(value);
+                    if (Number.isNaN(d.getTime())) return '-';
+                    return d.toISOString().split('T')[0];
+                };
 
-                const rows = summary.map((s, idx) => ([
-                    String(idx + 1),
+                const rows = summary.map((s) => ([
                     String(s.name || '-'),
                     String(s.reportBatch || s.batchNumber || '-'),
+                    String(formatJoinDate(s.enrollmentDate)),
                     String(s.totalClasses || 0),
                     String((s.present || 0) + (s.late || 0) + (s.leave || 0)),
-                    String(s.absent || 0)
+                    String(s.absent || 0),
+                    `${Number(s.percentage || 0).toFixed(2)}%`
                 ]));
 
                 const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -4800,7 +4807,7 @@
 
                 doc.autoTable({
                     startY: 168,
-                    head: [['S.No', 'Student Name', 'Batch Number', 'Total Classes', 'Total Present', 'Total Absent']],
+                    head: [['Student Name', 'Batch Number', 'Date of Joining', 'Total Class', 'Attended Class', 'Absent', 'Percentage']],
                     body: rows,
                     styles: { fontSize: 10, cellPadding: 6 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
