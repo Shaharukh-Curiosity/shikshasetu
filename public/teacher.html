@@ -189,6 +189,9 @@
                 <button class="nav-link" id="workTab" onclick="showTab('work')">Daily Work</button>
             </li>
             <li class="nav-item">
+                <button class="nav-link" id="busTab" onclick="showTab('bus')">Bus On Wheels</button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link" id="lowTab" onclick="showTab('low')">Low Attendance</button>
             </li>
             <li class="nav-item">
@@ -516,6 +519,41 @@
                     
                     <button class="btn btn-primary mb-3" onclick="loadWorkReports()">View Reports</button>
                     <div id="workResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BUS ON WHEELS -->
+        <div id="busSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h5 class="card-title mb-0">Bus On Wheels Inventory</h5>
+                        <div class="d-flex gap-2" id="busInventoryActions">
+                            <button class="btn btn-outline-primary" onclick="viewBusInventoryDetails()">View Inventory Details</button>
+                            <button class="btn btn-success" onclick="saveBusInventory()">Save Inventory</button>
+                        </div>
+                    </div>
+                    <div id="busInventoryEditor">
+                        <div class="text-muted small mb-3" id="busInventoryMeta">Editable quantity table for equipment tracking.</div>
+                        <div class="table-responsive">
+                            <table class="table table-bordered align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th style="width: 35%;">Item</th>
+                                        <th style="width: 20%;">Quantity</th>
+                                        <th style="width: 45%;">Remarks</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="busInventoryTableBody">
+                                    <tr>
+                                        <td colspan="3" class="text-center text-muted">Loading...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="mt-3" id="busInventoryDetails"></div>
                 </div>
             </div>
         </div>
@@ -940,6 +978,7 @@
         let studentsFiltered = [];
         let studentsPage = 1;
         const studentsPageSize = 25;
+        let busInventoryData = [];
         
         console.log('📍 Current page:', window.location.pathname);
         console.log('🚀 Loading initial data...');
@@ -1163,6 +1202,7 @@
                 'studentsSection',
                 'reportSection',
                 'workSection',
+                'busSection',
                 'lowSection',
                 'analysisSection',
                 'marksSection',
@@ -1175,6 +1215,7 @@
                 'studentsTab',
                 'reportTab',
                 'workTab',
+                'busTab',
                 'lowTab',
                 'analysisTab',
                 'marksTab',
@@ -1210,6 +1251,10 @@
             } else if (tab === 'work') {
                 document.getElementById('workSection').style.display = 'block';
                 document.getElementById('workTab').classList.add('active');
+            } else if (tab === 'bus') {
+                document.getElementById('busSection').style.display = 'block';
+                document.getElementById('busTab').classList.add('active');
+                loadBusInventory();
             } else if (tab === 'presentation') {
                 document.getElementById('presentationSection').style.display = 'block';
                 document.getElementById('presentationTab').classList.add('active');
@@ -1311,7 +1356,7 @@
             }
 
             try {
-                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}`, {
+                const res = await fetch(`/api/students/region-summary/${encodeURIComponent(region)}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
@@ -1319,16 +1364,31 @@
                     throw new Error(`API Error: ${res.status}`);
                 }
 
-                const students = await res.json();
+                const summary = await res.json();
+                const formatSummaryDate = (value) => {
+                    if (!value) return 'Not available';
+                    const dt = new Date(value);
+                    if (Number.isNaN(dt.getTime())) return escapeHtml(String(value));
+                    return dt.toLocaleDateString();
+                };
+
                 document.getElementById('selectedRegionCount').innerHTML = `
                     <div class="alert alert-info">
-                        <h6>📊 Total Registered Students in ${region}: <strong>${students.length}</strong></h6>
+                        <h6 class="mb-3">Region Summary: <strong>${escapeHtml(region)}</strong></h6>
+                        <div class="row g-2">
+                            <div class="col-md-4"><strong>Total Enrolled:</strong> ${summary.totalStudents || 0}</div>
+                            <div class="col-md-4"><strong>Project Inauguration Date:</strong> ${formatSummaryDate(summary.projectInaugurationDate)}</div>
+                            <div class="col-md-4"><strong>Theory Date:</strong> ${formatSummaryDate(summary.theoryDate)}</div>
+                            <div class="col-md-4"><strong>Practical Date:</strong> ${formatSummaryDate(summary.practicalDate)}</div>
+                            <div class="col-md-4"><strong>Presentation Date:</strong> ${formatSummaryDate(summary.presentationDate)}</div>
+                            <div class="col-md-4"><strong>Certificate Date:</strong> ${formatSummaryDate(summary.certificateDate)}</div>
+                        </div>
                     </div>
                 `;
             } catch (error) {
-                console.error('❌ Error loading region count:', error);
+                console.error('Error loading region summary:', error);
                 document.getElementById('selectedRegionCount').innerHTML =
-                    `<div class="alert alert-danger">Error loading region count: ${error.message}</div>`;
+                    `<div class="alert alert-danger">Error loading region summary: ${error.message}</div>`;
             }
         }
 
@@ -3612,6 +3672,220 @@
             } catch (error) {
                 console.error('❌ Error loading students:', error);
                 alert('Error loading students: ' + error.message);
+            }
+        }
+
+        function renderBusInventoryTable() {
+            const tableBody = document.getElementById('busInventoryTableBody');
+            if (!tableBody) return;
+            tableBody.innerHTML = busInventoryData.map((item, index) => `
+                <tr>
+                    <td>${escapeHtml(item.name)}</td>
+                    <td>
+                        <input
+                            type="number"
+                            class="form-control"
+                            min="0"
+                            step="1"
+                            value="${Number(item.quantity) || 0}"
+                            onchange="updateBusInventoryQuantity(${index}, this.value)"
+                        >
+                    </td>
+                    <td>
+                        <input
+                            type="text"
+                            class="form-control"
+                            maxlength="300"
+                            placeholder="Enter remarks (e.g. malfunction, replacement needed)"
+                            value="${escapeHtml(item.remarks || '')}"
+                            onchange="updateBusInventoryRemarks(${index}, this.value)"
+                        >
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateBusInventoryQuantity(index, value) {
+            if (!busInventoryData[index]) return;
+            busInventoryData[index].quantity = Math.max(0, Number(value) || 0);
+        }
+
+        function updateBusInventoryRemarks(index, value) {
+            if (!busInventoryData[index]) return;
+            busInventoryData[index].remarks = String(value || '').trim();
+        }
+
+        function setBusInventoryView(mode) {
+            const editorEl = document.getElementById('busInventoryEditor');
+            const actionsEl = document.getElementById('busInventoryActions');
+            const detailsEl = document.getElementById('busInventoryDetails');
+            if (mode === 'details') {
+                if (editorEl) editorEl.style.display = 'none';
+                if (actionsEl) actionsEl.style.display = 'none';
+                if (detailsEl) detailsEl.style.display = 'block';
+                return;
+            }
+            if (editorEl) editorEl.style.display = 'block';
+            if (actionsEl) actionsEl.style.display = 'flex';
+            if (detailsEl) {
+                detailsEl.style.display = 'block';
+                detailsEl.innerHTML = '';
+            }
+        }
+
+        function backToBusInventoryEditor() {
+            setBusInventoryView('edit');
+        }
+
+        async function loadBusInventory() {
+            const tableBody = document.getElementById('busInventoryTableBody');
+            const metaEl = document.getElementById('busInventoryMeta');
+            setBusInventoryView('edit');
+            if (tableBody) {
+                tableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>';
+            }
+            try {
+                const res = await fetch('/api/bus-inventory', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                busInventoryData = Array.isArray(data.items) ? data.items : [];
+                renderBusInventoryTable();
+                if (metaEl) {
+                    const updatedText = data.updatedAt
+                        ? `Last saved by ${data.updatedByName || 'Unknown'} on ${new Date(data.updatedAt).toLocaleString()}`
+                        : 'Editable quantity table for equipment tracking.';
+                    metaEl.textContent = updatedText;
+                }
+            } catch (error) {
+                console.error('Error loading bus inventory:', error);
+                if (tableBody) {
+                    tableBody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Failed to load inventory: ${escapeHtml(error.message)}</td></tr>`;
+                }
+            }
+        }
+
+        async function saveBusInventory() {
+            try {
+                const res = await fetch('/api/bus-inventory', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ items: busInventoryData })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                busInventoryData = Array.isArray(data.items) ? data.items : busInventoryData;
+                renderBusInventoryTable();
+                const metaEl = document.getElementById('busInventoryMeta');
+                if (metaEl && data.updatedAt) {
+                    metaEl.textContent = `Last saved by ${data.updatedByName || 'Unknown'} on ${new Date(data.updatedAt).toLocaleString()}`;
+                }
+                alert('Bus inventory saved successfully.');
+            } catch (error) {
+                console.error('Error saving bus inventory:', error);
+                alert(`Failed to save inventory: ${error.message}`);
+            }
+        }
+
+        async function viewBusInventoryDetails() {
+            const detailsEl = document.getElementById('busInventoryDetails');
+            if (!detailsEl) return;
+            setBusInventoryView('details');
+            detailsEl.innerHTML = '<div class="text-muted">Loading inventory details...</div>';
+
+            try {
+                const res = await fetch('/api/bus-inventory/details', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                const history = Array.isArray(data.history) ? data.history : [];
+                const currentItems = Array.isArray(data.current?.items) ? data.current.items : [];
+                const currentRows = currentItems.map((item, idx) => `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td>${escapeHtml(item.name)}</td>
+                        <td>${Number(item.quantity) || 0}</td>
+                        <td>${escapeHtml(item.remarks || '-')}</td>
+                    </tr>
+                `).join('');
+                const historyDetailCards = history.map((entry, idx) => {
+                    const entryItems = Array.isArray(entry.items) ? entry.items : [];
+                    const entryRows = entryItems.map((item, itemIdx) => `
+                        <tr>
+                            <td>${itemIdx + 1}</td>
+                            <td>${escapeHtml(item.name || '-')}</td>
+                            <td>${Number(item.quantity) || 0}</td>
+                            <td>${escapeHtml(item.remarks || '-')}</td>
+                        </tr>
+                    `).join('');
+
+                    return `
+                        <div class="card mb-3">
+                            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                <div><strong>Snapshot ${idx + 1}</strong></div>
+                                <div class="small text-muted">
+                                    Saved by ${escapeHtml(entry.updatedByName || 'Unknown')} on
+                                    ${entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '-'}
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-bordered mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Item</th>
+                                                <th>Quantity</th>
+                                                <th>Remarks</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${entryRows || '<tr><td colspan="4" class="text-center text-muted">No items found.</td></tr>'}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                detailsEl.innerHTML = `
+                    <div class="card border-0 bg-light">
+                        <div class="card-body">
+                            <button class="btn btn-sm btn-outline-secondary mb-3" onclick="backToBusInventoryEditor()">Back To Inventory Input</button>
+                            <h6 class="mb-2">Inventory Details</h6>
+                            <div class="small text-muted mb-3">
+                                Current: ${escapeHtml(data.current?.updatedByName || 'Unknown')} | 
+                                ${data.current?.updatedAt ? new Date(data.current.updatedAt).toLocaleString() : 'Not saved yet'}
+                            </div>
+                            <div class="table-responsive mb-3">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Item</th>
+                                            <th>Quantity</th>
+                                            <th>Remarks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${currentRows || '<tr><td colspan="4" class="text-center text-muted">No current items found.</td></tr>'}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <h6 class="mt-2">Previous Snapshots</h6>
+                            ${historyDetailCards || '<div class="text-muted">No previous details found.</div>'}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                detailsEl.innerHTML = `<div class="alert alert-danger">Failed to load inventory details: ${escapeHtml(error.message)}</div>`;
             }
         }
 

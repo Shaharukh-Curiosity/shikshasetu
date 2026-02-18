@@ -6,6 +6,7 @@ const { Parser } = require('json2csv');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const Marks = require('../models/Marks');
+const Presentation = require('../models/Presentation');
 const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const PRESENT_STATUSES = ['present', 'late', 'leave'];
@@ -296,6 +297,62 @@ router.get('/batches/:region', auth, async (req, res) => {
     res.json(batches.filter(b => b));
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Region summary (enrolment + key project dates)
+router.get('/region-summary/:region', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const region = String(req.params.region || '').trim();
+    if (!region) {
+      return res.status(400).json({ message: 'Region is required' });
+    }
+
+    const students = await User.find({ role: 'student', region })
+      .select('createdAt')
+      .lean();
+
+    const totalStudents = students.length;
+    let projectInaugurationDate = null;
+    students.forEach((student) => {
+      const value = student?.createdAt ? new Date(student.createdAt) : null;
+      if (!value || Number.isNaN(value.getTime())) return;
+      if (!projectInaugurationDate || value < projectInaugurationDate) {
+        projectInaugurationDate = value;
+      }
+    });
+
+    const [latestTheory, latestPractical, latestPresentationInMarks, latestPresentationInTable] = await Promise.all([
+      Marks.findOne({ region, theory: { $ne: null } }).sort({ date: -1 }).select('date').lean(),
+      Marks.findOne({ region, practical: { $ne: null } }).sort({ date: -1 }).select('date').lean(),
+      Marks.findOne({ region, presentation: { $ne: null } }).sort({ date: -1 }).select('date').lean(),
+      Presentation.findOne({
+        region,
+        $or: [
+          { presentationMarks: { $ne: null } },
+          { 'evaluation.content': { $ne: null } },
+          { 'evaluation.design': { $ne: null } },
+          { 'evaluation.communication': { $ne: null } }
+        ]
+      }).sort({ date: -1 }).select('date').lean()
+    ]);
+
+    const presentationDate = [latestPresentationInMarks?.date, latestPresentationInTable?.date]
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0] || null;
+
+    res.json({
+      region,
+      totalStudents,
+      projectInaugurationDate: projectInaugurationDate ? projectInaugurationDate.toISOString().slice(0, 10) : null,
+      theoryDate: latestTheory?.date || null,
+      practicalDate: latestPractical?.date || null,
+      presentationDate,
+      certificateDate: null
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load region summary', details: error.message });
   }
 });
 
