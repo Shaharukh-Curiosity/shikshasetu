@@ -214,6 +214,10 @@
                         <h5 class="card-title mb-0">Mark Daily Attendance</h5>
                         <div class="text-muted small d-flex flex-wrap align-items-center gap-3">
                             <span class="d-inline-flex align-items-center gap-1">
+                                <i class="bi bi-calendar2-check text-primary"></i>
+                                Planned absence auto-marked absent
+                            </span>
+                            <span class="d-inline-flex align-items-center gap-1">
                                 <i class="bi bi-moon-stars-fill text-warning"></i>
                                 Absent yesterday
                             </span>
@@ -227,20 +231,49 @@
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
                             <label>Region</label>
-                            <select class="form-select" id="markRegion" onchange="loadMarkBatches();">
+                            <select class="form-select" id="markRegion" onchange="loadMarkBatches(); loadPlannedAbsenceStudentOptions(); loadPlannedAbsenceList();">
                                 <option value="">Select Region</option>
                             </select>
                         </div>
                         <div class="col-md-3">
                             <label>Batch</label>
-                            <select class="form-select" id="markBatch" onchange="loadMarkStudents()">
+                            <select class="form-select" id="markBatch" onchange="loadMarkStudents(); loadPlannedAbsenceStudentOptions(); loadPlannedAbsenceList();">
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
                         <div class="col-md-3">
                             <label>Date</label>
-                            <input type="date" class="form-control" id="markDate" required onchange="loadMarkStudents()">
+                            <input type="date" class="form-control" id="markDate" required onchange="loadMarkStudents(); loadPlannedAbsenceList();">
                         </div>
+                    </div>
+
+                    <div class="border rounded p-3 mb-4 bg-light">
+                        <h6 class="mb-3">Plan Student Absence</h6>
+                        <div class="text-muted small mb-2">You can select past or future dates. Use this for late-reported absence reasons as well.</div>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label>Student</label>
+                                <select class="form-select" id="plannedStudent">
+                                    <option value="">Select Student</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label>From Date</label>
+                                <input type="date" class="form-control" id="plannedFromDate">
+                            </div>
+                            <div class="col-md-2">
+                                <label>To Date</label>
+                                <input type="date" class="form-control" id="plannedToDate">
+                            </div>
+                            <div class="col-md-3">
+                                <label>Reason (Required)</label>
+                                <input type="text" class="form-control" id="plannedReason" placeholder="e.g. School Tour">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" onclick="createPlannedAbsence()">Save Reason</button>
+                            </div>
+                        </div>
+                        <div id="plannedAbsenceList" class="mt-3"></div>
                     </div>
 
                     <div class="row g-3 mb-3">
@@ -296,9 +329,23 @@
                             <input type="date" class="form-control" id="viewDate" required>
                         </div>
                         <div class="col-md-3">
+                            <label>Month (for Planned)</label>
+                            <input type="month" class="form-control" id="viewPlannedMonth">
+                        </div>
+                        <div class="col-md-3">
+                            <label>Status Filter</label>
+                            <select class="form-select" id="viewStatusFilter" onchange="applyViewDailyFilter()">
+                                <option value="all">All</option>
+                                <option value="present">Present</option>
+                                <option value="absent">Absent</option>
+                                <option value="not_marked">Not Marked</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
                             <label>&nbsp;</label>
                             <div class="d-grid gap-2">
                                 <button class="btn btn-primary w-100" onclick="viewAttendance()">View</button>
+                                <button class="btn btn-outline-primary w-100" onclick="viewPlannedStudentsAttendance()">Planned Students Attendance</button>
                                 <button class="btn btn-success w-100" onclick="shareDailySummaryAllBatches()">Share Daily Summary</button>
                             </div>
                         </div>
@@ -819,8 +866,10 @@
         if (presentationDateEl) presentationDateEl.value = today;
         const workDateEl = document.getElementById('workDate');
         const workViewDateEl = document.getElementById('workViewDate');
+        const viewPlannedMonthEl = document.getElementById('viewPlannedMonth');
         if (workDateEl) workDateEl.value = today;
         if (workViewDateEl) workViewDateEl.value = today;
+        if (viewPlannedMonthEl) viewPlannedMonthEl.value = today.slice(0, 7);
         const analysisStartEl = document.getElementById('analysisStartDate');
         const analysisEndEl = document.getElementById('analysisEndDate');
         if (analysisStartEl && analysisEndEl) {
@@ -854,7 +903,22 @@
                 if (el) el.max = maxDate;
             });
         }
+        function setPlannedAbsenceDates() {
+            const fromEl = document.getElementById('plannedFromDate');
+            const toEl = document.getElementById('plannedToDate');
+            if (!fromEl || !toEl) return;
+            const markDate = document.getElementById('markDate')?.value;
+            const defaultDate = markDate || today;
+            fromEl.value = fromEl.value || defaultDate;
+            toEl.value = toEl.value || defaultDate;
+            fromEl.addEventListener('change', () => {
+                if (toEl.value && fromEl.value && toEl.value < fromEl.value) {
+                    toEl.value = fromEl.value;
+                }
+            });
+        }
         setMaxDates();
+        setPlannedAbsenceDates();
         toggleExamMissedModeFields();
         updateWorkViewFilterUI();
         loadWorkViewTeachers();
@@ -863,6 +927,7 @@
         let presentationCurrentStudents = [];
         let presentationEvaluationStudents = [];
         let lastViewAttendance = null;
+        let lastViewRawStudents = [];
         let lastReportShareData = null;
         let analysisChart = null;
         let markFiltered = [];
@@ -870,6 +935,7 @@
         const markPageSize = 25;
         let lastMarkSubmission = null;
         let markSelections = new Map();
+        let currentPlannedAbsences = [];
         let studentsData = [];
         let studentsFiltered = [];
         let studentsPage = 1;
@@ -3528,9 +3594,20 @@
                 if (markStatusFilter) markStatusFilter.value = 'all';
 
                 markSelections = new Map();
+                currentStudents.forEach(student => {
+                    if (!student.attendance && student.plannedAbsence && student.plannedAbsence.reason) {
+                        markSelections.set(String(student._id), {
+                            status: 'absent',
+                            note: student.plannedAbsence.reason,
+                            isPlannedDefault: true
+                        });
+                    }
+                });
                 markFiltered = currentStudents.slice();
                 markPage = 1;
                 renderMarkTable();
+                await loadPlannedAbsenceList();
+                await loadPlannedAbsenceStudentOptions();
                 console.log('✅ Students table rendered');
             } catch (error) {
                 console.error('❌ Error loading students:', error);
@@ -3538,9 +3615,186 @@
             }
         }
 
-        function updateMarkStatus(studentId, value) {
+        async function loadPlannedAbsenceStudentOptions() {
+            const region = document.getElementById('markRegion').value;
+            const batch = document.getElementById('markBatch').value;
+            const select = document.getElementById('plannedStudent');
+            if (!select) return;
+
+            select.innerHTML = '<option value="">Select Student</option>';
+            if (!region || !batch) return;
+
+            try {
+                const res = await fetch(`/api/students?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&status=active`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const students = await res.json();
+                students
+                    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+                    .forEach(student => {
+                        select.innerHTML += `<option value="${student._id}">${escapeHtml(student.name)} (${escapeHtml(student.mobile || 'No mobile')})</option>`;
+                    });
+            } catch (error) {
+                console.error('❌ Error loading planned absence students:', error);
+            }
+        }
+
+        async function loadPlannedAbsenceList() {
+            const region = document.getElementById('markRegion').value;
+            const batch = document.getElementById('markBatch').value;
+            const date = document.getElementById('markDate').value;
+            const listEl = document.getElementById('plannedAbsenceList');
+            if (!listEl) return;
+
+            if (!region || !batch || !date) {
+                listEl.innerHTML = '<span class="text-muted small">Select region, batch and date to view planned absences.</span>';
+                currentPlannedAbsences = [];
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/attendance/planned-absences?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${encodeURIComponent(date)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                currentPlannedAbsences = await res.json();
+                if (!currentPlannedAbsences.length) {
+                    listEl.innerHTML = '<span class="text-muted small">No planned absences for selected date.</span>';
+                    return;
+                }
+                listEl.innerHTML = `
+                    <div class="small fw-semibold mb-2">Planned absences on ${escapeHtml(date)}</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        ${currentPlannedAbsences.map(item => `
+                            <span class="badge bg-primary">
+                                ${escapeHtml(item.studentName)}: ${escapeHtml(item.reason)}
+                                <button class="btn btn-sm btn-link text-white p-0 ms-2" title="Cancel planned absence" onclick="cancelPlannedAbsence('${item._id}')">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </span>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('❌ Error loading planned absences:', error);
+                listEl.innerHTML = '<span class="text-danger small">Failed to load planned absences.</span>';
+            }
+        }
+
+        async function createPlannedAbsence() {
+            const studentId = document.getElementById('plannedStudent')?.value;
+            const fromDate = document.getElementById('plannedFromDate')?.value;
+            const toDate = document.getElementById('plannedToDate')?.value;
+            const reason = (document.getElementById('plannedReason')?.value || '').trim();
+
+            if (!studentId || !fromDate || !toDate || !reason) {
+                alert('Please select student, date range and reason.');
+                return;
+            }
+            if (fromDate > toDate) {
+                alert('From Date cannot be after To Date.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/attendance/planned-absences', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        studentId,
+                        fromDate,
+                        toDate,
+                        reason
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.message || 'Failed to create planned absence');
+                }
+                alert('Planned absence saved successfully.');
+                document.getElementById('plannedReason').value = '';
+                const selectedDate = document.getElementById('markDate')?.value;
+                if (selectedDate && selectedDate >= fromDate && selectedDate <= toDate) {
+                    await loadMarkStudents();
+                } else {
+                    await loadPlannedAbsenceList();
+                }
+            } catch (error) {
+                alert('Failed to save planned absence: ' + error.message);
+            }
+        }
+
+        async function cancelPlannedAbsence(id) {
+            const ok = window.confirm('Cancel this planned absence?');
+            if (!ok) return;
+            try {
+                const res = await fetch(`/api/attendance/planned-absences/${id}/cancel`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.message || 'Cancel failed');
+                }
+                await loadPlannedAbsenceList();
+                await loadMarkStudents();
+            } catch (error) {
+                alert('Failed to cancel planned absence: ' + error.message);
+            }
+        }
+
+        function getEffectiveMarkState(student) {
+            const selection = markSelections.get(String(student._id)) || {};
+            const hasSelectionStatus = Object.prototype.hasOwnProperty.call(selection, 'status');
+            if (hasSelectionStatus) {
+                const status = selection.status || '';
+                let note = String(selection.note || '').trim();
+                if (status === 'absent' && !note && !student.attendance && student.plannedAbsence?.reason) {
+                    note = String(student.plannedAbsence.reason || '').trim();
+                }
+                return { status, note, isPlannedDefault: !!selection.isPlannedDefault };
+            }
+            if (student.attendance) {
+                return {
+                    status: student.attendance.status || '',
+                    note: String(student.attendance.note || '').trim(),
+                    isPlannedDefault: false
+                };
+            }
+            if (student.plannedAbsence) {
+                return {
+                    status: 'absent',
+                    note: String(student.plannedAbsence.reason || '').trim(),
+                    isPlannedDefault: true
+                };
+            }
+            return { status: '', note: '', isPlannedDefault: false };
+        }
+
+        function updateMarkStatus(studentId, value, options = {}) {
             const existing = markSelections.get(studentId) || {};
-            markSelections.set(studentId, { ...existing, status: value });
+            const next = { ...existing, status: value };
+            if (Object.prototype.hasOwnProperty.call(options, 'note')) {
+                next.note = String(options.note || '').trim();
+            } else if (value !== 'absent') {
+                next.note = '';
+                next.isPlannedDefault = false;
+            }
+            if (Object.prototype.hasOwnProperty.call(options, 'isPlannedDefault')) {
+                next.isPlannedDefault = !!options.isPlannedDefault;
+            }
+            markSelections.set(studentId, next);
         }
 
         function applyMarkFilters() {
@@ -3553,14 +3807,10 @@
                     return false;
                 }
                 if (statusFilter === 'not_marked') {
-                    return !student.attendance;
+                    return !getEffectiveMarkState(student).status;
                 }
                 if (statusFilter !== 'all') {
-                    const selection = markSelections.get(String(student._id)) || {};
-                    const hasSelectionStatus = Object.prototype.hasOwnProperty.call(selection, 'status');
-                    const status = hasSelectionStatus
-                        ? selection.status
-                        : (student.attendance ? student.attendance.status : '');
+                    const status = getEffectiveMarkState(student).status;
                     return status === statusFilter;
                 }
                 return true;
@@ -3580,7 +3830,7 @@
         function bulkClearStatus() {
             markFiltered.forEach(student => {
                 const studentId = String(student._id);
-                markSelections.set(studentId, { ...markSelections.get(studentId), status: '' });
+                markSelections.set(studentId, { ...markSelections.get(studentId), status: '', note: '', isPlannedDefault: false });
             });
             renderMarkTable();
         }
@@ -3601,7 +3851,7 @@
             if (!tableEl) return;
 
             const total = currentStudents.length;
-            const marked = currentStudents.filter(s => s.attendance).length;
+            const marked = currentStudents.filter(s => !!getEffectiveMarkState(s).status).length;
             const notMarked = total - marked;
             const alreadyMarked = marked;
             const markedByOthers = currentStudents.filter(s => s.attendance && s.attendance.markedBy && s.attendance.markedBy !== user.name).length;
@@ -3640,11 +3890,8 @@
             `;
 
             pageItems.forEach((student, index) => {
-                const selection = markSelections.get(String(student._id)) || {};
-                const hasSelectionStatus = Object.prototype.hasOwnProperty.call(selection, 'status');
-                const currentStatus = hasSelectionStatus
-                    ? selection.status
-                    : (student.attendance ? student.attendance.status : '');
+                const state = getEffectiveMarkState(student);
+                const currentStatus = state.status;
                 const isPresent = currentStatus === 'present';
                 const isAbsent = currentStatus === 'absent';
                 const prevAbsent = student.previousDay && student.previousDay.status === 'absent';
@@ -3660,11 +3907,17 @@
                 const frequentAbsentBadge = recentAbsentCount >= 3
                     ? '<span class="badge bg-danger ms-2" title="3+ absences in last 7 days">Frequent Absence</span>'
                     : '';
+                const plannedBadge = student.plannedAbsence
+                    ? `<span class="badge bg-primary ms-2" title="Planned: ${escapeHtml(student.plannedAbsence.fromDate)} to ${escapeHtml(student.plannedAbsence.toDate)}">Planned: ${escapeHtml(student.plannedAbsence.reason || 'No reason')}</span>`
+                    : '';
+                const plannedNote = state.isPlannedDefault && state.note
+                    ? `<div class="small text-primary mt-1"><i class="bi bi-info-circle"></i> ${escapeHtml(state.note)}</div>`
+                    : '';
 
                 html += `
                     <tr>
                         <td class="align-middle">${index + 1}</td>
-                        <td class="align-middle fw-semibold">${student.name}${prevDayIcon}${consecutiveIcon}${frequentAbsentBadge}</td>
+                        <td class="align-middle fw-semibold">${student.name}${prevDayIcon}${consecutiveIcon}${frequentAbsentBadge}${plannedBadge}${plannedNote}</td>
                         <td class="align-middle">
                             <div class="d-flex justify-content-center gap-2 flex-wrap">
                                 <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
@@ -3725,15 +3978,13 @@
             const attendanceRecords = [];
             
             currentStudents.forEach(student => {
-                const selection = markSelections.get(String(student._id)) || {};
-                const hasSelectionStatus = Object.prototype.hasOwnProperty.call(selection, 'status');
-                const status = hasSelectionStatus
-                    ? selection.status
-                    : (student.attendance ? student.attendance.status : '');
+                const state = getEffectiveMarkState(student);
+                const status = state.status;
                 if (status) {
                     attendanceRecords.push({
                         studentId: student._id,
-                        status: status
+                        status: status,
+                        note: state.note || ''
                     });
                 }
             });
@@ -3889,100 +4140,134 @@
                 if (!students || students.length === 0) {
                     document.getElementById('viewResults').innerHTML =
                         '<div class="alert alert-warning">No students found in this batch</div>';
+                    lastViewRawStudents = [];
+                    lastViewAttendance = null;
                     return;
                 }
 
-                let present = 0, absent = 0, notMarked = 0;
-                const absentNames = [];
-                const attendanceRows = [];
-
-                let html = `
-                    <table class="table table-bordered">
-                        <thead class="table-light">
-                            <tr>
-                                <th>#</th>
-                                <th>Name</th>
-                                <th>Status</th>
-                                <th>Marked By</th>
-                                <th>Parent Mobile</th>
-                                <th class="text-center">Call</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                students.forEach((student, index) => {
-                    let statusBadge;
-                    let markedBy = '-';
-                    let isAbsent = false;
-                    let statusKey = 'not_marked';
-
-                    if (student.attendance) {
-                        const status = student.attendance.status;
-                        statusBadge = getStatusBadge(status);
-                        markedBy = student.attendance.markedBy || '-';
-                        if (status === 'present' || status === 'late' || status === 'leave') {
-                            present++;
-                            statusKey = 'present';
-                        } else if (status === 'absent') {
-                            absent++;
-                            isAbsent = true;
-                            statusKey = 'absent';
-                            absentNames.push(student.name);
-                        }
-                    } else {
-                        statusBadge = getStatusBadge('');
-                        notMarked++;
-                    }
-
-                    const callButton = isAbsent
-                        ? buildCallButtonHtml(student._id, student.mobile, 'view-attendance')
-                        : '<span class="text-muted">-</span>';
-                    const parentMobile = student.mobile ? escapeHtml(student.mobile) : '-';
-
-                    attendanceRows.push({
-                        index,
-                        studentId: student._id,
-                        name: String(student.name || ''),
-                        batchNumber: String(student.batchNumber || ''),
-                        mobile: String(student.mobile || ''),
-                        statusKey,
-                        markedBy
-                    });
-
-                    html += `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${escapeHtml(student.name)}</td>
-                            <td>${statusBadge}</td>
-                            <td>${escapeHtml(markedBy)}</td>
-                            <td>${parentMobile}</td>
-                            <td class="text-center">${callButton}</td>
-                        </tr>
-                    `;
-                });
-
-                html += '</tbody></table>';
-
-                const summary = `
-                    <div class="alert alert-info">
-                        <strong>Summary:</strong>
-                        Present: <span class="badge bg-success">${present}</span> |
-                        Absent: <span class="badge bg-danger">${absent}</span> |
-                        Not Marked: <span class="badge bg-secondary">${notMarked}</span>
-                    </div>
-                    <div class="d-flex flex-wrap gap-2 mb-3">
-                        <button class="btn btn-success" onclick="shareAttendanceWhatsApp()">Download Attendance PDF</button>
-                    </div>
-                `;
-
-                document.getElementById('viewResults').innerHTML = summary + html;
-                lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames, records: attendanceRows };
+                lastViewRawStudents = students;
+                renderViewAttendanceResults(region, batch, date);
 
             } catch (error) {
                 console.error('Error viewing attendance:', error);
                 alert('Failed to load attendance');
             }
+        }
+
+        function applyViewDailyFilter() {
+            if (!lastViewAttendance || !lastViewRawStudents || lastViewRawStudents.length === 0) {
+                return;
+            }
+            renderViewAttendanceResults(lastViewAttendance.region, lastViewAttendance.batch, lastViewAttendance.date);
+        }
+
+        function renderViewAttendanceResults(region, batch, date) {
+            if (!Array.isArray(lastViewRawStudents) || lastViewRawStudents.length === 0) {
+                document.getElementById('viewResults').innerHTML =
+                    '<div class="alert alert-warning">No students found in this batch</div>';
+                lastViewAttendance = null;
+                return;
+            }
+
+            const statusFilter = document.getElementById('viewStatusFilter')?.value || 'all';
+
+            const normalized = lastViewRawStudents.map(student => {
+                let statusKey = 'not_marked';
+                let markedBy = '-';
+                let statusBadge = getStatusBadge('');
+                if (student.attendance) {
+                    const status = student.attendance.status;
+                    statusBadge = getStatusBadge(status);
+                    markedBy = student.attendance.markedBy || '-';
+                    if (status === 'present' || status === 'late' || status === 'leave') {
+                        statusKey = 'present';
+                    } else if (status === 'absent') {
+                        statusKey = 'absent';
+                    }
+                }
+                return { student, statusKey, markedBy, statusBadge };
+            });
+
+            const present = normalized.filter(x => x.statusKey === 'present').length;
+            const absent = normalized.filter(x => x.statusKey === 'absent').length;
+            const notMarked = normalized.filter(x => x.statusKey === 'not_marked').length;
+            const absentNames = normalized.filter(x => x.statusKey === 'absent').map(x => String(x.student.name || ''));
+
+            const filtered = statusFilter === 'all'
+                ? normalized
+                : normalized.filter(x => x.statusKey === statusFilter);
+
+            let html = `
+                <table class="table table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Marked By</th>
+                            <th>Parent Mobile</th>
+                            <th class="text-center">Call</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            const attendanceRows = [];
+            filtered.forEach((item, index) => {
+                const student = item.student;
+                const isAbsent = item.statusKey === 'absent';
+                const callButton = isAbsent
+                    ? buildCallButtonHtml(student._id, student.mobile, 'view-attendance')
+                    : '<span class="text-muted">-</span>';
+                const parentMobile = student.mobile ? escapeHtml(student.mobile) : '-';
+
+                attendanceRows.push({
+                    index,
+                    studentId: student._id,
+                    name: String(student.name || ''),
+                    batchNumber: String(student.batchNumber || ''),
+                    mobile: String(student.mobile || ''),
+                    statusKey: item.statusKey,
+                    markedBy: item.markedBy
+                });
+
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(student.name)}</td>
+                        <td>${item.statusBadge}</td>
+                        <td>${escapeHtml(item.markedBy)}</td>
+                        <td>${parentMobile}</td>
+                        <td class="text-center">${callButton}</td>
+                    </tr>
+                `;
+            });
+
+            if (filtered.length === 0) {
+                html += `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted">No students in selected filter</td>
+                    </tr>
+                `;
+            }
+
+            html += '</tbody></table>';
+
+            const summary = `
+                <div class="alert alert-info">
+                    <strong>Summary:</strong>
+                    Present: <span class="badge bg-success">${present}</span> |
+                    Absent: <span class="badge bg-danger">${absent}</span> |
+                    Not Marked: <span class="badge bg-secondary">${notMarked}</span> |
+                    Showing: <span class="badge bg-dark">${filtered.length}</span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button class="btn btn-success" onclick="shareAttendanceWhatsApp()">Download Attendance PDF</button>
+                </div>
+            `;
+
+            document.getElementById('viewResults').innerHTML = summary + html;
+            lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames, records: attendanceRows };
         }
 
         function shareAttendanceWhatsApp() {
@@ -4046,6 +4331,119 @@
             const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
             const safeDate = String(date || new Date().toISOString().split('T')[0]);
             doc.save(`Daily_Attendance_${safeRegion}_${safeBatch}_${safeDate}.pdf`);
+        }
+
+        async function viewPlannedStudentsAttendance() {
+            const region = document.getElementById('viewRegion').value;
+            const batch = document.getElementById('viewBatch').value;
+            const date = document.getElementById('viewDate').value;
+            const selectedMonth = document.getElementById('viewPlannedMonth')?.value || (date ? date.slice(0, 7) : today.slice(0, 7));
+
+            if (!region || !batch) {
+                alert('Please select region and batch (or all batches).');
+                return;
+            }
+
+            try {
+                const monthMatch = /^(\d{4})-(\d{2})$/.exec(String(selectedMonth || ''));
+                if (!monthMatch) {
+                    alert('Please select a valid month for planned attendance.');
+                    return;
+                }
+
+                const year = Number(monthMatch[1]);
+                const month = Number(monthMatch[2]);
+                const thisMonthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+                const thisMonthLastDay = new Date(year, month, 0).getDate();
+                const thisMonthEnd = `${year}-${String(month).padStart(2, '0')}-${String(thisMonthLastDay).padStart(2, '0')}`;
+
+                const prevMonth = month === 1 ? 12 : month - 1;
+                const prevYear = month === 1 ? year - 1 : year;
+                const prevMonthStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
+
+                const params = new URLSearchParams();
+                params.append('region', region);
+                params.append('batchNumber', batch);
+                params.append('startDate', prevMonthStart);
+                params.append('endDate', thisMonthEnd);
+
+                const res = await fetch(`/api/attendance/planned-absences?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+
+                const rows = await res.json();
+                if (!rows || rows.length === 0) {
+                    document.getElementById('viewResults').innerHTML = `
+                        <div class="alert alert-warning">No planned students attendance found for selected region/batch in ${prevMonthStart} to ${thisMonthEnd}.</div>
+                    `;
+                    return;
+                }
+
+                const sortedRows = rows.slice().sort((a, b) => {
+                    if (a.fromDate === b.fromDate) return String(a.studentName || '').localeCompare(String(b.studentName || ''));
+                    return String(a.fromDate || '').localeCompare(String(b.fromDate || ''));
+                });
+
+                let html = `
+                    <div class="alert alert-info">
+                        <strong>Planned Students Attendance:</strong>
+                        Region <span class="badge bg-primary">${escapeHtml(region)}</span>
+                        | Batch <span class="badge bg-dark">${escapeHtml(batch)}</span>
+                        ${date ? `| Selected Date <span class="badge bg-secondary">${escapeHtml(date)}</span>` : ''}
+                        | Month <span class="badge bg-info text-dark">${escapeHtml(selectedMonth)}</span>
+                        | Range <span class="badge bg-secondary">${escapeHtml(prevMonthStart)} to ${escapeHtml(thisMonthEnd)}</span>
+                        | Total <span class="badge bg-success">${sortedRows.length}</span>
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-light">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th>Batch Number</th>
+                                <th>Month</th>
+                                <th>Planned From</th>
+                                <th>Planned To</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                sortedRows.forEach((item, index) => {
+                    const fromMonth = String(item.fromDate || '').slice(0, 7);
+                    const toMonth = String(item.toDate || '').slice(0, 7);
+                    const monthLabel = fromMonth && toMonth
+                        ? (fromMonth === toMonth ? fromMonth : `${fromMonth} to ${toMonth}`)
+                        : '-';
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(item.studentName || '-')}</td>
+                            <td>${escapeHtml(item.batchNumber || '-')}</td>
+                            <td>${escapeHtml(monthLabel)}</td>
+                            <td>${escapeHtml(item.fromDate || '-')}</td>
+                            <td>${escapeHtml(item.toDate || '-')}</td>
+                            <td>${escapeHtml(item.reason || '-')}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                document.getElementById('viewResults').innerHTML = html;
+            } catch (error) {
+                console.error('Error loading planned students attendance:', error);
+                document.getElementById('viewResults').innerHTML =
+                    `<div class="alert alert-danger">Failed to load planned students attendance: ${escapeHtml(error.message)}</div>`;
+            }
         }
 
         async function shareDailySummaryAllBatches() {

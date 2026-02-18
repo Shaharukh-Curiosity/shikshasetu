@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Attendance = require('../models/Attendance');
+const PlannedAbsence = require('../models/PlannedAbsence');
 const ContactLog = require('../models/ContactLog');
 const User = require('../models/User');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
@@ -9,6 +10,15 @@ const { logAudit } = require('../utils/audit');
 const VALID_STATUSES = new Set(['present', 'absent', 'late', 'leave']);
 const PRESENT_STATUSES = new Set(['present', 'late', 'leave']);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeDateOnly(value) {
+  return String(value || '').slice(0, 10);
+}
+
+function isValidDateOnly(value) {
+  return DATE_REGEX.test(value);
+}
 
 // ============================================
 // MARK ATTENDANCE - SIMPLEST POSSIBLE
@@ -161,6 +171,219 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
 });
 
 // ============================================
+// PLANNED ABSENCE - CREATE
+// ============================================
+router.post('/planned-absences', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const studentId = String(req.body?.studentId || '');
+    const fromDate = normalizeDateOnly(req.body?.fromDate);
+    const toDate = normalizeDateOnly(req.body?.toDate);
+    const reason = String(req.body?.reason || '').trim();
+
+    if (!studentId || !fromDate || !toDate || !reason) {
+      return res.status(400).json({ message: 'studentId, fromDate, toDate and reason are required' });
+    }
+    if (!isValidDateOnly(fromDate) || !isValidDateOnly(toDate)) {
+      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    if (fromDate > toDate) {
+      return res.status(400).json({ message: 'fromDate cannot be after toDate' });
+    }
+    if (reason.length > 200) {
+      return res.status(400).json({ message: 'Reason is too long (max 200 characters)' });
+    }
+
+    const student = await User.findOne({ _id: studentId, role: 'student' }).lean();
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    const overlapping = await PlannedAbsence.findOne({
+      studentId,
+      status: 'active',
+      fromDate: { $lte: toDate },
+      toDate: { $gte: fromDate }
+    }).lean();
+
+    if (overlapping) {
+      const mergedFromDate = overlapping.fromDate < fromDate ? overlapping.fromDate : fromDate;
+      const mergedToDate = overlapping.toDate > toDate ? overlapping.toDate : toDate;
+
+      const planned = await PlannedAbsence.findByIdAndUpdate(
+        overlapping._id,
+        {
+          $set: {
+            fromDate: mergedFromDate,
+            toDate: mergedToDate,
+            reason
+          }
+        },
+        { new: true }
+      ).lean();
+
+      const attendanceReasonUpdate = await Attendance.updateMany(
+        {
+          studentId,
+          status: 'absent',
+          date: { $gte: fromDate, $lte: toDate },
+          $or: [{ note: { $exists: false } }, { note: '' }]
+        },
+        { $set: { note: reason } }
+      );
+
+      await logAudit({
+        req,
+        action: 'planned_absence_reason_update',
+        entity: 'planned_absence',
+        entityId: String(planned?._id || overlapping._id),
+        meta: {
+          studentId,
+          requestedFromDate: fromDate,
+          requestedToDate: toDate,
+          mergedFromDate,
+          mergedToDate,
+          reason,
+          attendanceNotesUpdated: attendanceReasonUpdate.modifiedCount || 0
+        }
+      });
+
+      return res.json({
+        message: 'Reason saved on existing planned absence',
+        plannedAbsence: planned,
+        attendanceNotesUpdated: attendanceReasonUpdate.modifiedCount || 0
+      });
+    }
+
+    const planned = await PlannedAbsence.create({
+      studentId,
+      studentName: student.name,
+      region: student.region || '',
+      schoolName: student.schoolName || '',
+      batchNumber: student.batchNumber || '',
+      fromDate,
+      toDate,
+      reason,
+      createdBy: String(req.user._id),
+      createdByName: req.user.name || ''
+    });
+
+    const attendanceReasonUpdate = await Attendance.updateMany(
+      {
+        studentId,
+        status: 'absent',
+        date: { $gte: fromDate, $lte: toDate },
+        $or: [{ note: { $exists: false } }, { note: '' }]
+      },
+      { $set: { note: reason } }
+    );
+
+    await logAudit({
+      req,
+      action: 'planned_absence_create',
+      entity: 'planned_absence',
+      entityId: String(planned._id),
+      meta: {
+        studentId,
+        fromDate,
+        toDate,
+        reason,
+        attendanceNotesUpdated: attendanceReasonUpdate.modifiedCount || 0
+      }
+    });
+
+    return res.json({
+      message: 'Planned absence created',
+      plannedAbsence: planned,
+      attendanceNotesUpdated: attendanceReasonUpdate.modifiedCount || 0
+    });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// PLANNED ABSENCE - LIST
+// ============================================
+router.get('/planned-absences', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, studentId, date, startDate, endDate } = req.query;
+    const query = { status: 'active' };
+
+    if (studentId) query.studentId = String(studentId);
+    if (region) query.region = String(region);
+    if (batchNumber && batchNumber !== 'all') query.batchNumber = String(batchNumber);
+
+    if (date) {
+      const dateOnly = normalizeDateOnly(date);
+      if (!isValidDateOnly(dateOnly)) {
+        return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+      }
+      query.fromDate = { $lte: dateOnly };
+      query.toDate = { $gte: dateOnly };
+    } else if (startDate || endDate) {
+      const rangeStart = normalizeDateOnly(startDate);
+      const rangeEnd = normalizeDateOnly(endDate);
+      if (!rangeStart || !rangeEnd || !isValidDateOnly(rangeStart) || !isValidDateOnly(rangeEnd)) {
+        return res.status(400).json({ message: 'Invalid date range format. Use startDate/endDate as YYYY-MM-DD' });
+      }
+      if (rangeStart > rangeEnd) {
+        return res.status(400).json({ message: 'startDate cannot be after endDate' });
+      }
+      query.fromDate = { $lte: rangeEnd };
+      query.toDate = { $gte: rangeStart };
+    }
+
+    const rows = await PlannedAbsence.find(query).sort({ fromDate: 1, studentName: 1 }).lean();
+    return res.json(rows);
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// PLANNED ABSENCE - CANCEL
+// ============================================
+router.patch('/planned-absences/:id/cancel', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const doc = await PlannedAbsence.findOneAndUpdate(
+      { _id: id, status: 'active' },
+      {
+        $set: {
+          status: 'cancelled',
+          cancelledBy: String(req.user._id),
+          cancelledAt: new Date()
+        }
+      },
+      { new: true }
+    ).lean();
+
+    if (!doc) {
+      return res.status(404).json({ message: 'Planned absence not found or already cancelled' });
+    }
+
+    await logAudit({
+      req,
+      action: 'planned_absence_cancel',
+      entity: 'planned_absence',
+      entityId: String(doc._id),
+      meta: {
+        studentId: doc.studentId,
+        fromDate: doc.fromDate,
+        toDate: doc.toDate
+      }
+    });
+
+    return res.json({ message: 'Planned absence cancelled', plannedAbsence: doc });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
 // VIEW ATTENDANCE - SIMPLEST POSSIBLE
 // ============================================
 router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
@@ -217,6 +440,13 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
       studentId: { $in: studentIds },
       date: dateOnly
     }).lean();
+    const plannedAbsences = await PlannedAbsence.find({
+      studentId: { $in: studentIds },
+      status: 'active',
+      fromDate: { $lte: dateOnly },
+      toDate: { $gte: dateOnly }
+    }).lean();
+    const plannedMap = new Map(plannedAbsences.map(r => [String(r.studentId), r]));
 
     console.log('Found attendance records:', attendanceRecords.length);
 
@@ -267,6 +497,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     const results = students.map(student => {
       const studentIdStr = String(student._id);
       const attendance = attendanceMap[studentIdStr];
+      const planned = plannedMap.get(studentIdStr);
 
       console.log(`\n${student.name} (${studentIdStr}):`);
       console.log('  Has attendance?', attendance ? 'YES' : 'NO');
@@ -289,6 +520,13 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
           ? { status: prev2Map.get(studentIdStr).status, date: prev2Date }
           : null,
         recent: recentMap.get(studentIdStr) || [],
+        plannedAbsence: planned ? {
+          id: planned._id,
+          fromDate: planned.fromDate,
+          toDate: planned.toDate,
+          reason: planned.reason,
+          createdByName: planned.createdByName
+        } : null,
         attendance: attendance ? {
           status: attendance.status,
           note: attendance.note || '',

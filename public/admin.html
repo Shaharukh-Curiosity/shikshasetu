@@ -805,6 +805,7 @@
                             <td>${escapeHtml(s.mobile || '-')}</td>
                             <td class="d-flex gap-1 flex-wrap">
                                 <button class="btn btn-sm btn-info" onclick="viewStudentProfile('${s._id}')">View</button>
+                                <button class="btn btn-sm btn-success" onclick="reactivateInactiveStudent('${s._id}')">Activate</button>
                                 ${getInactiveCallButtonHtml(s.mobile)}
                                 <button class="btn btn-sm btn-danger" onclick="deleteInactiveStudent('${s._id}')">Delete</button>
                             </td>
@@ -821,6 +822,30 @@
                 contentEl.innerHTML = html;
             } catch (error) {
                 contentEl.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function reactivateInactiveStudent(studentId) {
+            if (!confirm('Activate this student so they appear as active again?')) return;
+            try {
+                const res = await fetch(`/api/students/${studentId}/status`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ isActive: true })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.message || 'Failed to activate student');
+                }
+                await loadInactiveStudentsDetails();
+                await loadStudents();
+                await loadStats();
+                alert('Student activated successfully.');
+            } catch (error) {
+                alert('Error activating student: ' + error.message);
             }
         }
 
