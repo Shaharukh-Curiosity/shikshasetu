@@ -7,6 +7,8 @@ const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const Marks = require('../models/Marks');
 const Presentation = require('../models/Presentation');
+const ExamPlan = require('../models/ExamPlan');
+const RegionMilestone = require('../models/RegionMilestone');
 const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const PRESENT_STATUSES = ['present', 'late', 'leave'];
@@ -336,6 +338,10 @@ router.get('/region-summary/:region', auth, isTeacherOrAdmin, async (req, res) =
         ]
       }).sort({ date: -1 }).select('date').lean()
     ]);
+    const [latestPlan, regionMilestone] = await Promise.all([
+      ExamPlan.findOne({ region }).sort({ updatedAt: -1 }).lean(),
+      RegionMilestone.findOne({ region }).lean()
+    ]);
 
     const presentationDate = [latestPresentationInMarks?.date, latestPresentationInTable?.date]
       .filter(Boolean)
@@ -345,11 +351,11 @@ router.get('/region-summary/:region', auth, isTeacherOrAdmin, async (req, res) =
     res.json({
       region,
       totalStudents,
-      projectInaugurationDate: projectInaugurationDate ? projectInaugurationDate.toISOString().slice(0, 10) : null,
-      theoryDate: latestTheory?.date || null,
-      practicalDate: latestPractical?.date || null,
-      presentationDate,
-      certificateDate: null
+      projectInaugurationDate: regionMilestone?.projectInaugurationDate || (projectInaugurationDate ? projectInaugurationDate.toISOString().slice(0, 10) : null),
+      theoryDate: latestPlan?.theoryDate || latestTheory?.date || null,
+      practicalDate: latestPlan?.practicalDate || latestPractical?.date || null,
+      presentationDate: latestPlan?.presentationDate || presentationDate,
+      certificateDate: latestPlan?.certificateDate || null
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to load region summary', details: error.message });

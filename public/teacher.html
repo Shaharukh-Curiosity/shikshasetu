@@ -623,7 +623,7 @@
                         </div>
                         <div class="col-md-3">
                             <label>Batch</label>
-                            <select class="form-select" id="marksBatch" onchange="loadMarksStudents()">
+                            <select class="form-select" id="marksBatch" onchange="loadMarksStudents(); loadExamPlan(true);">
                                 <option value="">Select Batch</option>
                             </select>
                         </div>
@@ -632,6 +632,44 @@
                             <input type="date" class="form-control" id="marksDate" required onchange="loadMarksStudents()">
                         </div>
                     </div>
+
+                    <div class="card border mt-3 mb-3">
+                        <div class="card-body">
+                            <h6 class="mb-3">Saved Exam Plan (Region + Batch)</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label>Project Inauguration Date</label>
+                                    <input type="date" class="form-control" id="examPlanInaugurationDate">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Theory Date</label>
+                                    <input type="date" class="form-control" id="examPlanTheoryDate">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Practical Date</label>
+                                    <input type="date" class="form-control" id="examPlanPracticalDate">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Presentation Date</label>
+                                    <input type="date" class="form-control" id="examPlanPresentationDate">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>Certificate Date</label>
+                                    <input type="date" class="form-control" id="examPlanCertificateDate">
+                                </div>
+                                <div class="col-md-4">
+                                    <label>&nbsp;</label>
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-outline-secondary" onclick="loadExamPlan()">Load Plan</button>
+                                        <button class="btn btn-outline-primary" onclick="saveExamPlan()">Save Plan</button>
+                                        <button class="btn btn-warning" onclick="viewResultByPlan()">View Result By Saved Plan</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="small text-muted mt-2" id="examPlanMeta"></div>
+                        </div>
+                    </div>
+                    <div id="examPlanResults" class="mb-3"></div>
 
                     <div id="marksTable"></div>
                 </div>
@@ -930,6 +968,11 @@
                 'examMissedPresentationDate',
                 'examMissedStartDate',
                 'examMissedEndDate',
+                'examPlanInaugurationDate',
+                'examPlanTheoryDate',
+                'examPlanPracticalDate',
+                'examPlanPresentationDate',
+                'examPlanCertificateDate',
                 'presentationDate',
                 'workDate',
                 'workViewDate',
@@ -2149,6 +2192,9 @@
             if (!region) {
                 select.innerHTML = '<option value="">Select Batch</option>';
                 document.getElementById('marksTable').innerHTML = '';
+                const planResultsEl = document.getElementById('examPlanResults');
+                if (planResultsEl) planResultsEl.innerHTML = '';
+                setExamPlanInputs(null);
                 return;
             }
 
@@ -2158,11 +2204,15 @@
                 });
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const batches = await res.json();
-                select.innerHTML = '<option value="">Select Batch</option>';
+                select.innerHTML = '<option value="all">All Batches</option>';
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
+                select.value = 'all';
                 document.getElementById('marksTable').innerHTML = '';
+                const planResultsEl = document.getElementById('examPlanResults');
+                if (planResultsEl) planResultsEl.innerHTML = '';
+                setExamPlanInputs(null);
             } catch (error) {
                 console.error('Error loading marks batches:', error);
             }
@@ -2172,6 +2222,8 @@
             const region = document.getElementById('marksRegion').value;
             const batch = document.getElementById('marksBatch').value;
             const date = document.getElementById('marksDate').value;
+            const planResultsEl = document.getElementById('examPlanResults');
+            if (planResultsEl) planResultsEl.innerHTML = '';
 
             if (!region || !batch || !date) return;
 
@@ -2467,6 +2519,181 @@
                 select.value = 'all';
             } catch (error) {
                 console.error('? Error loading result batches:', error);
+            }
+        }
+
+        function setExamPlanInputs(plan) {
+            const mappings = [
+                ['examPlanInaugurationDate', plan?.projectInaugurationDate || ''],
+                ['examPlanTheoryDate', plan?.theoryDate || ''],
+                ['examPlanPracticalDate', plan?.practicalDate || ''],
+                ['examPlanPresentationDate', plan?.presentationDate || ''],
+                ['examPlanCertificateDate', plan?.certificateDate || '']
+            ];
+            mappings.forEach(([id, value]) => {
+                const el = document.getElementById(id);
+                if (el) el.value = value;
+            });
+
+            const metaEl = document.getElementById('examPlanMeta');
+            if (metaEl) {
+                if (plan?.updatedAt) {
+                    metaEl.textContent = `Plan updated by ${plan.updatedByName || 'Unknown'} on ${new Date(plan.updatedAt).toLocaleString()}`;
+                } else {
+                    metaEl.textContent = 'No saved plan yet for this region and batch.';
+                }
+            }
+        }
+
+        async function loadExamPlan(silent = false) {
+            const region = document.getElementById('marksRegion')?.value || '';
+            const batch = document.getElementById('marksBatch')?.value || '';
+            if (!region || !batch || String(batch).toLowerCase() === 'all') {
+                if (!silent) {
+                    alert('Please select region and a specific batch to load plan');
+                }
+                setExamPlanInputs(null);
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/exam-plan?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                setExamPlanInputs(data);
+            } catch (error) {
+                console.error('Error loading exam plan:', error);
+                if (!silent) {
+                    alert(`Failed to load exam plan: ${error.message}`);
+                }
+            }
+        }
+
+        async function saveExamPlan() {
+            const region = document.getElementById('marksRegion')?.value || '';
+            const batch = document.getElementById('marksBatch')?.value || '';
+            if (!region || !batch || String(batch).toLowerCase() === 'all') {
+                alert('Please select region and a specific batch to save plan');
+                return;
+            }
+
+            const payload = {
+                region,
+                batchNumber: batch,
+                projectInaugurationDate: document.getElementById('examPlanInaugurationDate')?.value || null,
+                theoryDate: document.getElementById('examPlanTheoryDate')?.value || null,
+                practicalDate: document.getElementById('examPlanPracticalDate')?.value || null,
+                presentationDate: document.getElementById('examPlanPresentationDate')?.value || null,
+                certificateDate: document.getElementById('examPlanCertificateDate')?.value || null
+            };
+
+            try {
+                const res = await fetch('/api/exam-plan', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                setExamPlanInputs(data);
+                alert('Exam plan saved successfully.');
+            } catch (error) {
+                console.error('Error saving exam plan:', error);
+                alert(`Failed to save exam plan: ${error.message}`);
+            }
+        }
+
+        async function viewResultByPlan() {
+            const region = document.getElementById('marksRegion')?.value || '';
+            const batch = document.getElementById('marksBatch')?.value || '';
+            const planResultsEl = document.getElementById('examPlanResults');
+            if (!region || !batch || String(batch).toLowerCase() === 'all') {
+                alert('Please select region and a specific batch');
+                return;
+            }
+
+            const params = new URLSearchParams({ region, batchNumber: batch });
+            const theoryDate = document.getElementById('examPlanTheoryDate')?.value || '';
+            const practicalDate = document.getElementById('examPlanPracticalDate')?.value || '';
+            const presentationDate = document.getElementById('examPlanPresentationDate')?.value || '';
+            if (theoryDate) params.set('theoryDate', theoryDate);
+            if (practicalDate) params.set('practicalDate', practicalDate);
+            if (presentationDate) params.set('presentationDate', presentationDate);
+
+            try {
+                const res = await fetch(`/api/marks/by-plan?${params.toString()}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                const students = Array.isArray(data.students) ? data.students : [];
+                const usedDates = data.usedDates || {};
+                if (!students.length) {
+                    if (planResultsEl) planResultsEl.innerHTML =
+                        '<div class="alert alert-warning">No students found for selected filters</div>';
+                    return;
+                }
+
+                let html = `
+                    <div class="alert alert-info">
+                        <strong>Region:</strong> ${escapeHtml(region)} &nbsp; | &nbsp;
+                        <strong>Batch:</strong> ${escapeHtml(batch)}<br>
+                        <strong>Plan Dates:</strong>
+                        Theory: ${escapeHtml(usedDates.theoryDate || '-')},
+                        Practical: ${escapeHtml(usedDates.practicalDate || '-')},
+                        Presentation: ${escapeHtml(usedDates.presentationDate || '-')}
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th class="text-center">Theory</th>
+                                <th class="text-center">Practical</th>
+                                <th class="text-center">Presentation</th>
+                                <th class="text-center">Total Obtained</th>
+                                <th class="text-center">Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                students.forEach((student, index) => {
+                    const m = student.marks || {};
+                    const theory = (m.theory === null || m.theory === undefined) ? '<span class="badge bg-secondary">MISSED</span>' : m.theory;
+                    const practical = (m.practical === null || m.practical === undefined) ? '<span class="badge bg-secondary">MISSED</span>' : m.practical;
+                    const presentation = (m.presentation === null || m.presentation === undefined) ? '<span class="badge bg-secondary">MISSED</span>' : m.presentation;
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(student.name || '-')}</td>
+                            <td class="text-center">${theory}</td>
+                            <td class="text-center">${practical}</td>
+                            <td class="text-center">${presentation}</td>
+                            <td class="text-center">${Number(m.totalObtained || 0)}</td>
+                            <td class="text-center"><span class="badge bg-primary">${Number(m.percentage || 0).toFixed(2)}%</span></td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                if (planResultsEl) planResultsEl.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading plan-based result:', error);
+                if (planResultsEl) planResultsEl.innerHTML =
+                    `<div class="alert alert-danger">Error loading plan-based result: ${error.message}</div>`;
             }
         }
 
@@ -5368,7 +5595,9 @@
                     <table class="table table-bordered table-striped">
                         <thead class="table-dark">
                             <tr>
+                                <th class="text-center">S.No</th>
                                 <th>Student Name</th>
+                                <th>Date of Joining</th>
                                 <th>Batch</th>
                                 <th class="text-center">Total Classes</th>
                                 <th class="text-center">Marked</th>
@@ -5380,8 +5609,14 @@
                         </thead>
                         <tbody>
                 `;
+                const formatJoinDate = (value) => {
+                    if (!value) return '-';
+                    const d = new Date(value);
+                    if (Number.isNaN(d.getTime())) return '-';
+                    return d.toISOString().split('T')[0];
+                };
 
-                mergedSummary.forEach(student => {
+                mergedSummary.forEach((student, index) => {
                     const percentage = parseFloat(student.percentage);
                     let percentBadge = 'bg-danger';
                     if (percentage >= 75) {
@@ -5395,7 +5630,9 @@
 
                     html += `
                         <tr>
+                            <td class="text-center">${index + 1}</td>
                             <td>${student.name}</td>
+                            <td>${formatJoinDate(student.enrollmentDate)}</td>
                             <td>${student.reportBatch || '-'}</td>
                             <td class="text-center"><strong>${student.totalClasses}</strong></td>
                             <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>

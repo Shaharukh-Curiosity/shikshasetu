@@ -32,6 +32,7 @@ app.use('/api/workReport', require('./routes/workReport'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/presentations', require('./routes/presentations'));
 app.use('/api/bus-inventory', require('./routes/busInventory'));
+app.use('/api/exam-plan', require('./routes/examPlan'));
 
 // Serve HTML pages
 app.get('/', (req, res) => {

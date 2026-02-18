@@ -3,6 +3,8 @@ const router = express.Router();
 const Marks = require('../models/Marks');
 const Presentation = require('../models/Presentation');
 const ExamAttendance = require('../models/ExamAttendance');
+const ExamPlan = require('../models/ExamPlan');
+const RegionMilestone = require('../models/RegionMilestone');
 const User = require('../models/User');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 
@@ -213,6 +215,125 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     });
 
     res.json(results);
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// VIEW MARKS BY EXAM PLAN (SEPARATE DATES)
+// ============================================
+router.get('/by-plan', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const region = String(req.query.region || '').trim();
+    const batchNumber = String(req.query.batchNumber || '').trim();
+    if (!region || !batchNumber) {
+      return res.status(400).json({ message: 'Missing parameters: region, batchNumber' });
+    }
+    if (batchNumber.toLowerCase() === 'all') {
+      return res.status(400).json({ message: 'Please select a specific batch for plan-based result' });
+    }
+
+    const toDateOnly = (value) => String(value || '').trim().substring(0, 10);
+    const cleanTheoryDateInput = toDateOnly(req.query.theoryDate);
+    const cleanPracticalDateInput = toDateOnly(req.query.practicalDate);
+    const cleanPresentationDateInput = toDateOnly(req.query.presentationDate);
+
+    const [plan, milestone] = await Promise.all([
+      ExamPlan.findOne({ region, batchNumber }).lean(),
+      RegionMilestone.findOne({ region }).lean()
+    ]);
+    const usedDates = {
+      theoryDate: cleanTheoryDateInput || (plan?.theoryDate || null),
+      practicalDate: cleanPracticalDateInput || (plan?.practicalDate || null),
+      presentationDate: cleanPresentationDateInput || (plan?.presentationDate || null),
+      projectInaugurationDate: milestone?.projectInaugurationDate || null,
+      certificateDate: plan?.certificateDate || null
+    };
+
+    if (!usedDates.theoryDate || !usedDates.practicalDate || !usedDates.presentationDate) {
+      return res.status(400).json({
+        message: 'Missing exam plan dates. Please save Theory, Practical, and Presentation dates first.',
+        usedDates
+      });
+    }
+
+    const students = await User.find({
+      role: 'student',
+      region,
+      batchNumber,
+      isActive: true
+    }).lean();
+
+    if (!students || students.length === 0) {
+      return res.json({ usedDates, students: [] });
+    }
+
+    const [theoryMarks, practicalMarks, presentationMarks, presentationRows] = await Promise.all([
+      Marks.find({ region, batchNumber, date: usedDates.theoryDate }).lean(),
+      Marks.find({ region, batchNumber, date: usedDates.practicalDate }).lean(),
+      Marks.find({ region, batchNumber, date: usedDates.presentationDate }).lean(),
+      Presentation.find({ region, batchNumber, date: usedDates.presentationDate }).lean()
+    ]);
+
+    const hasValue = (v) => v !== null && v !== undefined;
+    const computePresentationFromTable = (p) => {
+      if (!p) return null;
+      if (Number.isFinite(p.presentationMarks)) return Number(p.presentationMarks);
+      const evalData = p.evaluation || {};
+      const content = Number(evalData.content);
+      const design = Number(evalData.design);
+      const communication = Number(evalData.communication);
+      const hasAny = Number.isFinite(content) || Number.isFinite(design) || Number.isFinite(communication);
+      if (!hasAny) return null;
+      return Math.max(0, Math.min(20, (Number.isFinite(content) ? content : 0) + (Number.isFinite(design) ? design : 0) + (Number.isFinite(communication) ? communication : 0)));
+    };
+
+    const theoryMap = new Map(theoryMarks.map(r => [String(r.studentId), r]));
+    const practicalMap = new Map(practicalMarks.map(r => [String(r.studentId), r]));
+    const presentationMap = new Map(presentationMarks.map(r => [String(r.studentId), r]));
+    const presentationTableMap = new Map(presentationRows.map(r => [String(r.studentId), r]));
+
+    const results = students.map((student) => {
+      const studentId = String(student._id);
+      const t = theoryMap.get(studentId);
+      const p = practicalMap.get(studentId);
+      const pm = presentationMap.get(studentId);
+      const pt = presentationTableMap.get(studentId);
+
+      const theory = (t && hasValue(t.theory)) ? Number(t.theory) : null;
+      const practical = (p && hasValue(p.practical)) ? Number(p.practical) : null;
+      const presentationFromMarks = (pm && hasValue(pm.presentation)) ? Number(pm.presentation) : null;
+      const presentationFromTable = computePresentationFromTable(pt);
+      const presentation = presentationFromMarks !== null ? presentationFromMarks : presentationFromTable;
+
+      const totalObtained = (theory || 0) + (practical || 0) + (presentation || 0);
+      const percentage = Number(((totalObtained / TOTAL_MARKS) * 100).toFixed(2));
+
+      return {
+        _id: student._id,
+        name: student.name,
+        schoolName: student.schoolName,
+        standard: student.standard,
+        batchNumber: student.batchNumber,
+        marks: {
+          theory,
+          practical,
+          presentation,
+          totalMarks: TOTAL_MARKS,
+          totalObtained,
+          percentage,
+          missingComponents: {
+            theory: theory === null,
+            practical: practical === null,
+            presentation: presentation === null
+          }
+        }
+      };
+    });
+
+    res.json({ usedDates, students: results });
   } catch (error) {
     console.error('FATAL ERROR:', error);
     res.status(500).json({ message: 'Server error' });
@@ -481,16 +602,18 @@ router.get('/exam-attendance/by-batch', auth, isTeacherOrAdmin, async (req, res)
   try {
     const { region, batchNumber, date } = req.query;
 
-    if (!region || !batchNumber || !date) {
+    if (!region || !date) {
       return res.status(400).json({ message: 'Missing parameters' });
     }
 
     const dateOnly = date.substring(0, 10);
+    const useAllBatches = !batchNumber || String(batchNumber).toLowerCase() === 'all';
+    const batchFilter = useAllBatches ? {} : { batchNumber };
 
     const students = await User.find({
       role: 'student',
       region,
-      batchNumber,
+      ...batchFilter,
       isActive: true
     }).lean();
 
@@ -500,7 +623,7 @@ router.get('/exam-attendance/by-batch', auth, isTeacherOrAdmin, async (req, res)
 
     const records = await ExamAttendance.find({
       region,
-      batchNumber,
+      ...batchFilter,
       date: dateOnly
     }).lean();
     const recordMap = new Map(records.map(r => [String(r.studentId), r]));
