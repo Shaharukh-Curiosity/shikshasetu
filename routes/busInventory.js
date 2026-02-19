@@ -4,19 +4,19 @@ const BusInventory = require('../models/BusInventory');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 
 const DEFAULT_ITEMS = [
-  { name: 'Computers', quantity: 26, remarks: '' },
-  { name: 'AC', quantity: 2, remarks: '' },
-  { name: 'Fans', quantity: 14, remarks: '' },
-  { name: 'Fire Extinguishers', quantity: 2, remarks: '' },
-  { name: 'Markers', quantity: 2, remarks: '' },
-  { name: 'Routers', quantity: 1, remarks: '' },
-  { name: 'Switch', quantity: 1, remarks: '' },
-  { name: 'Cameras', quantity: 2, remarks: '' },
-  { name: 'DVR', quantity: 1, remarks: '' },
-  { name: 'Solar Inverter', quantity: 1, remarks: '' },
-  { name: 'Monitors', quantity: 26, remarks: '' },
-  { name: 'Keyboards', quantity: 26, remarks: '' },
-  { name: 'Mouse', quantity: 26, remarks: '' }
+  { name: 'Computers', category: 'Hardware', quantity: 26, location: 'Bus', remarks: '' },
+  { name: 'AC', category: 'Electrical', quantity: 2, location: 'Bus', remarks: '' },
+  { name: 'Fans', category: 'Electrical', quantity: 14, location: 'Bus', remarks: '' },
+  { name: 'Fire Extinguishers', category: 'Safety', quantity: 2, location: 'Bus', remarks: '' },
+  { name: 'Markers', category: 'Stationery', quantity: 2, location: 'Bus', remarks: '' },
+  { name: 'Routers', category: 'Networking', quantity: 1, location: 'Bus', remarks: '' },
+  { name: 'Switch', category: 'Networking', quantity: 1, location: 'Bus', remarks: '' },
+  { name: 'Cameras', category: 'Security', quantity: 2, location: 'Bus', remarks: '' },
+  { name: 'DVR', category: 'Security', quantity: 1, location: 'Bus', remarks: '' },
+  { name: 'Solar Inverter', category: 'Power', quantity: 1, location: 'Bus', remarks: '' },
+  { name: 'Monitors', category: 'Hardware', quantity: 26, location: 'Bus', remarks: '' },
+  { name: 'Keyboards', category: 'Hardware', quantity: 26, location: 'Bus', remarks: '' },
+  { name: 'Mouse', category: 'Hardware', quantity: 26, location: 'Bus', remarks: '' }
 ];
 
 // @route   GET /api/bus-inventory
@@ -39,7 +39,9 @@ router.get('/', auth, isTeacherOrAdmin, async (req, res) => {
       return found
         ? {
             name: item.name,
+            category: String(found.category || item.category || ''),
             quantity: Number(found.quantity) || 0,
+            location: 'Bus',
             remarks: String(found.remarks || '')
           }
         : item;
@@ -79,7 +81,9 @@ router.get('/details', auth, isTeacherOrAdmin, async (req, res) => {
       return found
         ? {
             name: item.name,
+            category: String(found.category || item.category || ''),
             quantity: Number(found.quantity) || 0,
+            location: 'Bus',
             remarks: String(found.remarks || '')
           }
         : item;
@@ -90,7 +94,9 @@ router.get('/details', auth, isTeacherOrAdmin, async (req, res) => {
       updatedAt: h.updatedAt || null,
       items: (h.items || []).map((i) => ({
         name: i.name,
+        category: String(i.category || ''),
         quantity: Number(i.quantity) || 0,
+        location: 'Bus',
         remarks: String(i.remarks || '')
       }))
     })).sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
@@ -121,7 +127,9 @@ router.put('/', auth, isTeacherOrAdmin, async (req, res) => {
 
     const cleanedItems = items.map((item) => ({
       name: String(item.name || '').trim(),
+      category: String(item.category || '').trim(),
       quantity: Math.max(0, Number(item.quantity) || 0),
+      location: 'Bus',
       remarks: String(item.remarks || '').trim()
     })).filter((item) => item.name);
 

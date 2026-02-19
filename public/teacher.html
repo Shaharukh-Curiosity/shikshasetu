@@ -531,6 +531,7 @@
                         <h5 class="card-title mb-0">Bus On Wheels Inventory</h5>
                         <div class="d-flex gap-2" id="busInventoryActions">
                             <button class="btn btn-outline-primary" onclick="viewBusInventoryDetails()">View Inventory Details</button>
+                            <button class="btn btn-outline-success" onclick="shareBusInventoryToWhatsApp()">Share to WhatsApp</button>
                             <button class="btn btn-success" onclick="saveBusInventory()">Save Inventory</button>
                         </div>
                     </div>
@@ -540,14 +541,16 @@
                             <table class="table table-bordered align-middle">
                                 <thead class="table-light">
                                     <tr>
-                                        <th style="width: 35%;">Item</th>
-                                        <th style="width: 20%;">Quantity</th>
-                                        <th style="width: 45%;">Remarks</th>
+                                        <th style="width: 24%;">Item Name</th>
+                                        <th style="width: 18%;">Category</th>
+                                        <th style="width: 14%;">Quantity</th>
+                                        <th style="width: 14%;">Location</th>
+                                        <th style="width: 30%;">Remarks</th>
                                     </tr>
                                 </thead>
                                 <tbody id="busInventoryTableBody">
                                     <tr>
-                                        <td colspan="3" class="text-center text-muted">Loading...</td>
+                                        <td colspan="5" class="text-center text-muted">Loading...</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -3910,12 +3913,30 @@
                     <td>${escapeHtml(item.name)}</td>
                     <td>
                         <input
+                            type="text"
+                            class="form-control"
+                            maxlength="120"
+                            placeholder="Enter category"
+                            value="${escapeHtml(item.category || '')}"
+                            onchange="updateBusInventoryCategory(${index}, this.value)"
+                        >
+                    </td>
+                    <td>
+                        <input
                             type="number"
                             class="form-control"
                             min="0"
                             step="1"
                             value="${Number(item.quantity) || 0}"
                             onchange="updateBusInventoryQuantity(${index}, this.value)"
+                        >
+                    </td>
+                    <td>
+                        <input
+                            type="text"
+                            class="form-control"
+                            value="${escapeHtml(item.location || 'Bus')}"
+                            readonly
                         >
                     </td>
                     <td>
@@ -3932,14 +3953,21 @@
             `).join('');
         }
 
+        function updateBusInventoryCategory(index, value) {
+            if (!busInventoryData[index]) return;
+            busInventoryData[index].category = String(value || '').trim();
+        }
+
         function updateBusInventoryQuantity(index, value) {
             if (!busInventoryData[index]) return;
             busInventoryData[index].quantity = Math.max(0, Number(value) || 0);
+            busInventoryData[index].location = 'Bus';
         }
 
         function updateBusInventoryRemarks(index, value) {
             if (!busInventoryData[index]) return;
             busInventoryData[index].remarks = String(value || '').trim();
+            busInventoryData[index].location = 'Bus';
         }
 
         function setBusInventoryView(mode) {
@@ -3969,7 +3997,7 @@
             const metaEl = document.getElementById('busInventoryMeta');
             setBusInventoryView('edit');
             if (tableBody) {
-                tableBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">Loading...</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>';
             }
             try {
                 const res = await fetch('/api/bus-inventory', {
@@ -3978,6 +4006,11 @@
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const data = await res.json();
                 busInventoryData = Array.isArray(data.items) ? data.items : [];
+                busInventoryData = busInventoryData.map((item) => ({
+                    ...item,
+                    category: String(item.category || ''),
+                    location: 'Bus'
+                }));
                 renderBusInventoryTable();
                 if (metaEl) {
                     const updatedText = data.updatedAt
@@ -3988,7 +4021,7 @@
             } catch (error) {
                 console.error('Error loading bus inventory:', error);
                 if (tableBody) {
-                    tableBody.innerHTML = `<tr><td colspan="3" class="text-center text-danger">Failed to load inventory: ${escapeHtml(error.message)}</td></tr>`;
+                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Failed to load inventory: ${escapeHtml(error.message)}</td></tr>`;
                 }
             }
         }
@@ -4006,6 +4039,11 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
                 busInventoryData = Array.isArray(data.items) ? data.items : busInventoryData;
+                busInventoryData = busInventoryData.map((item) => ({
+                    ...item,
+                    category: String(item.category || ''),
+                    location: 'Bus'
+                }));
                 renderBusInventoryTable();
                 const metaEl = document.getElementById('busInventoryMeta');
                 if (metaEl && data.updatedAt) {
@@ -4037,7 +4075,9 @@
                     <tr>
                         <td>${idx + 1}</td>
                         <td>${escapeHtml(item.name)}</td>
+                        <td>${escapeHtml(item.category || '-')}</td>
                         <td>${Number(item.quantity) || 0}</td>
+                        <td>${escapeHtml(item.location || 'Bus')}</td>
                         <td>${escapeHtml(item.remarks || '-')}</td>
                     </tr>
                 `).join('');
@@ -4047,7 +4087,9 @@
                         <tr>
                             <td>${itemIdx + 1}</td>
                             <td>${escapeHtml(item.name || '-')}</td>
+                            <td>${escapeHtml(item.category || '-')}</td>
                             <td>${Number(item.quantity) || 0}</td>
+                            <td>${escapeHtml(item.location || 'Bus')}</td>
                             <td>${escapeHtml(item.remarks || '-')}</td>
                         </tr>
                     `).join('');
@@ -4067,13 +4109,15 @@
                                         <thead class="table-light">
                                             <tr>
                                                 <th>#</th>
-                                                <th>Item</th>
+                                                <th>Item Name</th>
+                                                <th>Category</th>
                                                 <th>Quantity</th>
+                                                <th>Location</th>
                                                 <th>Remarks</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            ${entryRows || '<tr><td colspan="4" class="text-center text-muted">No items found.</td></tr>'}
+                                            ${entryRows || '<tr><td colspan="6" class="text-center text-muted">No items found.</td></tr>'}
                                         </tbody>
                                     </table>
                                 </div>
@@ -4096,13 +4140,15 @@
                                     <thead class="table-light">
                                         <tr>
                                             <th>#</th>
-                                            <th>Item</th>
+                                            <th>Item Name</th>
+                                            <th>Category</th>
                                             <th>Quantity</th>
+                                            <th>Location</th>
                                             <th>Remarks</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        ${currentRows || '<tr><td colspan="4" class="text-center text-muted">No current items found.</td></tr>'}
+                                        ${currentRows || '<tr><td colspan="6" class="text-center text-muted">No current items found.</td></tr>'}
                                     </tbody>
                                 </table>
                             </div>
@@ -4113,6 +4159,85 @@
                 `;
             } catch (error) {
                 detailsEl.innerHTML = `<div class="alert alert-danger">Failed to load inventory details: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function shareBusInventoryToWhatsApp() {
+            const jsPdfLib = window.jspdf;
+            if (!jsPdfLib || !jsPdfLib.jsPDF) {
+                alert('PDF library not loaded. Please refresh and try again.');
+                return;
+            }
+
+            try {
+                if (!Array.isArray(busInventoryData) || busInventoryData.length === 0) {
+                    await loadBusInventory();
+                }
+
+                if (!Array.isArray(busInventoryData) || busInventoryData.length === 0) {
+                    alert('No bus inventory found to share.');
+                    return;
+                }
+
+                const rows = busInventoryData.map((item, idx) => ([
+                    String(idx + 1),
+                    String(item.name || '-'),
+                    String(item.category || '-'),
+                    String(Number(item.quantity) || 0),
+                    String(item.location || 'Bus'),
+                    String(item.remarks || '-')
+                ]));
+
+                const metaText = (document.getElementById('busInventoryMeta')?.textContent || '').trim();
+                const generatedAt = new Date().toLocaleString();
+                const doc = new jsPdfLib.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+
+                doc.setFontSize(16);
+                doc.text('Bus On Wheels Inventory Report', 40, 44);
+                doc.setFontSize(11);
+                doc.text(`Generated At: ${generatedAt}`, 40, 68);
+                doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 84);
+                doc.text(`Location: Bus`, 40, 100);
+                if (metaText) {
+                    doc.text(metaText, 40, 116);
+                }
+
+                doc.autoTable({
+                    startY: metaText ? 136 : 120,
+                    head: [['S.No', 'Item Name', 'Category', 'Quantity', 'Location', 'Remarks']],
+                    body: rows,
+                    styles: { fontSize: 10, cellPadding: 6 },
+                    headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 250, 250] },
+                    theme: 'grid'
+                });
+
+                const safeDate = new Date().toISOString().slice(0, 10);
+                const fileName = `Bus_On_Wheels_Inventory_${safeDate}.pdf`;
+                const pdfBlob = doc.output('blob');
+
+                let file = null;
+                try {
+                    file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                } catch (e) {
+                    file = null;
+                }
+
+                const shareText = `Bus On Wheels inventory report (${safeDate})`;
+                if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Bus On Wheels Inventory',
+                        text: shareText,
+                        files: [file]
+                    });
+                } else {
+                    doc.save(fileName);
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText + '. PDF downloaded. Please attach and send on WhatsApp.')}`;
+                    window.open(waUrl, '_blank');
+                }
+            } catch (error) {
+                console.error('Error sharing bus inventory to WhatsApp:', error);
+                alert('Failed to share bus inventory: ' + error.message);
             }
         }
 
