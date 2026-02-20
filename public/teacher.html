@@ -537,6 +537,17 @@
                             </div>
                         </div>
                     </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label>Student Filter</label>
+                            <select class="form-select" id="reportStudentFilter" onchange="applyReportStudentFilter()">
+                                <option value="all">All Students</option>
+                                <option value="all-attended">Attended All Classes</option>
+                                <option value="below-75">Attendance Below 75%</option>
+                                <option value="above-75">Attendance 75% and Above</option>
+                            </select>
+                        </div>
+                    </div>
 
                     <div id="reportResults"></div>
                 </div>
@@ -1094,6 +1105,7 @@
         let presentationEvaluationStudents = [];
         let lastViewAttendance = null;
         let lastViewRawStudents = [];
+        let lastReportRawData = null;
         let lastReportShareData = null;
         let analysisChart = null;
         let markFiltered = [];
@@ -5750,7 +5762,15 @@
 
         async function loadReportBatches() {
             const region = document.getElementById('reportRegion').value;
-            if (!region) return;
+            if (!region) {
+                const select = document.getElementById('reportBatch');
+                if (select) select.innerHTML = '<option value="">Select Batch</option>';
+                lastReportRawData = null;
+                lastReportShareData = null;
+                const reportResults = document.getElementById('reportResults');
+                if (reportResults) reportResults.innerHTML = '';
+                return;
+            }
 
             try {
                 const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
@@ -5765,6 +5785,10 @@
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
                 select.value = 'all';
+                lastReportRawData = null;
+                lastReportShareData = null;
+                const reportResults = document.getElementById('reportResults');
+                if (reportResults) reportResults.innerHTML = '';
             } catch (error) {
                 console.error('Error loading batches:', error);
             }
@@ -5804,6 +5828,187 @@
                 endInput.value = new Date().toISOString().split('T')[0];
             }
         }
+
+        function applyReportStudentFilter() {
+            if (!lastReportRawData || !Array.isArray(lastReportRawData.summary)) {
+                return;
+            }
+
+            const { region, batch, filterType, startDate, endDate, stats, summary } = lastReportRawData;
+            const studentFilter = document.getElementById('reportStudentFilter')?.value || 'all';
+
+            const withComputed = summary.map((student) => {
+                const totalClasses = Number(student.totalClasses || 0);
+                const presentTotal = Number(student.present || 0) + Number(student.late || 0) + Number(student.leave || 0);
+                const percentage = Number(student.percentage || 0);
+                const attendedAll = totalClasses > 0 && presentTotal >= totalClasses;
+                return { ...student, presentTotal, percentage, attendedAll };
+            });
+
+            const filterByType = (student) => {
+                if (studentFilter === 'all-attended') return student.attendedAll;
+                if (studentFilter === 'below-75') return student.percentage < 75;
+                if (studentFilter === 'above-75') return student.percentage >= 75;
+                return true;
+            };
+
+            const filteredSummary = withComputed.filter(filterByType);
+            const attendedAllCount = withComputed.filter(s => s.attendedAll).length;
+            const below75Count = withComputed.filter(s => s.percentage < 75).length;
+            const above75Count = withComputed.filter(s => s.percentage >= 75).length;
+
+            const batchWiseMap = {};
+            withComputed.forEach((student) => {
+                const b = String(student.reportBatch || student.batchNumber || '-');
+                if (!batchWiseMap[b]) {
+                    batchWiseMap[b] = {
+                        batch: b,
+                        total: 0,
+                        attendedAll: 0,
+                        below75: 0,
+                        above75: 0
+                    };
+                }
+                batchWiseMap[b].total += 1;
+                if (student.attendedAll) batchWiseMap[b].attendedAll += 1;
+                if (student.percentage < 75) batchWiseMap[b].below75 += 1;
+                if (student.percentage >= 75) batchWiseMap[b].above75 += 1;
+            });
+
+            const batchWiseRows = Object.values(batchWiseMap).sort((a, b) => a.batch.localeCompare(b.batch));
+            const activeFilterLabel = studentFilter === 'all-attended'
+                ? 'Attended All Classes'
+                : studentFilter === 'below-75'
+                    ? 'Attendance Below 75%'
+                    : studentFilter === 'above-75'
+                        ? 'Attendance 75% and Above'
+                        : 'All Students';
+
+            let html = `
+                <div class="alert alert-info">
+                    <h6>Summary Statistics</h6>
+                    <div class="row">
+                        <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
+                        <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
+                        <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
+                        <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
+                    </div>
+                    <p class="mt-2 mb-0"><strong>Period:</strong> ${stats.dateRange.start} to ${stats.dateRange.end}</p>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-3"><div class="card border-primary"><div class="card-body py-2"><small class="text-muted">Total Students</small><h5 class="mb-0">${withComputed.length}</h5></div></div></div>
+                    <div class="col-md-3"><div class="card border-success"><div class="card-body py-2"><small class="text-muted">Attended All Classes</small><h5 class="mb-0 text-success">${attendedAllCount}</h5></div></div></div>
+                    <div class="col-md-3"><div class="card border-danger"><div class="card-body py-2"><small class="text-muted">Below 75%</small><h5 class="mb-0 text-danger">${below75Count}</h5></div></div></div>
+                    <div class="col-md-3"><div class="card border-warning"><div class="card-body py-2"><small class="text-muted">75% and Above</small><h5 class="mb-0 text-warning">${above75Count}</h5></div></div></div>
+                </div>
+                <div class="alert alert-secondary py-2">
+                    <strong>Active Student Filter:</strong> ${activeFilterLabel} | <strong>Shown:</strong> ${filteredSummary.length} / ${withComputed.length}
+                </div>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered table-sm">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Batch</th>
+                                <th class="text-center">Total Students</th>
+                                <th class="text-center">Attended All Classes</th>
+                                <th class="text-center">Below 75%</th>
+                                <th class="text-center">75% and Above</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${batchWiseRows.map(r => `
+                                <tr>
+                                    <td>${r.batch}</td>
+                                    <td class="text-center">${r.total}</td>
+                                    <td class="text-center text-success"><strong>${r.attendedAll}</strong></td>
+                                    <td class="text-center text-danger"><strong>${r.below75}</strong></td>
+                                    <td class="text-center text-warning"><strong>${r.above75}</strong></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-center">S.No</th>
+                            <th>Student Name</th>
+                            <th>Date of Joining</th>
+                            <th>Batch</th>
+                            <th class="text-center">Total Classes</th>
+                            <th class="text-center">Marked</th>
+                            <th class="text-center">Present</th>
+                            <th class="text-center">Absent</th>
+                            <th class="text-center">Attendance %</th>
+                            <th>Marked By</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            const formatJoinDate = (value) => {
+                if (!value) return '-';
+                const d = new Date(value);
+                if (Number.isNaN(d.getTime())) return '-';
+                return d.toISOString().split('T')[0];
+            };
+
+            filteredSummary.forEach((student, index) => {
+                const percentage = Number(student.percentage || 0);
+                let percentBadge = 'bg-danger';
+                if (percentage >= 75) {
+                    percentBadge = 'bg-success';
+                } else if (percentage >= 50) {
+                    percentBadge = 'bg-warning';
+                }
+
+                const markedBy = student.markedBy || '-';
+                const presentTotal = student.presentTotal;
+
+                html += `
+                    <tr>
+                        <td class="text-center">${index + 1}</td>
+                        <td>${student.name}</td>
+                        <td>${formatJoinDate(student.enrollmentDate)}</td>
+                        <td>${student.reportBatch || '-'}</td>
+                        <td class="text-center"><strong>${student.totalClasses}</strong></td>
+                        <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
+                        <td class="text-center"><span class="badge bg-success">${presentTotal}</span></td>
+                        <td class="text-center"><span class="badge bg-danger">${student.absent}</span></td>
+                        <td class="text-center"><span class="badge ${percentBadge}">${percentage.toFixed(2)}%</span></td>
+                        <td>${markedBy}</td>
+                    </tr>
+                `;
+            });
+
+            if (filteredSummary.length === 0) {
+                html += `
+                    <tr>
+                        <td colspan="10" class="text-center text-muted">No students match the selected filter.</td>
+                    </tr>
+                `;
+            }
+
+            html += `
+                    </tbody>
+                </table>
+                </div>
+                <button class="btn btn-secondary mt-3" onclick="printReport()">Print Report</button>
+            `;
+
+            document.getElementById('reportResults').innerHTML = html;
+            lastReportShareData = {
+                region,
+                batch,
+                filterType,
+                startDate,
+                endDate,
+                stats,
+                summary: filteredSummary
+            };
+        }
+
         async function viewReport() {
             const region = document.getElementById('reportRegion').value;
             const batch = document.getElementById('reportBatch').value;
@@ -5841,6 +6046,7 @@
                     if (!Array.isArray(batches) || batches.length === 0) {
                         document.getElementById('reportResults').innerHTML =
                             '<div class="alert alert-warning">No batches found for this region</div>';
+                        lastReportRawData = null;
                         lastReportShareData = null;
                         return;
                     }
@@ -5875,84 +6081,11 @@
                 if (!mergedSummary || mergedSummary.length === 0) {
                     document.getElementById('reportResults').innerHTML =
                         '<div class="alert alert-warning">No attendance records found for the selected period</div>';
+                    lastReportRawData = null;
                     lastReportShareData = null;
                     return;
                 }
-
-                let html = `
-                    <div class="alert alert-info">
-                        <h6>Summary Statistics</h6>
-                        <div class="row">
-                            <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
-                            <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
-                            <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
-                            <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
-                        </div>
-                        <p class="mt-2 mb-0"><strong>Period:</strong> ${stats.dateRange.start} to ${stats.dateRange.end}</p>
-                    </div>
-
-                    <div class="table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th class="text-center">S.No</th>
-                                <th>Student Name</th>
-                                <th>Date of Joining</th>
-                                <th>Batch</th>
-                                <th class="text-center">Total Classes</th>
-                                <th class="text-center">Marked</th>
-                                <th class="text-center">Present</th>
-                                <th class="text-center">Absent</th>
-                                <th class="text-center">Attendance %</th>
-                                <th>Marked By</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                const formatJoinDate = (value) => {
-                    if (!value) return '-';
-                    const d = new Date(value);
-                    if (Number.isNaN(d.getTime())) return '-';
-                    return d.toISOString().split('T')[0];
-                };
-
-                mergedSummary.forEach((student, index) => {
-                    const percentage = parseFloat(student.percentage);
-                    let percentBadge = 'bg-danger';
-                    if (percentage >= 75) {
-                        percentBadge = 'bg-success';
-                    } else if (percentage >= 50) {
-                        percentBadge = 'bg-warning';
-                    }
-
-                    const markedBy = student.markedBy || '-';
-                    const presentTotal = (student.present || 0) + (student.late || 0) + (student.leave || 0);
-
-                    html += `
-                        <tr>
-                            <td class="text-center">${index + 1}</td>
-                            <td>${student.name}</td>
-                            <td>${formatJoinDate(student.enrollmentDate)}</td>
-                            <td>${student.reportBatch || '-'}</td>
-                            <td class="text-center"><strong>${student.totalClasses}</strong></td>
-                            <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
-                            <td class="text-center"><span class="badge bg-success">${presentTotal}</span></td>
-                            <td class="text-center"><span class="badge bg-danger">${student.absent}</span></td>
-                            <td class="text-center"><span class="badge ${percentBadge}">${student.percentage}%</span></td>
-                            <td>${markedBy}</td>
-                        </tr>
-                    `;
-                });
-
-                html += `
-                        </tbody>
-                    </table>
-                    </div>
-                    <button class="btn btn-secondary mt-3" onclick="printReport()">Print Report</button>
-                `;
-
-                document.getElementById('reportResults').innerHTML = html;
-                lastReportShareData = {
+                lastReportRawData = {
                     region,
                     batch,
                     filterType,
@@ -5961,11 +6094,13 @@
                     stats,
                     summary: mergedSummary
                 };
+                applyReportStudentFilter();
 
             } catch (error) {
                 console.error('Error viewing report:', error);
                 document.getElementById('reportResults').innerHTML =
                     `<div class="alert alert-danger">Failed to generate the report: ${error.message}</div>`;
+                lastReportRawData = null;
                 lastReportShareData = null;
             }
         }
