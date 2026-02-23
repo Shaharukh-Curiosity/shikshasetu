@@ -681,6 +681,106 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
 });
 
 // ============================================
+// CLASS DETAILS REPORT - Day Numbers Only
+// ============================================
+router.get('/class-details', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, startDate, endDate } = req.query;
+
+    if (!region || !startDate || !endDate) {
+      return res.status(400).json({ message: 'region, startDate and endDate are required' });
+    }
+    if (!isValidDateOnly(String(startDate)) || !isValidDateOnly(String(endDate))) {
+      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    if (String(startDate) > String(endDate)) {
+      return res.status(400).json({ message: 'startDate cannot be after endDate' });
+    }
+
+    const studentsQuery = {
+      role: 'student',
+      region: String(region)
+    };
+    if (batchNumber && String(batchNumber).toLowerCase() !== 'all') {
+      studentsQuery.batchNumber = String(batchNumber);
+    }
+
+    const students = await User.find(studentsQuery)
+      .select('_id name schoolName standard mobile batchNumber region')
+      .sort({ batchNumber: 1, name: 1 })
+      .lean();
+
+    if (!students.length) {
+      return res.json({
+        rows: [],
+        meta: {
+          region: String(region),
+          batchNumber: String(batchNumber || 'all'),
+          startDate: String(startDate),
+          endDate: String(endDate),
+          totalStudents: 0
+        }
+      });
+    }
+
+    const studentIds = students.map(s => String(s._id));
+    const attendanceQuery = {
+      studentId: { $in: studentIds },
+      date: { $gte: String(startDate), $lte: String(endDate) }
+    };
+    if (batchNumber && String(batchNumber).toLowerCase() !== 'all') {
+      attendanceQuery.batchNumber = String(batchNumber);
+    }
+
+    const attendanceRecords = await Attendance.find(attendanceQuery)
+      .select('studentId date')
+      .lean();
+
+    const daysByStudent = {};
+    attendanceRecords.forEach((row) => {
+      const studentId = String(row.studentId || '');
+      if (!studentId || !row.date) return;
+      if (!daysByStudent[studentId]) {
+        daysByStudent[studentId] = new Set();
+      }
+      const day = Number(String(row.date).slice(8, 10));
+      if (!Number.isNaN(day)) {
+        daysByStudent[studentId].add(day);
+      }
+    });
+
+    const rows = students.map((student) => {
+      const sid = String(student._id);
+      const classDays = Array.from(daysByStudent[sid] || []).sort((a, b) => a - b);
+      return {
+        studentId: sid,
+        studentName: student.name || '',
+        schoolName: student.schoolName || '',
+        standard: student.standard || '',
+        mobile: student.mobile || '',
+        batchNumber: student.batchNumber || '',
+        region: student.region || '',
+        classDays
+      };
+    });
+
+    return res.json({
+      rows,
+      meta: {
+        region: String(region),
+        batchNumber: String(batchNumber || 'all'),
+        startDate: String(startDate),
+        endDate: String(endDate),
+        totalStudents: rows.length
+      }
+    });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
 // LOW ATTENDANCE - Absent 3+ classes (any days)
 // ============================================
 router.get('/low-attendance', auth, isTeacherOrAdmin, async (req, res) => {
@@ -857,7 +957,7 @@ router.get('/contact-log', auth, isTeacherOrAdmin, async (req, res) => {
 // ============================================
 router.get('/engagement', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { region, batchNumber, days } = req.query;
+    const { region, batchNumber, days, limit } = req.query;
     if (!region) {
       return res.status(400).json({ message: 'Missing region' });
     }
@@ -927,19 +1027,23 @@ router.get('/engagement', auth, isTeacherOrAdmin, async (req, res) => {
       };
     });
 
-    const topAttendance = enriched
+    const topAttendanceSorted = enriched
       .filter(r => r.recent.total > 0)
-      .sort((a, b) => b.recent.rate - a.recent.rate)
-      .slice(0, 10);
+      .sort((a, b) => b.recent.rate - a.recent.rate);
 
-    const mostImproved = enriched
+    const mostImprovedSorted = enriched
       .filter(r => r.recent.total > 0 && r.previous.total > 0)
-      .sort((a, b) => b.improvement - a.improvement)
-      .slice(0, 10);
+      .sort((a, b) => b.improvement - a.improvement);
+
+    const limitRaw = String(limit || '10').trim().toLowerCase();
+    const limitValue = limitRaw === 'all' ? 0 : Math.max(parseInt(limitRaw, 10) || 10, 1);
+    const topAttendance = limitValue > 0 ? topAttendanceSorted.slice(0, limitValue) : topAttendanceSorted;
+    const mostImproved = limitValue > 0 ? mostImprovedSorted.slice(0, limitValue) : mostImprovedSorted;
 
     res.json({
       topAttendance,
       mostImproved,
+      limitUsed: limitValue > 0 ? limitValue : 'all',
       dateRange: {
         recent: { start: startRecent, end: endDate, days: daysInt },
         previous: { start: startPrev, end: endPrev, days: daysInt }

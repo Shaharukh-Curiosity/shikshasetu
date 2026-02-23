@@ -12,7 +12,7 @@ const RegionMilestone = require('../models/RegionMilestone');
 const { auth, isAdmin, isTeacherOrAdmin } = require('../middleware/auth');
 const { logAudit } = require('../utils/audit');
 const PRESENT_STATUSES = ['present', 'late', 'leave'];
-const ATTENDANCE_ACTIVE_THRESHOLD = 50;
+const ATTENDANCE_ACTIVE_THRESHOLD = 30;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -254,31 +254,53 @@ router.get('/inactive-details', auth, isTeacherOrAdmin, async (req, res) => {
   }
 });
 
-// Auto-inactivate students with too many absences
+// Auto-update active/inactive by attendance percentage threshold
 router.post('/auto-inactivate-absent', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const threshold = Math.max(1, Number(req.body?.threshold || 5));
+    const students = await User.find({ role: 'student' }).select('_id isActive').lean();
+    const ids = students.map(s => String(s._id));
+    const statsMap = await buildAttendanceStatsMap(ids);
 
-    const absences = await Attendance.aggregate([
-      { $match: { status: 'absent' } },
-      { $group: { _id: '$studentId', count: { $sum: 1 } } },
-      { $match: { count: { $gt: threshold } } }
-    ]);
+    const inactiveIds = [];
+    const activeIds = [];
 
-    const studentIds = absences.map(a => a._id).filter(Boolean);
-    if (studentIds.length === 0) {
-      return res.json({ threshold, totalAbsentStudents: 0, updated: 0 });
+    students.forEach((student) => {
+      const stats = statsMap.get(String(student._id)) || {};
+      const attendancePercentage = Number(stats.attendancePercentage || 0);
+      if (attendancePercentage < ATTENDANCE_ACTIVE_THRESHOLD) {
+        inactiveIds.push(student._id);
+      } else {
+        activeIds.push(student._id);
+      }
+    });
+
+    let updatedInactive = 0;
+    let updatedActive = 0;
+
+    if (inactiveIds.length > 0) {
+      const resultInactive = await User.updateMany(
+        { _id: { $in: inactiveIds }, role: 'student', isActive: true },
+        { $set: { isActive: false } }
+      );
+      updatedInactive = resultInactive.modifiedCount || resultInactive.nModified || 0;
     }
 
-    const result = await User.updateMany(
-      { _id: { $in: studentIds }, role: 'student', isActive: true },
-      { $set: { isActive: false } }
-    );
+    if (activeIds.length > 0) {
+      const resultActive = await User.updateMany(
+        { _id: { $in: activeIds }, role: 'student', isActive: false },
+        { $set: { isActive: true } }
+      );
+      updatedActive = resultActive.modifiedCount || resultActive.nModified || 0;
+    }
 
     res.json({
-      threshold,
-      totalAbsentStudents: studentIds.length,
-      updated: result.modifiedCount || result.nModified || 0
+      thresholdPercentage: ATTENDANCE_ACTIVE_THRESHOLD,
+      totalStudents: students.length,
+      inactiveStudents: inactiveIds.length,
+      activeStudents: activeIds.length,
+      updated: updatedInactive + updatedActive,
+      updatedInactive,
+      updatedActive
     });
   } catch (error) {
     res.status(500).json({ message: 'Auto-inactivate failed', details: error.message });
@@ -596,8 +618,8 @@ router.get('/', auth, async (req, res) => {
     }
 
     const filtered = studentsWithAttendanceStatus.filter(s => {
-      if (normalizedStatus === 'active') return !!s.isActive;
-      if (normalizedStatus === 'inactive') return !s.isActive;
+      if (normalizedStatus === 'active') return s.attendanceStatus === 'active';
+      if (normalizedStatus === 'inactive') return s.attendanceStatus === 'inactive';
       return true;
     });
 

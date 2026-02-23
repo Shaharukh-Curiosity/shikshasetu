@@ -22,8 +22,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     const students = await User.find({
       role: 'student',
       region,
-      batchNumber,
-      isActive: true
+      batchNumber
     }).lean();
 
     if (!students || students.length === 0) {
