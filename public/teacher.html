@@ -446,9 +446,14 @@
                             </select>
                         </div>
                         <div class="col-md-4 d-flex align-items-end">
-                            <button class="btn btn-success w-100" onclick="exportStudentsDetails()">
-                                Export Students Details
-                            </button>
+                            <div class="d-grid gap-2 w-100">
+                                <button class="btn btn-success w-100" onclick="exportStudentsDetails()">
+                                    Export Students Details
+                                </button>
+                                <button class="btn btn-outline-success w-100" onclick="shareStudentsDetailsToWhatsApp()">
+                                    Share Students PDF to WhatsApp
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -587,20 +592,26 @@
                     <h5 class="card-title">🔍 View Daily Work</h5>
                     
                     <div class="row g-3 mb-3 align-items-end">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <label>Teacher</label>
                             <select class="form-select" id="workViewTeacher">
                                 <option value="">All Teachers</option>
                             </select>
                         </div>
                         <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="workViewRegion">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
                             <label>Filter Type</label>
                             <select class="form-select" id="workViewFilterType" onchange="updateWorkViewFilterUI()">
                                 <option value="date">Date</option>
                                 <option value="month">Month</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <label id="workViewDateLabel">Date</label>
                             <input type="date" class="form-control" id="workViewDate" required>
                         </div>
@@ -612,7 +623,10 @@
                         </div>
                     </div>
                     
-                    <button class="btn btn-primary mb-3" onclick="loadWorkReports()">View Reports</button>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-primary" onclick="loadWorkReports()">View Reports</button>
+                        <button class="btn btn-success" onclick="shareWorkReportPDF()">Share</button>
+                    </div>
                     <div id="workResults"></div>
                 </div>
             </div>
@@ -1116,6 +1130,7 @@
         let lastViewRawStudents = [];
         let lastReportRawData = null;
         let lastReportShareData = null;
+        let lastWorkShareData = null;
         let analysisChart = null;
         let markFiltered = [];
         let markPage = 1;
@@ -1455,6 +1470,7 @@
                 
                 const markRegion = document.getElementById('markRegion');
                 const viewRegion = document.getElementById('viewRegion');
+                const workViewRegion = document.getElementById('workViewRegion');
                 
                 if (!markRegion || !viewRegion) {
                     console.error('❌ Region dropdowns not found in DOM');
@@ -1463,17 +1479,26 @@
                 
                 markRegion.innerHTML = '<option value="">Select Region</option>';
                 viewRegion.innerHTML = '<option value="">Select Region</option>';
+                if (workViewRegion) {
+                    workViewRegion.innerHTML = '<option value="">Select Region</option>';
+                }
                 
                 if (!regions || regions.length === 0) {
                     console.warn('⚠️ No regions found');
                     markRegion.innerHTML += '<option disabled>No regions available</option>';
                     viewRegion.innerHTML += '<option disabled>No regions available</option>';
+                    if (workViewRegion) {
+                        workViewRegion.innerHTML += '<option disabled>No regions available</option>';
+                    }
                     return;
                 }
                 
                 regions.forEach(region => {
                     markRegion.innerHTML += `<option value="${region}">${region}</option>`;
                     viewRegion.innerHTML += `<option value="${region}">${region}</option>`;
+                    if (workViewRegion) {
+                        workViewRegion.innerHTML += `<option value="${region}">${region}</option>`;
+                    }
                 });
                 console.log('✅ Region dropdowns populated');
             } catch (error) {
@@ -1562,12 +1587,26 @@
 
                 const users = await res.json();
                 const select = document.getElementById('workViewTeacher');
+                const checkbox = document.getElementById('workViewOnlyMine');
                 if (!select) return;
 
-                select.innerHTML = '<option value="">All Teachers</option>';
-                users.forEach(u => {
-                    select.innerHTML += `<option value="${u._id}">${u.name}</option>`;
-                });
+                if (user && user.role === 'teacher') {
+                    select.innerHTML = `<option value="${user._id}">${escapeHtml(user.name || 'My Reports')}</option>`;
+                    select.value = user._id;
+                    select.disabled = true;
+                    if (checkbox) {
+                        checkbox.checked = true;
+                        checkbox.disabled = true;
+                    }
+                } else {
+                    select.innerHTML = '<option value="">All Teachers</option>';
+                    users.forEach(u => {
+                        select.innerHTML += `<option value="${u._id}">${u.name}</option>`;
+                    });
+                    if (checkbox) {
+                        checkbox.disabled = false;
+                    }
+                }
 
                 if (user && user._id) {
                     select.dataset.currentUserId = user._id;
@@ -1582,6 +1621,15 @@
             const checkbox = document.getElementById('workViewOnlyMine');
             const select = document.getElementById('workViewTeacher');
             if (!checkbox || !select) return;
+            if (user && user.role === 'teacher') {
+                const currentUserId = select.dataset.currentUserId || (user && user._id ? user._id : '');
+                if (currentUserId) {
+                    select.value = currentUserId;
+                }
+                select.disabled = true;
+                checkbox.checked = true;
+                return;
+            }
 
             if (checkbox.checked) {
                 const currentUserId = select.dataset.currentUserId || (user && user._id ? user._id : '');
@@ -3821,16 +3869,18 @@
         }
 
         async function loadWorkReports() {
+            const region = document.getElementById('workViewRegion').value;
             const filterType = document.getElementById('workViewFilterType').value;
             const dateInput = document.getElementById('workViewDate').value;
             const teacherId = document.getElementById('workViewTeacher').value;
 
-            if (!dateInput) {
-                alert('Please select date/month');
+            if (!region || !dateInput) {
+                alert('Please select region and date/month');
                 return;
             }
 
             const params = new URLSearchParams();
+            params.append('region', region);
             if (teacherId) {
                 params.append('teacherId', teacherId);
             }
@@ -3856,6 +3906,7 @@
 
                 const reports = await res.json();
                 if (!reports || reports.length === 0) {
+                    lastWorkShareData = null;
                     document.getElementById('workResults').innerHTML =
                         '<div class="alert alert-warning">No reports found for the selected filters</div>';
                     return;
@@ -3868,6 +3919,7 @@
                             <tr>
                                 <th>#</th>
                                 <th>Date</th>
+                                <th>Region</th>
                                 <th>Teacher</th>
                                 <th>Topics Taught</th>
                             </tr>
@@ -3881,8 +3933,9 @@
                         <tr>
                             <td>${index + 1}</td>
                             <td>${reportDate}</td>
-                            <td>${report.teacherName || '-'}</td>
-                            <td>${report.topicsCovered}</td>
+                            <td>${escapeHtml(report.region || region || '-')}</td>
+                            <td>${escapeHtml(report.teacherName || '-')}</td>
+                            <td>${escapeHtml(report.topicsCovered || '-')}</td>
                         </tr>
                     `;
                 });
@@ -3893,11 +3946,96 @@
                     </div>
                 `;
 
+                lastWorkShareData = { region, filterType, dateInput, reports };
                 document.getElementById('workResults').innerHTML = html;
             } catch (error) {
                 console.error('❌ Error loading work reports:', error);
+                lastWorkShareData = null;
                 document.getElementById('workResults').innerHTML =
                     `<div class="alert alert-danger">Error loading reports: ${error.message}</div>`;
+            }
+        }
+
+        async function shareWorkReportPDF() {
+            if (!lastWorkShareData || !Array.isArray(lastWorkShareData.reports) || lastWorkShareData.reports.length === 0) {
+                alert('Please view reports first.');
+                return;
+            }
+
+            const jsPdfLib = window.jspdf;
+            if (!jsPdfLib || !jsPdfLib.jsPDF) {
+                alert('PDF library not loaded. Please refresh and try again.');
+                return;
+            }
+
+            try {
+                const { region, filterType, dateInput, reports } = lastWorkShareData;
+                const periodLabel = filterType === 'month' ? `Month: ${dateInput}` : `Date: ${dateInput}`;
+                const rows = reports.map((report, index) => {
+                    const reportDate = report.date ? new Date(report.date).toISOString().split('T')[0] : '-';
+                    return [
+                        String(index + 1),
+                        String(reportDate),
+                        String(report.region || region || '-'),
+                        String(report.teacherName || '-'),
+                        String(report.topicsCovered || '-')
+                    ];
+                });
+
+                const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                doc.setFontSize(16);
+                doc.text('Daily Work Report', 40, 44);
+                doc.setFontSize(11);
+                doc.text(`Region: ${region}`, 40, 68);
+                doc.text(`Filter Type: ${filterType === 'month' ? 'Month' : 'Date'}`, 40, 84);
+                doc.text(periodLabel, 40, 100);
+                doc.text(`Total Reports: ${reports.length}`, 40, 116);
+                doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 132);
+
+                doc.autoTable({
+                    startY: 152,
+                    head: [['#', 'Date', 'Region', 'Teacher', 'Topics Taught']],
+                    body: rows,
+                    styles: { fontSize: 10, cellPadding: 6 },
+                    headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 250, 250] },
+                    theme: 'grid'
+                });
+
+                const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
+                const safePeriod = String(dateInput || 'period').replace(/[^\w-]/g, '_');
+                const fileName = `Daily_Work_${safeRegion}_${safePeriod}.pdf`;
+                const pdfBlob = doc.output('blob');
+
+                let file = null;
+                try {
+                    file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                } catch (error) {
+                    file = null;
+                }
+
+                const shareText = `Daily Work report (${periodLabel}) - ${region}`;
+                if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Daily Work Report',
+                        text: shareText,
+                        files: [file]
+                    });
+                    return;
+                }
+
+                doc.save(fileName);
+                const sendOnWhatsApp = window.confirm('PDF downloaded. Press OK for WhatsApp, Cancel for Email.');
+                if (sendOnWhatsApp) {
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText + '. PDF downloaded. Please attach and send.')}`;
+                    window.open(waUrl, '_blank');
+                } else {
+                    const mailUrl = `mailto:?subject=${encodeURIComponent('Daily Work Report')}&body=${encodeURIComponent(shareText + '\n\nPDF has been downloaded. Please attach it in this email.')}`;
+                    window.location.href = mailUrl;
+                }
+            } catch (error) {
+                console.error('Error sharing daily work report:', error);
+                alert('Failed to share daily work report: ' + error.message);
             }
         }
 
@@ -5587,6 +5725,124 @@
             } catch (error) {
                 console.error('Error exporting students details:', error);
                 alert('Failed to export students details');
+            }
+        }
+
+        async function shareStudentsDetailsToWhatsApp() {
+            const region = document.getElementById('studentsRegion').value;
+            const batch = document.getElementById('studentsBatch').value;
+            if (!region) {
+                alert('Please select a region first');
+                return;
+            }
+            if (!batch) {
+                alert('Please select a batch or choose All Batches');
+                return;
+            }
+
+            const jsPdfLib = window.jspdf;
+            if (!jsPdfLib || !jsPdfLib.jsPDF) {
+                alert('PDF library not loaded. Please refresh and try again.');
+                return;
+            }
+
+            try {
+                if (!Array.isArray(studentsData) || studentsData.length === 0) {
+                    await loadStudentsData();
+                }
+
+                const currentRows = Array.isArray(studentsFiltered) ? studentsFiltered.slice() : [];
+                if (!currentRows.length) {
+                    alert('No students match current filter to share.');
+                    return;
+                }
+
+                const statusFilter = document.getElementById('studentsStatusFilter')?.value || 'all';
+                const ageRule = document.getElementById('studentsAgeFilter')?.value || 'all';
+                const ageValueRaw = (document.getElementById('studentsAgeValue')?.value || '').trim();
+                const ageValue = Number(ageValueRaw);
+                const hasAgeValue = ageValueRaw !== '' && Number.isFinite(ageValue);
+
+                const statusLabelMap = {
+                    all: 'All',
+                    active: 'Active',
+                    inactive: 'Inactive'
+                };
+                const ageRuleLabelMap = {
+                    all: 'All Ages',
+                    above: 'Above',
+                    below: 'Below',
+                    equal: 'Equal To',
+                    above_or_equal: 'Age and Above',
+                    below_or_equal: 'Age and Below'
+                };
+
+                const activeCount = currentRows.filter(s => !!s.isActive).length;
+                const inactiveCount = currentRows.length - activeCount;
+                const generatedDate = new Date().toISOString().split('T')[0];
+
+                const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+                doc.setFontSize(16);
+                doc.text('Students Details Report', 40, 44);
+                doc.setFontSize(11);
+                doc.text(`Region: ${region}`, 40, 68);
+                doc.text(`Batch: ${batch === '__all__' ? 'All Batches' : batch}`, 40, 84);
+                doc.text(`Status Filter: ${statusLabelMap[statusFilter] || 'All'}`, 40, 100);
+                doc.text(`Age Rule: ${ageRuleLabelMap[ageRule] || 'All Ages'}`, 40, 116);
+                doc.text(`Age Number: ${hasAgeValue ? ageValue : '-'}`, 40, 132);
+                doc.text(`Students: ${currentRows.length}   Active: ${activeCount}   Inactive: ${inactiveCount}`, 40, 148);
+                doc.text(`Generated By: ${user.name || 'Teacher'}   Date: ${generatedDate}`, 40, 164);
+
+                const body = currentRows.map((student, index) => ([
+                    String(index + 1),
+                    String(student.name || '-'),
+                    String(student.batchNumber || '-'),
+                    String(student.schoolName || '-'),
+                    String(student.standard || '-'),
+                    String(student.mobile || '-'),
+                    String(student.age ?? '-'),
+                    student.isActive ? 'Active' : 'Inactive'
+                ]));
+
+                doc.autoTable({
+                    startY: 184,
+                    head: [['S.No', 'Student Name', 'Batch Number', 'School', 'Standard', 'Mobile', 'Age', 'Status']],
+                    body,
+                    styles: { fontSize: 10, cellPadding: 5 },
+                    headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
+                    alternateRowStyles: { fillColor: [245, 250, 250] },
+                    theme: 'grid'
+                });
+
+                const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
+                const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
+                const fileName = `Students_Details_${safeRegion}_${safeBatch}_${generatedDate}.pdf`;
+                const pdfBlob = doc.output('blob');
+
+                let file = null;
+                try {
+                    file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+                } catch (e) {
+                    file = null;
+                }
+
+                const batchLabel = batch === '__all__' ? 'All Batches' : `Batch ${batch}`;
+                const shareText = `Students details report (${generatedDate}) - ${region}, ${batchLabel} | Filters: Status=${statusLabelMap[statusFilter] || 'All'}, Age Rule=${ageRuleLabelMap[ageRule] || 'All Ages'}${hasAgeValue ? ` ${ageValue}` : ''}`;
+
+                if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        title: 'Students Details Report',
+                        text: shareText,
+                        files: [file]
+                    });
+                } else {
+                    doc.save(fileName);
+                    const waUrl = `https://wa.me/?text=${encodeURIComponent(shareText + '. PDF downloaded. Please attach and send on WhatsApp.')}`;
+                    window.open(waUrl, '_blank');
+                }
+            } catch (error) {
+                console.error('Error sharing students details to WhatsApp:', error);
+                alert('Failed to share students details: ' + error.message);
             }
         }
 

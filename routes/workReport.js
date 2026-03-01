@@ -81,7 +81,12 @@ router.get('/', auth, isTeacherOrAdmin, async (req, res) => {
         }
 
         if (region) {
-            filter.region = region;
+            // Backward compatibility: older reports were saved with empty/missing region.
+            filter.$or = [
+                { region },
+                { region: '' },
+                { region: { $exists: false } }
+            ];
         }
         if (teacherId && req.user.role === 'admin') {
             filter.teacherId = teacherId;
