@@ -18,22 +18,20 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     }
 
     const dateOnly = date.substring(0, 10);
+    const batchValue = String(batchNumber || '');
+    const isAllBatches = batchValue === 'all' || batchValue === '__all__';
 
-    const students = await User.find({
-      role: 'student',
-      region,
-      batchNumber
-    }).lean();
+    const studentQuery = { role: 'student', region };
+    if (!isAllBatches) studentQuery.batchNumber = batchNumber;
+    const students = await User.find(studentQuery).lean();
 
     if (!students || students.length === 0) {
       return res.json({ students: [], groupTopics: { 1: '' } });
     }
 
-    const presentations = await Presentation.find({
-      region,
-      batchNumber,
-      date: dateOnly
-    }).lean();
+    const presentationQuery = { region, date: dateOnly };
+    if (!isAllBatches) presentationQuery.batchNumber = batchNumber;
+    const presentations = await Presentation.find(presentationQuery).lean();
 
     const presentationMap = new Map(presentations.map(p => [String(p.studentId), p]));
     const groupTopics = { 1: '' };
