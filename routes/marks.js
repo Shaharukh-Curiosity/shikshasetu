@@ -10,6 +10,32 @@ const { auth, isTeacherOrAdmin } = require('../middleware/auth');
 
 const TOTAL_MARKS = 100;
 const LIMITS = { theory: 40, practical: 40, presentation: 20 };
+const BREAKDOWN_LIMITS = { word: 20, excel: 20 };
+const PRACTICAL_KEYS = Object.keys(BREAKDOWN_LIMITS);
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const toNumberOrNull = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+const mergeBreakdown = (existing, input) => {
+  const merged = { ...(existing || {}) };
+  if (!input || typeof input !== 'object') return merged;
+  PRACTICAL_KEYS.forEach((key) => {
+    if (hasOwn(input, key)) {
+      merged[key] = toNumberOrNull(input[key]);
+    }
+  });
+  return merged;
+};
+const sumBreakdown = (breakdown) => {
+  if (!breakdown) return { total: null, hasAny: false };
+  const values = PRACTICAL_KEYS.map(k => breakdown[k]);
+  const hasAny = values.some(v => v !== null && v !== undefined);
+  if (!hasAny) return { total: null, hasAny: false };
+  const total = values.reduce((acc, v) => acc + (Number.isFinite(v) ? v : 0), 0);
+  return { total, hasAny };
+};
 
 // ============================================
 // MARKS - SAVE/UPDATE
@@ -58,15 +84,32 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         continue;
       }
 
-      const theory = (record.theory === null || record.theory === undefined || record.theory === '')
-        ? null
-        : Number(record.theory);
-      const practical = (record.practical === null || record.practical === undefined || record.practical === '')
-        ? null
-        : Number(record.practical);
-      const presentation = (record.presentation === null || record.presentation === undefined || record.presentation === '')
-        ? null
-        : Number(record.presentation);
+      const existingTheory = existingRecord ? existingRecord.theory : null;
+      const existingPractical = existingRecord ? existingRecord.practical : null;
+      const existingPresentation = existingRecord ? existingRecord.presentation : null;
+      const existingPracticalBreakdown = existingRecord ? (existingRecord.practicalBreakdown || {}) : {};
+
+      let theory = hasOwn(record, 'theory') ? toNumberOrNull(record.theory) : existingTheory;
+      let practical = hasOwn(record, 'practical') ? toNumberOrNull(record.practical) : existingPractical;
+      let presentation = hasOwn(record, 'presentation') ? toNumberOrNull(record.presentation) : existingPresentation;
+
+      let practicalBreakdown = existingPracticalBreakdown;
+
+      if (hasOwn(record, 'practicalBreakdown')) {
+        practicalBreakdown = mergeBreakdown(existingPracticalBreakdown, record.practicalBreakdown);
+        const practicalSum = sumBreakdown(practicalBreakdown);
+        practical = practicalSum.hasAny ? practicalSum.total : null;
+      }
+
+      const breakdownInvalid = (breakdown) => PRACTICAL_KEYS.some(key => {
+        const v = breakdown ? breakdown[key] : null;
+        return v !== null && v !== undefined && (v < 0 || v > BREAKDOWN_LIMITS[key]);
+      });
+
+      if (breakdownInvalid(practicalBreakdown)) {
+        errors++;
+        continue;
+      }
 
       if ((theory !== null && (theory < 0 || theory > LIMITS.theory)) ||
           (practical !== null && (practical < 0 || practical > LIMITS.practical)) ||
@@ -86,6 +129,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         date: dateOnly,
         theory,
         practical,
+        practicalBreakdown,
         presentation,
         totalMarks: TOTAL_MARKS,
         totalObtained,
@@ -204,6 +248,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
         marks: m ? {
           theory: m.theory,
           practical: m.practical,
+          practicalBreakdown: m.practicalBreakdown || null,
           presentation: m.presentation,
           totalMarks: m.totalMarks,
           totalObtained: m.totalObtained,

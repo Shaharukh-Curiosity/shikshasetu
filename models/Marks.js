@@ -8,6 +8,10 @@ const marksSchema = new mongoose.Schema({
   date: { type: String, required: true }, // YYYY-MM-DD
   theory: { type: Number, default: null },
   practical: { type: Number, default: null },
+  practicalBreakdown: {
+    word: { type: Number, default: null },
+    excel: { type: Number, default: null }
+  },
   presentation: { type: Number, default: null },
   totalMarks: { type: Number, required: true },
   totalObtained: { type: Number, required: true },

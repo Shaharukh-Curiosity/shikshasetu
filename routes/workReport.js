@@ -59,6 +59,44 @@ router.post('/', auth, isTeacherOrAdmin, async (req, res) => {
     }
 });
 
+// @route   PUT /api/workReport/:id
+// @desc    Update an existing daily work report
+// @access  Private (Teachers only)
+router.put('/:id', auth, isTeacherOrAdmin, async (req, res) => {
+    try {
+        const { date, subject, topicsCovered, assignment, attendanceCount } = req.body;
+
+        if (!date || !topicsCovered) {
+            return res.status(400).json({ error: 'Date and topics are required' });
+        }
+
+        const filter = { _id: req.params.id };
+        if (req.user.role === 'teacher') {
+            filter.teacherId = req.user._id;
+        }
+
+        const report = await WorkReport.findOne(filter);
+        if (!report) {
+            return res.status(404).json({ error: 'Report not found' });
+        }
+
+        report.date = new Date(date);
+        if (subject) report.subject = subject;
+        report.topicsCovered = topicsCovered;
+        if (assignment !== undefined) report.assignment = assignment;
+        if (attendanceCount !== undefined) {
+            report.attendanceCount = attendanceCount;
+        }
+        report.updatedAt = new Date();
+
+        await report.save();
+        res.json({ message: 'Report updated successfully', report });
+    } catch (error) {
+        console.error('❌ Error updating work report:', error);
+        res.status(500).json({ error: 'Error updating report: ' + error.message });
+    }
+});
+
 // @route   GET /api/workReport
 // @desc    Get all work reports for logged-in teacher with filtering
 // @access  Private (Teachers only)

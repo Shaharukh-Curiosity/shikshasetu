@@ -554,6 +554,10 @@
                                 <option value="above-75">Attendance 75% and Above</option>
                             </select>
                         </div>
+                        <div class="col-md-4">
+                            <label>Attendance % (Minimum)</label>
+                            <input type="number" min="0" max="100" step="0.01" class="form-control" id="reportAttendancePercent" placeholder="e.g. 60" oninput="applyReportStudentFilter()">
+                        </div>
                     </div>
 
                     <div id="reportResults"></div>
@@ -577,13 +581,18 @@
                             <input type="date" class="form-control" id="workDate" required>
                         </div>
                     </div>
+
+                    <input type="hidden" id="workReportId" value="">
                     
                     <div class="mb-3">
                         <label>Topics Taught Today</label>
                         <textarea class="form-control" id="workTopics" rows="3" placeholder="Enter topics covered..." required></textarea>
                     </div>
                     
-                    <button class="btn btn-success" onclick="submitWorkReport()">Submit Daily Work</button>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-success" id="workSubmitBtn" onclick="submitWorkReport()">Submit Daily Work</button>
+                        <button class="btn btn-outline-secondary d-none" id="workCancelEditBtn" onclick="cancelWorkReportEdit()">Cancel Edit</button>
+                    </div>
                 </div>
             </div>
             
@@ -729,66 +738,65 @@
         <div id="marksSection" style="display: none;">
             <div class="card">
                 <div class="card-body">
-                    <h5 class="card-title">Enter Exam Marks</h5>
+                    <h5 class="card-title">Exam Marks</h5>
 
-                    <div class="row g-3 mb-4">
-                        <div class="col-md-3">
-                            <label>Region</label>
-                            <select class="form-select" id="marksRegion" onchange="loadMarksBatches()">
-                                <option value="">Select Region</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label>Batch</label>
-                            <select class="form-select" id="marksBatch" onchange="loadMarksStudents(); loadExamPlan(true);">
-                                <option value="">Select Batch</option>
-                            </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label>Date</label>
-                            <input type="date" class="form-control" id="marksDate" required onchange="loadMarksStudents()">
-                        </div>
-                    </div>
-
-                    <div class="card border mt-3 mb-3">
+                    <div class="card border mb-3">
                         <div class="card-body">
-                            <h6 class="mb-3">Saved Exam Plan (Region + Batch)</h6>
-                            <div class="row g-3">
-                                <div class="col-md-4">
-                                    <label>Project Inauguration Date</label>
-                                    <input type="date" class="form-control" id="examPlanInaugurationDate">
+                            <h6 class="mb-3">Practical Marks</h6>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <label>Region</label>
+                                    <select class="form-select" id="examPracticalRegion" onchange="loadExamComponentBatches('practical')">
+                                        <option value="">Select Region</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-4">
-                                    <label>Theory Date</label>
-                                    <input type="date" class="form-control" id="examPlanTheoryDate">
+                                <div class="col-md-3">
+                                    <label>Batch</label>
+                                    <select class="form-select" id="examPracticalBatch" onchange="loadExamComponentStudents('practical')">
+                                        <option value="">Select Batch</option>
+                                    </select>
                                 </div>
-                                <div class="col-md-4">
-                                    <label>Practical Date</label>
-                                    <input type="date" class="form-control" id="examPlanPracticalDate">
+                                <div class="col-md-3">
+                                    <label>Date</label>
+                                    <input type="date" class="form-control" id="examPracticalDate" required onchange="loadExamComponentStudents('practical')">
                                 </div>
-                                <div class="col-md-4">
-                                    <label>Presentation Date</label>
-                                    <input type="date" class="form-control" id="examPlanPresentationDate">
-                                </div>
-                                <div class="col-md-4">
-                                    <label>Certificate Date</label>
-                                    <input type="date" class="form-control" id="examPlanCertificateDate">
-                                </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label>&nbsp;</label>
-                                    <div class="d-grid gap-2">
-                                        <button class="btn btn-outline-secondary" onclick="loadExamPlan()">Load Plan</button>
-                                        <button class="btn btn-outline-primary" onclick="saveExamPlan()">Save Plan</button>
-                                        <button class="btn btn-warning" onclick="viewResultByPlan()">View Result By Saved Plan</button>
-                                    </div>
+                                    <button class="btn btn-outline-primary w-100" onclick="loadExamComponentStudents('practical')">Load Practical</button>
                                 </div>
                             </div>
-                            <div class="small text-muted mt-2" id="examPlanMeta"></div>
+                            <div id="examPracticalTable"></div>
                         </div>
                     </div>
-                    <div id="examPlanResults" class="mb-3"></div>
 
-                    <div id="marksTable"></div>
+                    <div class="card border">
+                        <div class="card-body">
+                            <h6 class="mb-3">Theory Marks</h6>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-3">
+                                    <label>Region</label>
+                                    <select class="form-select" id="examTheoryRegion" onchange="loadExamComponentBatches('theory')">
+                                        <option value="">Select Region</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label>Batch</label>
+                                    <select class="form-select" id="examTheoryBatch" onchange="loadExamComponentStudents('theory')">
+                                        <option value="">Select Batch</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label>Date</label>
+                                    <input type="date" class="form-control" id="examTheoryDate" required onchange="loadExamComponentStudents('theory')">
+                                </div>
+                                <div class="col-md-3">
+                                    <label>&nbsp;</label>
+                                    <button class="btn btn-outline-primary w-100" onclick="loadExamComponentStudents('theory')">Load Theory</button>
+                                </div>
+                            </div>
+                            <div id="examTheoryTable"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1043,7 +1051,10 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('markDate').value = today;
         document.getElementById('viewDate').value = today;
-        document.getElementById('marksDate').value = today;
+        const examPracticalDateEl = document.getElementById('examPracticalDate');
+        const examTheoryDateEl = document.getElementById('examTheoryDate');
+        if (examPracticalDateEl) examPracticalDateEl.value = today;
+        if (examTheoryDateEl) examTheoryDateEl.value = today;
         document.getElementById('resultDate').value = today;
         const examMissedTheoryDateEl = document.getElementById('examMissedTheoryDate');
         const examMissedPracticalDateEl = document.getElementById('examMissedPracticalDate');
@@ -1080,7 +1091,8 @@
                 'viewDate',
                 'reportStartDate',
                 'reportEndDate',
-                'marksDate',
+                'examPracticalDate',
+                'examTheoryDate',
                 'resultDate',
                 'examMissedTheoryDate',
                 'examMissedPracticalDate',
@@ -1144,6 +1156,27 @@
         let studentsPage = 1;
         const studentsPageSize = 25;
         let busInventoryData = [];
+        const examComponentConfig = {
+            practical: {
+                prefix: 'examPractical',
+                label: 'Practical',
+                mode: 'triple',
+                field: 'practical',
+                breakdownKey: 'practicalBreakdown',
+                limits: { word: 20, excel: 20 }
+            },
+            theory: {
+                prefix: 'examTheory',
+                label: 'Theory',
+                mode: 'single',
+                field: 'theory',
+                max: 40
+            }
+        };
+        const examComponentState = {
+            practical: { students: [] },
+            theory: { students: [] }
+        };
         
         console.log('📍 Current page:', window.location.pathname);
         console.log('🚀 Loading initial data...');
@@ -1661,7 +1694,6 @@
         }
 
                 // MARKS FUNCTIONS
-        let marksCurrentStudents = [];
 
         // PRESENTATION FUNCTIONS
         async function loadPresentationRegions() {
@@ -2145,6 +2177,9 @@
                 const topicRows = students
                     .filter(s => s.presentation && s.presentation.topic)
                     .sort((a, b) => {
+                        const ba = String(a.batchNumber || '');
+                        const bb = String(b.batchNumber || '');
+                        if (ba !== bb) return ba.localeCompare(bb, undefined, { numeric: true, sensitivity: 'base' });
                         const ga = a.presentation?.groupNumber ?? 9999;
                         const gb = b.presentation?.groupNumber ?? 9999;
                         if (ga !== gb) return ga - gb;
@@ -2170,13 +2205,14 @@
                 const body = topicRows.map((student, index) => ([
                     String(index + 1),
                     String(student.name || '-'),
+                    String(student.batchNumber || '-'),
                     String(student.presentation?.groupNumber || '-'),
                     String(student.presentation?.topic || '-')
                 ]));
 
                 doc.autoTable({
                     startY: 152,
-                    head: [['S.No', 'Student Name', 'Group ID', 'Presentation Topic']],
+                    head: [['S.No', 'Student Name', 'Batch', 'Group ID', 'Presentation Topic']],
                     body,
                     styles: { fontSize: 10, cellPadding: 5 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
@@ -2479,35 +2515,56 @@
 
         // MARKS FUNCTIONS
         async function loadMarksRegions() {
+            await Promise.all([
+                loadExamComponentRegions('practical'),
+                loadExamComponentRegions('theory')
+            ]);
+        }
+
+        function getExamComponentMeta(component) {
+            return examComponentConfig[component];
+        }
+
+        function getExamComponentElements(component) {
+            const meta = getExamComponentMeta(component);
+            if (!meta) return {};
+            return {
+                regionEl: document.getElementById(`${meta.prefix}Region`),
+                batchEl: document.getElementById(`${meta.prefix}Batch`),
+                dateEl: document.getElementById(`${meta.prefix}Date`),
+                tableEl: document.getElementById(`${meta.prefix}Table`)
+            };
+        }
+
+        async function loadExamComponentRegions(component) {
+            const { regionEl, batchEl, tableEl } = getExamComponentElements(component);
+            if (!regionEl || !batchEl || !tableEl) return;
+
             try {
                 const res = await fetch('/api/students/regions/all', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const regions = await res.json();
-                const select = document.getElementById('marksRegion');
-                if (!select) return;
-                select.innerHTML = '<option value="">Select Region</option>';
+                regionEl.innerHTML = '<option value="">Select Region</option>';
                 regions.forEach(region => {
-                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                    regionEl.innerHTML += `<option value="${region}">${region}</option>`;
                 });
-                document.getElementById('marksBatch').innerHTML = '<option value="">Select Batch</option>';
-                document.getElementById('marksTable').innerHTML = '';
+                batchEl.innerHTML = '<option value="">Select Batch</option>';
+                tableEl.innerHTML = '';
             } catch (error) {
-                console.error('Error loading marks regions:', error);
+                console.error('Error loading exam regions:', error);
             }
         }
 
-        async function loadMarksBatches() {
-            const region = document.getElementById('marksRegion').value;
-            const select = document.getElementById('marksBatch');
-            if (!select) return;
+        async function loadExamComponentBatches(component) {
+            const { regionEl, batchEl, tableEl } = getExamComponentElements(component);
+            if (!regionEl || !batchEl || !tableEl) return;
+            const region = regionEl.value;
+
             if (!region) {
-                select.innerHTML = '<option value="">Select Batch</option>';
-                document.getElementById('marksTable').innerHTML = '';
-                const planResultsEl = document.getElementById('examPlanResults');
-                if (planResultsEl) planResultsEl.innerHTML = '';
-                setExamPlanInputs(null);
+                batchEl.innerHTML = '<option value="">Select Batch</option>';
+                tableEl.innerHTML = '';
                 return;
             }
 
@@ -2517,141 +2574,145 @@
                 });
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const batches = await res.json();
-                select.innerHTML = '<option value="all">All Batches</option>';
+                batchEl.innerHTML = '<option value="all">All Batches</option>';
                 batches.forEach(batch => {
-                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                    batchEl.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
-                select.value = 'all';
-                document.getElementById('marksTable').innerHTML = '';
-                const planResultsEl = document.getElementById('examPlanResults');
-                if (planResultsEl) planResultsEl.innerHTML = '';
-                setExamPlanInputs(null);
+                batchEl.value = 'all';
+                tableEl.innerHTML = '';
             } catch (error) {
-                console.error('Error loading marks batches:', error);
+                console.error('Error loading exam batches:', error);
             }
         }
 
-        async function loadMarksStudents() {
-            const region = document.getElementById('marksRegion').value;
-            const batch = document.getElementById('marksBatch').value;
-            const date = document.getElementById('marksDate').value;
-            const planResultsEl = document.getElementById('examPlanResults');
-            if (planResultsEl) planResultsEl.innerHTML = '';
-
+        async function loadExamComponentStudents(component) {
+            const { regionEl, batchEl, dateEl, tableEl } = getExamComponentElements(component);
+            if (!regionEl || !batchEl || !dateEl || !tableEl) return;
+            const region = regionEl.value;
+            const batch = batchEl.value;
+            const date = dateEl.value;
             if (!region || !batch || !date) return;
 
-                try {
-                    const res = await fetch(
-                        `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
-                        { headers: { 'Authorization': `Bearer ${token}` } }
-                    );
+            try {
+                const res = await fetch(
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    { headers: { 'Authorization': `Bearer ${token}` } }
+                );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
-                marksCurrentStudents = await res.json();
+                const students = await res.json();
+                examComponentState[component].students = Array.isArray(students) ? students : [];
 
-                let attendanceMap = new Map();
-                try {
-                    const attRes = await fetch(
-                        `/api/marks/exam-attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
-                        { headers: { 'Authorization': `Bearer ${token}` } }
-                    );
-                    if (attRes.ok) {
-                        const attendanceRows = await attRes.json();
-                        attendanceRows.forEach(row => {
-                            if (row && row.studentId) {
-                                attendanceMap.set(String(row.studentId), row.appeared);
-                            }
-                        });
-                    }
-                } catch (attError) {
-                    console.warn('Exam attendance lookup failed, continuing without it.', attError);
-                }
-
-                if (!marksCurrentStudents || marksCurrentStudents.length === 0) {
-                    document.getElementById('marksTable').innerHTML =
-                        '<div class="alert alert-warning">No students found in this batch</div>';
+                if (!students || students.length === 0) {
+                    tableEl.innerHTML = '<div class="alert alert-warning">No students found in this batch</div>';
                     return;
                 }
 
-                marksAttendanceMap = attendanceMap;
-                renderMarksTable();
+                renderExamComponentTable(component);
             } catch (error) {
-                console.error('? Error loading marks:', error);
-                document.getElementById('marksTable').innerHTML =
-                    `<div class="alert alert-danger">Error loading marks: ${error.message}</div>`;
+                console.error('Error loading exam students:', error);
+                tableEl.innerHTML = `<div class="alert alert-danger">Error loading marks: ${error.message}</div>`;
             }
         }
 
-        let marksAttendanceMap = new Map();
+        function splitTotalToParts(total, limits) {
+            if (!Number.isFinite(total)) {
+                return { word: null, excel: null };
+            }
+            let remaining = Math.max(0, total);
+            const word = Math.min(limits.word, remaining);
+            remaining -= word;
+            const excel = Math.min(limits.excel, remaining);
+            return { word, excel };
+        }
 
-        function renderMarksTable() {
-            const showAbsentOnly = document.getElementById('marksAbsentOnly')?.checked;
-            const students = Array.isArray(marksCurrentStudents) ? marksCurrentStudents : [];
-            const rows = showAbsentOnly
-                ? students.filter(s => marksAttendanceMap.get(String(s._id)) === false)
-                : students;
+        function renderExamComponentTable(component) {
+            const meta = getExamComponentMeta(component);
+            const { tableEl } = getExamComponentElements(component);
+            if (!meta || !tableEl) return;
+            const students = Array.isArray(examComponentState[component].students)
+                ? examComponentState[component].students
+                : [];
 
-            if (rows.length === 0) {
-                document.getElementById('marksTable').innerHTML =
-                    '<div class="alert alert-warning">No students match the current filter</div>';
+            if (students.length === 0) {
+                tableEl.innerHTML = '<div class="alert alert-warning">No students found</div>';
                 return;
             }
 
+            const sortedStudents = [...students].sort((a, b) => {
+                const batchCmp = String(a.batchNumber || '').localeCompare(String(b.batchNumber || ''));
+                if (batchCmp !== 0) return batchCmp;
+                return String(a.name || '').localeCompare(String(b.name || ''));
+            });
+
             let html = `
                 <div class="alert alert-info py-2">
-                    Tip: Leave a component blank to mark it as missed.
+                    Leave a field blank for missed students. Saved marks will reload on the selected date.
                 </div>
-                <div class="d-flex align-items-center gap-3 mb-2 flex-wrap">
-                    <div class="d-flex align-items-center gap-2">
-                        <input class="form-check-input" type="checkbox" id="marksAbsentOnly" onchange="renderMarksTable()">
-                        <label class="form-check-label" for="marksAbsentOnly">Show only absent students</label>
-                    </div>
-                    <button class="btn btn-outline-primary btn-sm" onclick="saveExamAttendance()">Save Exam Attendance</button>
-                </div>
+                <div class="table-responsive">
                 <table class="table table-sm table-striped">
                     <thead class="table-light">
                         <tr>
                             <th>#</th>
                             <th>Student Name</th>
-                            <th class="text-center">Appeared</th>
-                            <th class="text-center">Theory (40)</th>
-                            <th class="text-center">Practical (40)</th>
-                            <th class="text-center">Presentation (20)</th>
+                            <th>Batch</th>
+            `;
+
+            if (meta.mode === 'single') {
+                html += `<th class="text-center">${meta.max} Marks</th>`;
+            } else {
+                html += `
+                            <th class="text-center">Word (20)</th>
+                            <th class="text-center">Excel (20)</th>
+                `;
+            }
+
+            html += `
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            rows.forEach((student, index) => {
-                const m = student.marks || {};
-                const presentationValue = m.presentation ?? student.presentationPrefill ?? '';
-                const appeared = marksAttendanceMap.get(String(student._id));
-                const isAbsent = appeared === false;
-                const isUnknown = appeared === null || appeared === undefined;
-                const absentAttr = (isAbsent || isUnknown) ? 'data-absent="1" disabled placeholder="ABSENT"' : '';
-                const checkboxChecked = appeared === true ? 'checked' : '';
+            sortedStudents.forEach((student, index) => {
+                const marks = student.marks || {};
                 html += `
                     <tr>
                         <td class="align-middle">${index + 1}</td>
-                        <td class="align-middle fw-semibold">${student.name}</td>
+                        <td class="align-middle fw-semibold">${escapeHtml(student.name || '-')}</td>
+                        <td class="align-middle">${escapeHtml(student.batchNumber || '-')}</td>
+                `;
+
+                if (meta.mode === 'single') {
+                    const value = marks[meta.field];
+                    html += `
                         <td class="align-middle text-center">
-                            <input type="checkbox" class="form-check-input"
-                                data-exam-attendance="1"
-                                data-student-id="${student._id}"
-                                ${checkboxChecked}
-                                onchange="handleExamAttendanceToggle('${student._id}', this.checked)">
+                            <input type="number" class="form-control form-control-sm" min="0" max="${meta.max}"
+                                id="${meta.prefix}_${student._id}" value="${value ?? ''}">
+                        </td>
+                    `;
+                } else {
+                    const breakdown = marks[meta.breakdownKey] || {};
+                    let word = breakdown.word;
+                    let excel = breakdown.excel;
+                    const hasAnyBreakdown = [word, excel].some(v => v !== null && v !== undefined);
+                    const fallbackTotal = Number.isFinite(marks[meta.field]) ? Number(marks[meta.field]) : null;
+                    if (!hasAnyBreakdown && Number.isFinite(fallbackTotal)) {
+                        const parts = splitTotalToParts(fallbackTotal, meta.limits);
+                        word = parts.word;
+                        excel = parts.excel;
+                    }
+                    html += `
+                        <td class="align-middle text-center">
+                            <input type="number" class="form-control form-control-sm" min="0" max="${meta.limits.word}"
+                                id="${meta.prefix}_word_${student._id}" value="${word ?? ''}">
                         </td>
                         <td class="align-middle text-center">
-                            <input type="number" class="form-control form-control-sm" min="0" max="40"
-                                id="theory_${student._id}" value="${m.theory ?? ''}" ${absentAttr}>
+                            <input type="number" class="form-control form-control-sm" min="0" max="${meta.limits.excel}"
+                                id="${meta.prefix}_excel_${student._id}" value="${excel ?? ''}">
                         </td>
-                        <td class="align-middle text-center">
-                            <input type="number" class="form-control form-control-sm" min="0" max="40"
-                                id="practical_${student._id}" value="${m.practical ?? ''}" ${absentAttr}>
-                        </td>
-                        <td class="align-middle text-center">
-                            <input type="number" class="form-control form-control-sm" min="0" max="20"
-                                id="presentation_${student._id}" value="${presentationValue}" ${absentAttr}>
-                        </td>
+                    `;
+                }
+
+                html += `
                     </tr>
                 `;
             });
@@ -2659,36 +2720,22 @@
             html += `
                     </tbody>
                 </table>
+                </div>
                 <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-success btn-lg" onclick="submitMarks()">Submit Exam Marks</button>
-                    <button class="btn btn-outline-secondary btn-lg" onclick="enableAbsentMarksInputs()">Enable Absent Entries</button>
+                    <button class="btn btn-success" onclick="saveExamComponentMarks('${component}')">Save ${meta.label} Marks</button>
                 </div>
             `;
 
-            document.getElementById('marksTable').innerHTML = html;
+            tableEl.innerHTML = html;
         }
 
-        function enableAbsentMarksInputs() {
-            const inputs = document.querySelectorAll('#marksTable input[data-absent="1"]');
-            if (!inputs || inputs.length === 0) {
-                alert('No absent inputs to enable.');
-                return;
-            }
-            inputs.forEach(input => {
-                input.disabled = false;
-                input.removeAttribute('placeholder');
-            });
-        }
-
-        async function handleExamAttendanceToggle(studentId, appeared) {
-            marksAttendanceMap.set(String(studentId), appeared);
-            renderMarksTable();
-        }
-
-        async function saveExamAttendance() {
-            const region = document.getElementById('marksRegion').value;
-            const batch = document.getElementById('marksBatch').value;
-            const date = document.getElementById('marksDate').value;
+        async function saveExamComponentMarks(component) {
+            const meta = getExamComponentMeta(component);
+            const { regionEl, batchEl, dateEl } = getExamComponentElements(component);
+            if (!meta || !regionEl || !batchEl || !dateEl) return;
+            const region = regionEl.value;
+            const batch = batchEl.value;
+            const date = dateEl.value;
 
             if (!region || !batch || !date) {
                 alert('Please select region, batch, and date');
@@ -2696,72 +2743,35 @@
             }
 
             const records = [];
-            marksCurrentStudents.forEach(student => {
-                const appeared = marksAttendanceMap.get(String(student._id));
-                records.push({ studentId: student._id, appeared: !!appeared });
+            const students = examComponentState[component].students || [];
+
+            students.forEach(student => {
+                if (meta.mode === 'single') {
+                    const input = document.getElementById(`${meta.prefix}_${student._id}`);
+                    const rawValue = input ? input.value : '';
+                    if (rawValue === '') return;
+                    records.push({
+                        studentId: student._id,
+                        [meta.field]: rawValue === '' ? null : Number(rawValue)
+                    });
+                } else {
+                    const wordEl = document.getElementById(`${meta.prefix}_word_${student._id}`);
+                    const excelEl = document.getElementById(`${meta.prefix}_excel_${student._id}`);
+                    const wordVal = wordEl ? wordEl.value : '';
+                    const excelVal = excelEl ? excelEl.value : '';
+                    const hasValue = wordVal !== '' || excelVal !== '';
+                    if (!hasValue) return;
+                    records.push({
+                        studentId: student._id,
+                        [`${meta.field}Breakdown`]: {
+                            word: wordVal === '' ? null : Number(wordVal),
+                            excel: excelVal === '' ? null : Number(excelVal)
+                        }
+                    });
+                }
             });
 
             if (records.length === 0) {
-                alert('No exam attendance changes to save');
-                return;
-            }
-
-            try {
-                const res = await fetch('/api/marks/exam-attendance/mark', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ date, records })
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    alert(`Exam attendance saved. Successful: ${data.results?.successful || 0}`);
-                } else {
-                    alert('Error: ' + (data.message || 'Failed to save exam attendance'));
-                }
-            } catch (error) {
-                console.error('Error saving exam attendance:', error);
-                alert('Failed to save exam attendance');
-            }
-        }
-
-        async function submitMarks() {
-            const region = document.getElementById('marksRegion').value;
-            const batch = document.getElementById('marksBatch').value;
-            const date = document.getElementById('marksDate').value;
-
-            if (!region || !batch || !date) {
-                alert('Please select region, batch, and date');
-                return;
-            }
-
-            const marksRecords = [];
-            marksCurrentStudents.forEach(student => {
-                const theoryEl = document.getElementById(`theory_${student._id}`);
-                const practicalEl = document.getElementById(`practical_${student._id}`);
-                const presentationEl = document.getElementById(`presentation_${student._id}`);
-
-                const hasValue = (theoryEl?.value ?? '') !== '' ||
-                                 (practicalEl?.value ?? '') !== '' ||
-                                 (presentationEl?.value ?? '') !== '';
-
-                if (!hasValue) return;
-
-                const theory = theoryEl.value === '' ? null : Number(theoryEl.value || 0);
-                const practical = practicalEl.value === '' ? null : Number(practicalEl.value || 0);
-                const presentation = presentationEl.value === '' ? null : Number(presentationEl.value || 0);
-
-                marksRecords.push({
-                    studentId: student._id,
-                    theory,
-                    practical,
-                    presentation
-                });
-            });
-
-            if (marksRecords.length === 0) {
                 alert('Please enter marks for at least one student');
                 return;
             }
@@ -2773,17 +2783,17 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ date, marksRecords })
+                    body: JSON.stringify({ date, marksRecords: records })
                 });
                 const data = await res.json();
                 if (res.ok) {
                     alert(`Exam marks saved. Successful: ${data.results?.successful || 0}`);
-                    loadMarksStudents();
+                    loadExamComponentStudents(component);
                 } else {
                     alert('Error: ' + (data.message || 'Failed to submit marks'));
                 }
             } catch (error) {
-                console.error('? Error submitting marks:', error);
+                console.error('Error submitting marks:', error);
                 alert('Failed to submit marks');
             }
         }
@@ -2858,9 +2868,22 @@
             }
         }
 
+        function getExamPlanRegionBatch() {
+            const components = ['practical', 'theory'];
+            for (const component of components) {
+                const meta = examComponentConfig[component];
+                if (!meta) continue;
+                const region = document.getElementById(`${meta.prefix}Region`)?.value || '';
+                const batch = document.getElementById(`${meta.prefix}Batch`)?.value || '';
+                if (region && batch && String(batch).toLowerCase() !== 'all') {
+                    return { region, batch };
+                }
+            }
+            return { region: '', batch: '' };
+        }
+
         async function loadExamPlan(silent = false) {
-            const region = document.getElementById('marksRegion')?.value || '';
-            const batch = document.getElementById('marksBatch')?.value || '';
+            const { region, batch } = getExamPlanRegionBatch();
             if (!region || !batch || String(batch).toLowerCase() === 'all') {
                 if (!silent) {
                     alert('Please select region and a specific batch to load plan');
@@ -2885,8 +2908,7 @@
         }
 
         async function saveExamPlan() {
-            const region = document.getElementById('marksRegion')?.value || '';
-            const batch = document.getElementById('marksBatch')?.value || '';
+            const { region, batch } = getExamPlanRegionBatch();
             if (!region || !batch || String(batch).toLowerCase() === 'all') {
                 alert('Please select region and a specific batch to save plan');
                 return;
@@ -2922,8 +2944,7 @@
         }
 
         async function viewResultByPlan() {
-            const region = document.getElementById('marksRegion')?.value || '';
-            const batch = document.getElementById('marksBatch')?.value || '';
+            const { region, batch } = getExamPlanRegionBatch();
             const planResultsEl = document.getElementById('examPlanResults');
             if (!region || !batch || String(batch).toLowerCase() === 'all') {
                 alert('Please select region and a specific batch');
@@ -3954,6 +3975,8 @@
         async function submitWorkReport() {
             const date = document.getElementById('workDate').value;
             const topicsCovered = document.getElementById('workTopics').value.trim();
+            const reportId = document.getElementById('workReportId').value.trim();
+            const isEditing = Boolean(reportId);
 
             if (!date || !topicsCovered) {
                 alert('Please select date and enter topics.');
@@ -3961,8 +3984,8 @@
             }
 
             try {
-                const res = await fetch('/api/workReport', {
-                    method: 'POST',
+                const res = await fetch(isEditing ? `/api/workReport/${reportId}` : '/api/workReport', {
+                    method: isEditing ? 'PUT' : 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
@@ -3976,8 +3999,9 @@
 
                 const data = await res.json();
                 if (res.ok) {
-                    alert(data.message || 'Report submitted successfully');
+                    alert(data.message || (isEditing ? 'Report updated successfully' : 'Report submitted successfully'));
                     document.getElementById('workTopics').value = '';
+                    cancelWorkReportEdit();
                     loadWorkReports();
                 } else {
                     alert('Error: ' + (data.error || data.message || 'Failed to submit report'));
@@ -3986,6 +4010,30 @@
                 console.error('❌ Error submitting work report:', error);
                 alert('Failed to submit report');
             }
+        }
+
+        function editWorkReport(index) {
+            const reports = lastWorkShareData?.reports || [];
+            const report = reports[index];
+
+            if (!report) {
+                alert('Unable to load report for editing.');
+                return;
+            }
+
+            const reportDate = report.date ? new Date(report.date).toISOString().split('T')[0] : '';
+            document.getElementById('workReportId').value = report._id || '';
+            document.getElementById('workDate').value = reportDate;
+            document.getElementById('workTopics').value = report.topicsCovered || '';
+
+            document.getElementById('workSubmitBtn').textContent = 'Update Daily Work';
+            document.getElementById('workCancelEditBtn').classList.remove('d-none');
+        }
+
+        function cancelWorkReportEdit() {
+            document.getElementById('workReportId').value = '';
+            document.getElementById('workSubmitBtn').textContent = 'Submit Daily Work';
+            document.getElementById('workCancelEditBtn').classList.add('d-none');
         }
 
         async function loadWorkReports() {
@@ -4042,6 +4090,7 @@
                                 <th>Region</th>
                                 <th>Teacher</th>
                                 <th>Topics Taught</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -4056,6 +4105,9 @@
                             <td>${escapeHtml(report.region || region || '-')}</td>
                             <td>${escapeHtml(report.teacherName || '-')}</td>
                             <td>${escapeHtml(report.topicsCovered || '-')}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary" onclick="editWorkReport(${index})">Edit</button>
+                            </td>
                         </tr>
                     `;
                 });
@@ -6250,6 +6302,9 @@
 
             const { region, batch, filterType, startDate, endDate, stats, summary } = lastReportRawData;
             const studentFilter = document.getElementById('reportStudentFilter')?.value || 'all';
+            const percentFilterRaw = (document.getElementById('reportAttendancePercent')?.value || '').trim();
+            const percentFilter = Number(percentFilterRaw);
+            const hasPercentFilter = percentFilterRaw !== '' && Number.isFinite(percentFilter);
 
             const withComputed = summary.map((student) => {
                 const totalClasses = Number(student.totalClasses || 0);
@@ -6266,7 +6321,11 @@
                 return true;
             };
 
-            const filteredSummary = withComputed.filter(filterByType);
+            const filteredSummary = withComputed.filter((student) => {
+                if (!filterByType(student)) return false;
+                if (hasPercentFilter) return student.percentage >= percentFilter;
+                return true;
+            });
             const attendedAllCount = withComputed.filter(s => s.attendedAll).length;
             const below75Count = withComputed.filter(s => s.percentage < 75).length;
             const above75Count = withComputed.filter(s => s.percentage >= 75).length;
@@ -6297,6 +6356,7 @@
                     : studentFilter === 'above-75'
                         ? 'Attendance 75% and Above'
                         : 'All Students';
+            const percentFilterLabel = hasPercentFilter ? ` | Min %: ${percentFilter}` : '';
 
             let html = `
                 <div class="alert alert-info">
@@ -6316,7 +6376,7 @@
                     <div class="col-md-3"><div class="card border-warning"><div class="card-body py-2"><small class="text-muted">75% and Above</small><h5 class="mb-0 text-warning">${above75Count}</h5></div></div></div>
                 </div>
                 <div class="alert alert-secondary py-2">
-                    <strong>Active Student Filter:</strong> ${activeFilterLabel} | <strong>Shown:</strong> ${filteredSummary.length} / ${withComputed.length}
+                    <strong>Active Student Filter:</strong> ${activeFilterLabel}${percentFilterLabel} | <strong>Shown:</strong> ${filteredSummary.length} / ${withComputed.length}
                 </div>
                 <div class="table-responsive mb-3">
                     <table class="table table-bordered table-sm">
@@ -6590,14 +6650,13 @@
                         : '-';
                     const studentName = escapeHtml(row.studentName || '-');
                     const school = escapeHtml(row.schoolName || '-');
-                    const mobile = escapeHtml(row.mobile || '-');
                     const standard = escapeHtml(row.standard || '-');
                     html += `
                         <tr>
                             <td class="text-center">${index + 1}</td>
                             <td>
                                 <div><strong>${studentName}</strong></div>
-                                <div class="text-muted small">School: ${school} | Std: ${standard} | Mobile: ${mobile}</div>
+                                <div class="text-muted small">School: ${school} | Std: ${standard}</div>
                             </td>
                             <td>${escapeHtml(row.batchNumber || '-')}</td>
                             <td>${escapeHtml(days)}</td>
@@ -6641,13 +6700,14 @@
                     return d.toISOString().split('T')[0];
                 };
 
-                const rows = summary.map((s) => ([
+                const rows = summary.map((s, idx) => ([
+                    String(idx + 1),
                     String(s.name || '-'),
-                    String(s.reportBatch || s.batchNumber || '-'),
                     String(formatJoinDate(s.enrollmentDate)),
+                    String(s.reportBatch || s.batchNumber || '-'),
                     String(s.totalClasses || 0),
-                    String((s.present || 0) + (s.late || 0) + (s.leave || 0)),
                     String(s.absent || 0),
+                    String((s.present || 0) + (s.late || 0) + (s.leave || 0)),
                     `${Number(s.percentage || 0).toFixed(2)}%`
                 ]));
 
@@ -6664,7 +6724,7 @@
 
                 doc.autoTable({
                     startY: 168,
-                    head: [['Student Name', 'Batch Number', 'Date of Joining', 'Total Class', 'Attended Class', 'Absent', 'Percentage']],
+                    head: [['S.No', 'Student Name', 'Date of Joining', 'Batch Number', 'Total Class', 'Absent', 'Present', 'Attendance %']],
                     body: rows,
                     styles: { fontSize: 10, cellPadding: 6 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
@@ -6741,7 +6801,6 @@
                     String(idx + 1),
                     String(s.name || '-'),
                     String(s.finalBatch || '-'),
-                    String(s.mobile || '-'),
                     String(s.totalClasses || 0),
                     String(s.attendedClasses || 0)
                 ]));
@@ -6758,7 +6817,7 @@
 
                 doc.autoTable({
                     startY: 152,
-                    head: [['S.No', 'Student Name', 'Batch Number', 'Mobile', 'Total Classes', 'Attended Classes']],
+                    head: [['S.No', 'Student Name', 'Batch Number', 'Total Classes', 'Attended Classes']],
                     body: rows,
                     styles: { fontSize: 10, cellPadding: 5 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
