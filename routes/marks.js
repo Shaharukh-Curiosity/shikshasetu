@@ -197,12 +197,13 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     const dateOnly = date.substring(0, 10);
     const useAllBatches = !batchNumber || String(batchNumber).toLowerCase() === 'all';
     const batchFilter = useAllBatches ? {} : { batchNumber };
+    const includeInactive = String(req.query.includeInactive || '').toLowerCase() === 'true';
 
     const students = await User.find({
       role: 'student',
       region,
       ...batchFilter,
-      isActive: true
+      ...(includeInactive ? {} : { isActive: true })
     }).lean();
 
     if (!students || students.length === 0) {

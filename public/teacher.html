@@ -2595,7 +2595,7 @@
 
             try {
                 const res = await fetch(
-                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}&includeInactive=true`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
@@ -3043,7 +3043,7 @@
 
             try {
                 const res = await fetch(
-                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}&includeInactive=true`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
@@ -3240,7 +3240,7 @@
 
             try {
                 const res = await fetch(
-                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}&includeInactive=true`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
