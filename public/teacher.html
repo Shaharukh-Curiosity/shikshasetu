@@ -357,6 +357,7 @@
                                 <option value="all">All</option>
                                 <option value="not_marked">Not Marked</option>
                                 <option value="present">Present</option>
+                                <option value="late">Late</option>
                                 <option value="absent">Absent</option>
                             </select>
                         </div>
@@ -4841,12 +4842,16 @@
                 if (status === 'absent' && !note && !student.attendance && student.plannedAbsence?.reason) {
                     note = String(student.plannedAbsence.reason || '').trim();
                 }
-                return { status, note, isPlannedDefault: !!selection.isPlannedDefault };
+                const lateTime = status === 'late'
+                    ? String(selection.lateTime || student.attendance?.lateTime || '').trim()
+                    : '';
+                return { status, note, lateTime, isPlannedDefault: !!selection.isPlannedDefault };
             }
             if (student.attendance) {
                 return {
                     status: student.attendance.status || '',
                     note: String(student.attendance.note || '').trim(),
+                    lateTime: String(student.attendance.lateTime || '').trim(),
                     isPlannedDefault: false
                 };
             }
@@ -4854,10 +4859,11 @@
                 return {
                     status: 'absent',
                     note: String(student.plannedAbsence.reason || '').trim(),
+                    lateTime: '',
                     isPlannedDefault: true
                 };
             }
-            return { status: '', note: '', isPlannedDefault: false };
+            return { status: '', note: '', lateTime: '', isPlannedDefault: false };
         }
 
         function updateMarkStatus(studentId, value, options = {}) {
@@ -4869,10 +4875,32 @@
                 next.note = '';
                 next.isPlannedDefault = false;
             }
+            if (Object.prototype.hasOwnProperty.call(options, 'lateTime')) {
+                next.lateTime = String(options.lateTime || '').trim();
+            } else if (value !== 'late') {
+                next.lateTime = '';
+            }
             if (Object.prototype.hasOwnProperty.call(options, 'isPlannedDefault')) {
                 next.isPlannedDefault = !!options.isPlannedDefault;
             }
             markSelections.set(studentId, next);
+
+            const lateInput = document.querySelector(`input[data-late-input="${studentId}"]`);
+            if (lateInput) {
+                lateInput.disabled = value !== 'late';
+                if (value !== 'late') {
+                    lateInput.value = '';
+                } else if (!lateInput.value && next.lateTime) {
+                    lateInput.value = next.lateTime;
+                }
+            }
+        }
+
+        function updateLateTime(studentId, value) {
+            const timeValue = String(value || '').trim();
+            const existing = markSelections.get(studentId) || {};
+            if (existing.status !== 'late') return;
+            markSelections.set(studentId, { ...existing, lateTime: timeValue });
         }
 
         function applyMarkFilters() {
@@ -4972,6 +5000,8 @@
                 const currentStatus = state.status;
                 const isPresent = currentStatus === 'present';
                 const isAbsent = currentStatus === 'absent';
+                const isLate = currentStatus === 'late';
+                const lateTimeValue = state.lateTime || '';
                 const prevAbsent = student.previousDay && student.previousDay.status === 'absent';
                 const prevTwoAbsent = student.previousTwoDays && student.previousTwoDays.status === 'absent';
                 const consecutiveAbsent = prevAbsent && prevTwoAbsent;
@@ -4997,7 +5027,8 @@
                         <td class="align-middle">${index + 1}</td>
                         <td class="align-middle fw-semibold">${student.name}${prevDayIcon}${consecutiveIcon}${frequentAbsentBadge}${plannedBadge}${plannedNote}</td>
                         <td class="align-middle">
-                            <div class="d-flex justify-content-center gap-2 flex-wrap">
+                            <div class="d-flex flex-column align-items-center gap-2">
+                                <div class="d-flex justify-content-center gap-2 flex-wrap">
                                 <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
                                     <input type="radio" class="form-check-input m-0" name="status_${student._id}" value="present" ${isPresent ? 'checked' : ''} onchange="updateMarkStatus('${student._id}', this.value)">
                                     <span class="fw-semibold text-success">present</span>
@@ -5006,6 +5037,20 @@
                                     <input type="radio" class="form-check-input m-0" name="status_${student._id}" value="absent" ${isAbsent ? 'checked' : ''} onchange="updateMarkStatus('${student._id}', this.value)">
                                     <span class="fw-semibold text-danger">absent</span>
                                 </label>
+                                <label class="d-flex align-items-center gap-2 px-2 py-1 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
+                                    <input type="radio" class="form-check-input m-0" name="status_${student._id}" value="late" ${isLate ? 'checked' : ''} onchange="updateMarkStatus('${student._id}', this.value)">
+                                    <span class="fw-semibold text-warning">late</span>
+                                </label>
+                                </div>
+                                <input
+                                    type="time"
+                                    class="form-control form-control-sm"
+                                    style="max-width: 140px;"
+                                    value="${lateTimeValue}"
+                                    data-late-input="${student._id}"
+                                    ${isLate ? '' : 'disabled'}
+                                    onchange="updateLateTime('${student._id}', this.value)"
+                                >
                             </div>
                         </td>
                     </tr>
@@ -5054,18 +5099,29 @@
             const savingBanner = document.getElementById('savingBanner');
 
             const attendanceRecords = [];
+            let missingLateTimeFor = '';
             
             currentStudents.forEach(student => {
                 const state = getEffectiveMarkState(student);
                 const status = state.status;
                 if (status) {
+                    const lateTime = status === 'late' ? String(state.lateTime || '').trim() : '';
+                    if (status === 'late' && !lateTime) {
+                        missingLateTimeFor = student.name || 'selected student';
+                        return;
+                    }
                     attendanceRecords.push({
                         studentId: student._id,
                         status: status,
-                        note: state.note || ''
+                        note: state.note || '',
+                        lateTime: lateTime
                     });
                 }
             });
+            if (missingLateTimeFor) {
+                alert(`Late time is required for ${missingLateTimeFor}.`);
+                return;
+            }
 
             console.log('✅ Records to submit:', attendanceRecords.length);
 
@@ -5252,18 +5308,22 @@
             const normalized = lastViewRawStudents.map(student => {
                 let statusKey = 'not_marked';
                 let markedBy = '-';
+                let statusRaw = '';
+                let lateTime = '';
                 let statusBadge = getStatusBadge('');
                 if (student.attendance) {
                     const status = student.attendance.status;
                     statusBadge = getStatusBadge(status);
                     markedBy = student.attendance.markedBy || '-';
+                    statusRaw = status || '';
+                    lateTime = String(student.attendance.lateTime || '').trim();
                     if (status === 'present' || status === 'late' || status === 'leave') {
                         statusKey = 'present';
                     } else if (status === 'absent') {
                         statusKey = 'absent';
                     }
                 }
-                return { student, statusKey, markedBy, statusBadge };
+                return { student, statusKey, markedBy, statusBadge, statusRaw, lateTime };
             });
 
             const present = normalized.filter(x => x.statusKey === 'present').length;
@@ -5284,6 +5344,7 @@
                             <th>#</th>
                             <th>Name</th>
                             <th>Status</th>
+                            <th>Late Time</th>
                             <th>Marked By</th>
                             <th>Parent Mobile</th>
                             <th class="text-center">Call</th>
@@ -5308,6 +5369,8 @@
                     batchNumber: String(student.batchNumber || ''),
                     mobile: String(student.mobile || ''),
                     statusKey: item.statusKey,
+                    statusRaw: item.statusRaw,
+                    lateTime: item.lateTime,
                     markedBy: item.markedBy
                 });
 
@@ -5316,6 +5379,7 @@
                         <td>${index + 1}</td>
                         <td>${escapeHtml(student.name)}</td>
                         <td>${item.statusBadge}</td>
+                        <td>${item.statusRaw === 'late' ? escapeHtml(item.lateTime || '-') : '-'}</td>
                         <td>${escapeHtml(item.markedBy)}</td>
                         <td>${parentMobile}</td>
                         <td class="text-center">${callButton}</td>
@@ -5326,7 +5390,7 @@
             if (filtered.length === 0) {
                 html += `
                     <tr>
-                        <td colspan="6" class="text-center text-muted">No students in selected filter</td>
+                        <td colspan="7" class="text-center text-muted">No students in selected filter</td>
                     </tr>
                 `;
             }
@@ -5374,9 +5438,11 @@
             const isSuspendedClass = Boolean(suspendedClass) || (records.length > 0 && presentCount === 0 && absentRecords.length === records.length && notMarkedCount === 0);
             const absentLabel = isSuspendedClass ? 'Suspend Class' : 'Absent';
 
-            const statusLabel = (statusKey) => {
-                if (statusKey === 'present') return 'Present';
-                if (statusKey === 'absent') return absentLabel;
+            const statusLabel = (record) => {
+                if (record.statusRaw === 'late') return 'Late';
+                if (record.statusRaw === 'leave') return 'Leave';
+                if (record.statusRaw === 'present') return 'Present';
+                if (record.statusKey === 'absent') return absentLabel;
                 return 'Not Marked';
             };
 
@@ -5384,7 +5450,8 @@
                 String(index + 1),
                 String(r.name || '-'),
                 String(r.batchNumber || batch || '-'),
-                statusLabel(r.statusKey)
+                statusLabel(r),
+                r.statusRaw === 'late' ? String(r.lateTime || '-') : '-'
             ]));
 
             const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -5401,7 +5468,7 @@
 
             doc.autoTable({
                 startY: 168,
-                head: [['S.No', 'Student Name', 'Batch Number', 'Status']],
+                head: [['S.No', 'Student Name', 'Batch Number', 'Status', 'Late Time']],
                 body: rows,
                 styles: { fontSize: 10, cellPadding: 6 },
                 headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },

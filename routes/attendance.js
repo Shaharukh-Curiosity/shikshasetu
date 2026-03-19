@@ -11,6 +11,7 @@ const VALID_STATUSES = new Set(['present', 'absent', 'late', 'leave']);
 const PRESENT_STATUSES = new Set(['present', 'late', 'leave']);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_REGEX = /^\d{2}:\d{2}$/;
 
 function normalizeDateOnly(value) {
   return String(value || '').slice(0, 10);
@@ -18,6 +19,12 @@ function normalizeDateOnly(value) {
 
 function isValidDateOnly(value) {
   return DATE_REGEX.test(value);
+}
+
+function normalizeLateTime(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  return TIME_REGEX.test(raw) ? raw : '';
 }
 
 // ============================================
@@ -83,6 +90,9 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         errors++;
         continue;
       }
+      const lateTime = statusRaw === 'late'
+        ? normalizeLateTime(record.lateTime)
+        : '';
 
       const doc = {
         studentId: studentId,
@@ -93,6 +103,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         date: dateOnly,
         status: statusRaw,
         note: record.note ? String(record.note).trim().slice(0, 200) : '',
+        lateTime: lateTime,
         markedBy: String(req.user._id),
         markedByName: req.user.name,
         markedAt: now
@@ -108,6 +119,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
                 history: {
                   status: existingRecord.status,
                   note: existingRecord.note || '',
+                  lateTime: existingRecord.lateTime || '',
                   markedBy: existingRecord.markedBy,
                   markedByName: existingRecord.markedByName,
                   markedAt: existingRecord.markedAt
@@ -486,6 +498,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
           date: r.date,
           status: r.status,
           note: r.note || '',
+          lateTime: r.lateTime || '',
           markedByName: r.markedByName,
           markedAt: r.markedAt
         });
@@ -530,6 +543,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
         attendance: attendance ? {
           status: attendance.status,
           note: attendance.note || '',
+          lateTime: attendance.lateTime || '',
           markedBy: attendance.markedByName,
           markedAt: attendance.markedAt
         } : null
@@ -1099,3 +1113,4 @@ router.post('/undo', auth, isTeacherOrAdmin, async (req, res) => {
 });
 
 module.exports = router;
+

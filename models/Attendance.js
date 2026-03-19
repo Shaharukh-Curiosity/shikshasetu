@@ -9,6 +9,7 @@ const attendanceSchema = new mongoose.Schema({
   date: String,  // Store as STRING "YYYY-MM-DD" to avoid timezone issues
   status: String,  // "present", "absent", "late", "leave"
   note: String,    // optional reason/notes
+  lateTime: String, // optional "HH:mm" for late arrivals
   markedBy: String,  // User ID of who marked
   markedByName: String,  // Name of teacher/admin who marked (e.g., "John Admin", "Jane Teacher")
   markedAt: { type: Date, default: Date.now },
@@ -16,6 +17,7 @@ const attendanceSchema = new mongoose.Schema({
     {
       status: String,
       note: String,
+      lateTime: String,
       markedBy: String,
       markedByName: String,
       markedAt: Date

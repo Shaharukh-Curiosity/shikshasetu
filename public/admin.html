@@ -1509,6 +1509,7 @@
             }
         }// ===== ADMIN MARK ATTENDANCE =====
         let adminCurrentStudents = [];
+        let adminLateTimes = new Map();
 
         async function loadAdminMarkRegions() {
             const res = await fetch('/api/students/regions/all', {
@@ -1567,6 +1568,7 @@
                 return;
             }
             adminCurrentStudents = await res.json();
+            adminLateTimes = new Map();
 
             if (!adminCurrentStudents || adminCurrentStudents.length === 0) {
                 document.getElementById('adminStudentsTable').innerHTML =
@@ -1589,6 +1591,11 @@
             adminCurrentStudents.forEach((student, index) => {
                 const isPresent = student.attendance && student.attendance.status === 'present';
                 const isAbsent = student.attendance && student.attendance.status === 'absent';
+                const isLate = student.attendance && student.attendance.status === 'late';
+                const lateTimeValue = isLate && student.attendance?.lateTime ? String(student.attendance.lateTime) : '';
+                if (lateTimeValue) {
+                    adminLateTimes.set(String(student._id), lateTimeValue);
+                }
                 const prevAbsent = student.previousDay && student.previousDay.status === 'absent';
                 const prevTwoAbsent = student.previousTwoDays && student.previousTwoDays.status === 'absent';
                 const consecutiveAbsent = prevAbsent && prevTwoAbsent;
@@ -1600,15 +1607,30 @@
                         <td class="align-middle">${index + 1}</td>
                         <td class="align-middle fw-semibold">${student.name}${prevIcon}</td>
                         <td class="align-middle">
-                            <div class="d-flex justify-content-center gap-3">
+                            <div class="d-flex flex-column align-items-center gap-2">
+                                <div class="d-flex justify-content-center gap-3">
                                 <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
-                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="present" ${isPresent ? 'checked' : ''}>
+                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="present" ${isPresent ? 'checked' : ''} onchange="toggleAdminLateTime('${student._id}')">
                                     <span class="fw-semibold text-success">present</span>
                                 </label>
                                 <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
-                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="absent" ${isAbsent ? 'checked' : ''}>
+                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="absent" ${isAbsent ? 'checked' : ''} onchange="toggleAdminLateTime('${student._id}')">
                                     <span class="fw-semibold text-danger">absent</span>
                                 </label>
+                                <label class="d-flex align-items-center gap-2 px-3 py-2 rounded-pill border shadow-sm bg-light" style="cursor:pointer;">
+                                    <input type="radio" class="form-check-input m-0" name="admin_status_${student._id}" value="late" ${isLate ? 'checked' : ''} onchange="toggleAdminLateTime('${student._id}')">
+                                    <span class="fw-semibold text-warning">late</span>
+                                </label>
+                                </div>
+                                <input
+                                    type="time"
+                                    class="form-control form-control-sm"
+                                    style="max-width: 140px;"
+                                    id="admin_late_${student._id}"
+                                    value="${lateTimeValue}"
+                                    ${isLate ? '' : 'disabled'}
+                                    onchange="updateAdminLateTime('${student._id}', this.value)"
+                                >
                             </div>
                         </td>
                     </tr>
@@ -1635,15 +1657,29 @@
             }
 
             const attendanceRecords = [];
+            let missingLateTimeFor = '';
             adminCurrentStudents.forEach(student => {
                 const presentRadio = document.querySelector(`input[name="admin_status_${student._id}"][value="present"]`);
                 const absentRadio = document.querySelector(`input[name="admin_status_${student._id}"][value="absent"]`);
+                const lateRadio = document.querySelector(`input[name="admin_status_${student._id}"][value="late"]`);
                 if (presentRadio && presentRadio.checked) {
                     attendanceRecords.push({ studentId: student._id, status: 'present' });
                 } else if (absentRadio && absentRadio.checked) {
                     attendanceRecords.push({ studentId: student._id, status: 'absent' });
+                } else if (lateRadio && lateRadio.checked) {
+                    const lateInput = document.getElementById(`admin_late_${student._id}`);
+                    const lateTime = lateInput ? String(lateInput.value || '').trim() : '';
+                    if (!lateTime) {
+                        missingLateTimeFor = student.name || 'selected student';
+                        return;
+                    }
+                    attendanceRecords.push({ studentId: student._id, status: 'late', lateTime });
                 }
             });
+            if (missingLateTimeFor) {
+                alert(`Late time is required for ${missingLateTimeFor}.`);
+                return;
+            }
 
             if (attendanceRecords.length === 0) {
                 alert('Please mark at least one student');
@@ -1679,10 +1715,35 @@
             } catch (error) {
                 console.error('Error submitting attendance:', error);
                 alert('Failed to submit attendance');
-            } finally {
-                if (savingBanner) savingBanner.classList.add('d-none');
+        } finally {
+            if (savingBanner) savingBanner.classList.add('d-none');
+        }
+    }
+
+        function toggleAdminLateTime(studentId) {
+            const lateRadio = document.querySelector(`input[name="admin_status_${studentId}"][value="late"]`);
+            const lateInput = document.getElementById(`admin_late_${studentId}`);
+            if (!lateInput) return;
+            if (lateRadio && lateRadio.checked) {
+                lateInput.disabled = false;
+                if (!lateInput.value) {
+                    const saved = adminLateTimes.get(String(studentId));
+                    if (saved) lateInput.value = saved;
+                }
+            } else {
+                lateInput.disabled = true;
             }
         }
+
+        function updateAdminLateTime(studentId, value) {
+            const timeValue = String(value || '').trim();
+            if (timeValue) {
+                adminLateTimes.set(String(studentId), timeValue);
+            } else {
+                adminLateTimes.delete(String(studentId));
+            }
+        }
+
         function markAllAdminAttendance(status) {
             if (!adminCurrentStudents || adminCurrentStudents.length === 0) {
                 alert('No students loaded');
@@ -1691,6 +1752,7 @@
             adminCurrentStudents.forEach(student => {
                 const input = document.querySelector(`input[name="admin_status_${student._id}"][value="${status}"]`);
                 if (input) input.checked = true;
+                toggleAdminLateTime(student._id);
             });
         }
 
@@ -1702,8 +1764,11 @@
             adminCurrentStudents.forEach(student => {
                 const presentInput = document.querySelector(`input[name="admin_status_${student._id}"][value="present"]`);
                 const absentInput = document.querySelector(`input[name="admin_status_${student._id}"][value="absent"]`);
+                const lateInput = document.querySelector(`input[name="admin_status_${student._id}"][value="late"]`);
                 if (presentInput) presentInput.checked = false;
                 if (absentInput) absentInput.checked = false;
+                if (lateInput) lateInput.checked = false;
+                toggleAdminLateTime(student._id);
             });
         }
 
