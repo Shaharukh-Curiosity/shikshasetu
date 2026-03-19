@@ -5653,8 +5653,12 @@
                         const batchRawRows = [];
                         students.forEach((student) => {
                             let statusKey = 'not_marked';
+                            let statusRaw = '';
+                            let lateTime = '';
                             if (student.attendance) {
-                                if (['present', 'late', 'leave'].includes(student.attendance.status)) {
+                                statusRaw = String(student.attendance.status || '');
+                                lateTime = String(student.attendance.lateTime || '').trim();
+                                if (['present', 'late', 'leave'].includes(statusRaw)) {
                                     present++;
                                     statusKey = 'present';
                                 } else {
@@ -5668,7 +5672,9 @@
                             batchRawRows.push({
                                 name: String(student.name || '-'),
                                 batchNumber: String(student.batchNumber || b || '-'),
-                                statusKey
+                                statusKey,
+                                statusRaw,
+                                lateTime
                             });
                         });
 
@@ -5677,13 +5683,19 @@
 
                         batchRawRows.forEach((row) => {
                             let status = 'Not Marked';
-                            if (row.statusKey === 'present') status = 'Present';
+                            if (row.statusKey === 'present') {
+                                if (row.statusRaw === 'late') status = 'Late';
+                                else if (row.statusRaw === 'leave') status = 'Leave';
+                                else status = 'Present';
+                            }
                             if (row.statusKey === 'absent') status = absentLabel;
+                            const lateTimeCell = status === 'Late' ? (row.lateTime || '-') : '-';
                             batchRows.push([
                                 String(batchRows.length + 1),
                                 row.name,
                                 row.batchNumber,
                                 status,
+                                lateTimeCell,
                                 String(date)
                             ]);
                         });
@@ -5724,7 +5736,7 @@
 
                 doc.autoTable({
                     startY: 168,
-                    head: [['S.No', 'Student Name', 'Batch Number', 'Status', 'Date']],
+                    head: [['S.No', 'Student Name', 'Batch Number', 'Status', 'Late Time', 'Date']],
                     body: batchRows,
                     styles: { fontSize: 10, cellPadding: 6 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
