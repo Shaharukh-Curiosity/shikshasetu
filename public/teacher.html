@@ -649,6 +649,8 @@
                     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                         <h5 class="card-title mb-0">Bus On Wheels Inventory</h5>
                         <div class="d-flex gap-2" id="busInventoryActions">
+                            <button class="btn btn-outline-secondary" onclick="openBusServiceViewPanel()">View Bus Service</button>
+                            <button class="btn btn-outline-dark" onclick="openBusServicePanel()">Bus Service</button>
                             <button class="btn btn-outline-primary" onclick="viewBusInventoryDetails()">View Inventory Details</button>
                             <button class="btn btn-outline-success" onclick="shareBusInventoryToWhatsApp()">Share to WhatsApp</button>
                             <button class="btn btn-success" onclick="saveBusInventory()">Save Inventory</button>
@@ -676,6 +678,91 @@
                         </div>
                     </div>
                     <div class="mt-3" id="busInventoryDetails"></div>
+                    <div class="mt-4" id="busServicePanel" style="display: none;">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                    <h6 class="mb-0">Bus Service Expenditure</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="backToBusInventoryEditor()">Back To Inventory Input</button>
+                                </div>
+                                <form id="busServiceForm" onsubmit="saveBusServiceExpense(event)">
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-3">
+                                            <label>Service Date</label>
+                                            <input type="date" class="form-control" id="busServiceDate" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label>Garage Name</label>
+                                            <input type="text" class="form-control" id="busServiceGarageName" maxlength="120" placeholder="Garage name" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label>Garage Mobile</label>
+                                            <input type="text" class="form-control" id="busServiceGarageMobile" maxlength="20" placeholder="Mobile number">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label>Garage Address</label>
+                                            <input type="text" class="form-control" id="busServiceGarageAddress" maxlength="200" placeholder="Address">
+                                        </div>
+                                    </div>
+                                    <div class="row g-3 align-items-end mt-1">
+                                        <div class="col-md-6">
+                                            <label>Notes (applies to all)</label>
+                                            <input type="text" class="form-control" id="busServiceNotes" maxlength="200" placeholder="Optional note for this batch">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3 table-responsive">
+                                        <table class="table table-bordered align-middle">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th style="width: 60%;">Service Part</th>
+                                                    <th style="width: 40%;">Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="busServiceInputsBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div class="mt-2 d-flex gap-2 justify-content-end">
+                                        <button class="btn btn-outline-primary" type="button" onclick="loadBusServiceExpenses()">Refresh List</button>
+                                        <button class="btn btn-success" type="submit">Save Service Entries</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4" id="busServiceViewPanel" style="display: none;">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                    <h6 class="mb-0">View Bus Service</h6>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="backToBusInventoryEditor()">Back To Inventory Input</button>
+                                </div>
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-3">
+                                            <label>Filter From</label>
+                                            <input type="date" class="form-control" id="busServiceViewFilterFrom">
+                                        </div>
+                                        <div class="col-md-3">
+                                            <label>Filter To</label>
+                                            <input type="date" class="form-control" id="busServiceViewFilterTo">
+                                        </div>
+                                        <div class="col-md-4 d-flex gap-2">
+                                            <button class="btn btn-outline-dark w-100" type="button" onclick="applyBusServiceYearFilter('this')">This Year</button>
+                                            <button class="btn btn-outline-secondary w-100" type="button" onclick="applyBusServiceYearFilter('previous')">Previous Year</button>
+                                            <button class="btn btn-outline-secondary w-100" type="button" onclick="applyBusServiceYearFilter('previousAll')">All Previous Years</button>
+                                        </div>
+                                        <div class="col-md-2 d-flex gap-2">
+                                            <button class="btn btn-outline-primary w-100" type="button" onclick="loadBusServiceExpenses()">Apply Range Filter</button>
+                                            <button class="btn btn-outline-danger w-100" type="button" onclick="compareBusServiceLastTwo()">Compare Last Service</button>
+                                        </div>
+                                    </div>
+                                <div class="mt-3 d-flex justify-content-between align-items-center">
+                                    <div class="small text-muted" id="busServiceCompareNote"></div>
+                                    <div class="fw-semibold">Total Service Amount: <span id="busServiceTotalAmount">0</span></div>
+                                </div>
+                                <div class="mt-3" id="busServiceList"></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -710,7 +797,7 @@
                         <div class="col-md-4">
                             <label>&nbsp;</label>
                             <div class="d-grid gap-2">
-                                <button class="btn btn-outline-primary w-100" onclick="loadPresentationStudents()">Load PPT</button>
+                                <button class="btn btn-outline-primary w-100" onclick="loadPresentationStudents(true)">Load PPT</button>
                                 <button class="btn btn-outline-secondary w-100" onclick="loadPresentationTopics()">Presentation Topics Load</button>
                                 <button class="btn btn-outline-dark w-100" onclick="loadPresentationEvaluation()">Presentation Evaluation</button>
                                 <button class="btn btn-success w-100" onclick="sharePresentationTopicsToWhatsApp()">Share to WhatsApp</button>
@@ -1157,6 +1244,35 @@
         let studentsPage = 1;
         const studentsPageSize = 25;
         let busInventoryData = [];
+        let busServiceData = [];
+        let busServiceEditId = null;
+        let busServiceHighlightParts = new Set();
+        let busServiceComparisonNote = '';
+        const busServiceParts = [
+            'Bus Wheel Service',
+            'Engine Oil',
+            'Steearing Oil',
+            'Break Oil',
+            'Gear Oil',
+            'Crown Oil',
+            'Bus Front & REAR WHEEL ALIGNMENT',
+            'Radiator Coolent',
+            'Front Liner',
+            'Rear Liner',
+            'All filter (Air, Uriya etc)',
+            'Front Oil Seal',
+            'Back Small Oil Seal',
+            'Back Big Oil Seal',
+            'Packing',
+            'Cotton Seal',
+            'Excel Packing',
+            'Coolant Water',
+            'Spindle',
+            'Small Spring',
+            'Labor',
+            'Diesel for Cleaning',
+            'Urea'
+        ];
         const examComponentConfig = {
             practical: {
                 prefix: 'examPractical',
@@ -1463,6 +1579,7 @@
             } else if (tab === 'bus') {
                 document.getElementById('busSection').style.display = 'block';
                 document.getElementById('busTab').classList.add('active');
+                backToBusInventoryEditor();
                 loadBusInventory();
             } else if (tab === 'presentation') {
                 document.getElementById('presentationSection').style.display = 'block';
@@ -1740,6 +1857,7 @@
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
                 const batches = await res.json();
                 select.innerHTML = '<option value="">Select Batch</option>';
+                select.innerHTML += '<option value="all">All Batches</option>';
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch}">${batch}</option>`;
                 });
@@ -1809,14 +1927,20 @@
             updatePresentationCounts();
         }
 
-        async function loadPresentationStudents() {
+        async function loadPresentationStudents(showAlert = false) {
             const region = document.getElementById('presentationRegion').value;
             const batch = document.getElementById('presentationBatch').value;
             const date = document.getElementById('presentationDate').value;
 
             if (!region || !batch || !date) return;
             if (batch === 'all') {
-                alert('Please select a specific batch to manage presentation groups. Use Share to WhatsApp for all batches.');
+                if (showAlert) {
+                    alert('Please select a specific batch to manage presentation groups. Use Share to WhatsApp for all batches.');
+                }
+                document.getElementById('presentationTable').innerHTML = '';
+                document.getElementById('presentationTopicsTable').innerHTML = '';
+                document.getElementById('presentationEvaluationTable').innerHTML = '';
+                document.getElementById('presentationGroupCounts').innerHTML = '';
                 return;
             }
 
@@ -2155,8 +2279,8 @@
             const batch = document.getElementById('presentationBatch').value;
             const date = document.getElementById('presentationDate').value;
 
-            if (!region || !date) {
-                alert('Please select region and group date');
+            if (!region || !batch || !date) {
+                alert('Please select region, batch (or All Batches), and group date');
                 return;
             }
 
@@ -2167,8 +2291,9 @@
             }
 
             try {
+                const batchParam = batch === 'all' ? 'all' : batch;
                 const res = await fetch(
-                    `/api/presentations/by-batch?region=${encodeURIComponent(region)}&batchNumber=all&date=${date}`,
+                    `/api/presentations/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batchParam)}&date=${date}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
@@ -2198,7 +2323,8 @@
                 doc.text('Presentation Topics Report', 40, 44);
                 doc.setFontSize(11);
                 doc.text(`Region: ${region}`, 40, 68);
-                doc.text('Batch: All Batches', 40, 84);
+                const batchLabel = batch === 'all' ? 'All Batches' : `Batch ${batch}`;
+                doc.text(`Batch: ${batchLabel}`, 40, 84);
                 doc.text(`Group Date: ${date}`, 40, 100);
                 doc.text(`Topics Count: ${topicRows.length}`, 40, 116);
                 doc.text(`Generated By: ${user.name || 'Teacher'}   Date: ${generatedDate}`, 40, 132);
@@ -2222,7 +2348,7 @@
                 });
 
                 const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
-                const safeBatch = 'All_Batches';
+                const safeBatch = (batch === 'all' ? 'All_Batches' : String(batch || 'batch')).replace(/[^\w-]/g, '_');
                 const safeDate = String(date || 'date').replace(/[^\w-]/g, '_');
                 const fileName = `Presentation_Topics_${safeRegion}_${safeBatch}_${safeDate}.pdf`;
                 const pdfBlob = doc.output('blob');
@@ -2234,7 +2360,7 @@
                     file = null;
                 }
 
-                const shareText = `Presentation topics (${date}) - ${region}, All Batches`;
+                const shareText = `Presentation topics (${date}) - ${region}, ${batchLabel}`;
 
                 if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
                     await navigator.share({
@@ -4427,10 +4553,30 @@
             const editorEl = document.getElementById('busInventoryEditor');
             const actionsEl = document.getElementById('busInventoryActions');
             const detailsEl = document.getElementById('busInventoryDetails');
+            const serviceEl = document.getElementById('busServicePanel');
+            const serviceViewEl = document.getElementById('busServiceViewPanel');
             if (mode === 'details') {
                 if (editorEl) editorEl.style.display = 'none';
                 if (actionsEl) actionsEl.style.display = 'none';
                 if (detailsEl) detailsEl.style.display = 'block';
+                if (serviceEl) serviceEl.style.display = 'none';
+                if (serviceViewEl) serviceViewEl.style.display = 'none';
+                return;
+            }
+            if (mode === 'service') {
+                if (editorEl) editorEl.style.display = 'none';
+                if (detailsEl) detailsEl.style.display = 'none';
+                if (actionsEl) actionsEl.style.display = 'flex';
+                if (serviceEl) serviceEl.style.display = 'block';
+                if (serviceViewEl) serviceViewEl.style.display = 'none';
+                return;
+            }
+            if (mode === 'serviceView') {
+                if (editorEl) editorEl.style.display = 'none';
+                if (detailsEl) detailsEl.style.display = 'none';
+                if (actionsEl) actionsEl.style.display = 'flex';
+                if (serviceEl) serviceEl.style.display = 'none';
+                if (serviceViewEl) serviceViewEl.style.display = 'block';
                 return;
             }
             if (editorEl) editorEl.style.display = 'block';
@@ -4439,10 +4585,27 @@
                 detailsEl.style.display = 'block';
                 detailsEl.innerHTML = '';
             }
+            if (serviceEl) serviceEl.style.display = 'none';
+            if (serviceViewEl) serviceViewEl.style.display = 'none';
         }
 
         function backToBusInventoryEditor() {
             setBusInventoryView('edit');
+        }
+
+        function openBusServicePanel() {
+            setBusInventoryView('service');
+            renderBusServiceInputs();
+            const dateEl = document.getElementById('busServiceDate');
+            if (dateEl && !dateEl.value) {
+                dateEl.value = today;
+            }
+        }
+
+        function openBusServiceViewPanel() {
+            setBusInventoryView('serviceView');
+            initBusServiceViewFilters();
+            loadBusServiceExpenses();
         }
 
         async function loadBusInventory() {
@@ -4691,6 +4854,387 @@
             } catch (error) {
                 console.error('Error sharing bus inventory to WhatsApp:', error);
                 alert('Failed to share bus inventory: ' + error.message);
+            }
+        }
+
+        function renderBusServiceInputs() {
+            const bodyEl = document.getElementById('busServiceInputsBody');
+            if (!bodyEl) return;
+            bodyEl.innerHTML = busServiceParts.map((part, idx) => `
+                <tr>
+                    <td>${escapeHtml(part)}</td>
+                    <td>
+                        <input
+                            type="number"
+                            class="form-control"
+                            min="0"
+                            step="1"
+                            placeholder="Enter amount"
+                            data-service-part="${escapeHtml(part)}"
+                            data-index="${idx}"
+                        >
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderBusServiceExpenses() {
+            const listEl = document.getElementById('busServiceList');
+            if (!listEl) return;
+            if (!busServiceData.length) {
+                listEl.innerHTML = '<div class="text-muted">No service expenses recorded yet.</div>';
+                const totalEl = document.getElementById('busServiceTotalAmount');
+                if (totalEl) totalEl.textContent = '0';
+                return;
+            }
+
+            const totalAmount = busServiceData.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+            const totalEl = document.getElementById('busServiceTotalAmount');
+            if (totalEl) totalEl.textContent = totalAmount.toFixed(2);
+            const noteEl = document.getElementById('busServiceCompareNote');
+            if (noteEl) {
+                noteEl.textContent = busServiceComparisonNote || '';
+            }
+
+            const rows = busServiceData.map((entry, idx) => `
+                <tr class="${busServiceHighlightParts.has(String(entry.servicePart || '')) ? 'table-danger' : ''}">
+                    <td>${idx + 1}</td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="text" class="form-control form-control-sm" value="${escapeHtml(entry.servicePart || '')}" data-edit-field="servicePart">`
+                            : `${escapeHtml(entry.servicePart || '-')}${busServiceHighlightParts.has(String(entry.servicePart || '')) ? ' <span class="badge bg-danger ms-1">High</span>' : ''}`}
+                    </td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="number" class="form-control form-control-sm" min="0" step="1" value="${Number(entry.amount || 0)}" data-edit-field="amount">`
+                            : Number(entry.amount || 0)}
+                    </td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="date" class="form-control form-control-sm" value="${entry.serviceDate ? new Date(entry.serviceDate).toISOString().split('T')[0] : ''}" data-edit-field="serviceDate">`
+                            : (entry.serviceDate ? new Date(entry.serviceDate).toLocaleDateString() : '-')}
+                    </td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="text" class="form-control form-control-sm" value="${escapeHtml(entry.garageName || '')}" data-edit-field="garageName">`
+                            : escapeHtml(entry.garageName || '-')}
+                    </td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="text" class="form-control form-control-sm" value="${escapeHtml(entry.garageMobile || '')}" data-edit-field="garageMobile">`
+                            : escapeHtml(entry.garageMobile || '-')}
+                    </td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="text" class="form-control form-control-sm" value="${escapeHtml(entry.garageAddress || '')}" data-edit-field="garageAddress">`
+                            : escapeHtml(entry.garageAddress || '-')}
+                    </td>
+                    <td>${escapeHtml(entry.createdByName || 'Unknown')}</td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `<input type="text" class="form-control form-control-sm" value="${escapeHtml(entry.notes || '')}" data-edit-field="notes">`
+                            : escapeHtml(entry.notes || '-')}
+                    </td>
+                    <td>
+                        ${busServiceEditId === String(entry._id)
+                            ? `
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm btn-success" type="button" onclick="saveBusServiceEdit('${entry._id}')">Save</button>
+                                    <button class="btn btn-sm btn-outline-secondary" type="button" onclick="cancelBusServiceEdit()">Cancel</button>
+                                </div>
+                              `
+                            : `<button class="btn btn-sm btn-outline-primary" type="button" onclick="startBusServiceEdit('${entry._id}')">Edit</button>`}
+                    </td>
+                </tr>
+            `).join('');
+
+            listEl.innerHTML = `
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 6%;">#</th>
+                                <th style="width: 18%;">Service Part</th>
+                                <th style="width: 10%;">Amount</th>
+                                <th style="width: 10%;">Date</th>
+                                <th style="width: 14%;">Garage Name</th>
+                                <th style="width: 12%;">Garage Mobile</th>
+                                <th style="width: 16%;">Garage Address</th>
+                                <th style="width: 10%;">Added By</th>
+                                <th style="width: 10%;">Notes</th>
+                                <th style="width: 10%;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        async function loadBusServiceExpenses() {
+            const listEl = document.getElementById('busServiceList');
+            if (listEl) {
+                listEl.innerHTML = '<div class="text-muted">Loading service expenses...</div>';
+            }
+            try {
+                const { startDate, endDate } = getBusServiceViewFilterRange();
+                const query = (startDate && endDate)
+                    ? `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`
+                    : '';
+                const res = await fetch(`/api/bus-service${query}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                busServiceData = Array.isArray(data) ? data : [];
+                busServiceHighlightParts = new Set();
+                busServiceComparisonNote = '';
+                renderBusServiceExpenses();
+            } catch (error) {
+                console.error('Error loading bus service expenses:', error);
+                if (listEl) {
+                    listEl.innerHTML = `<div class="text-danger">Failed to load service expenses: ${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        async function compareBusServiceLastTwo() {
+            const listEl = document.getElementById('busServiceList');
+            if (listEl) {
+                listEl.innerHTML = '<div class="text-muted">Comparing latest service with preceding service...</div>';
+            }
+            try {
+                const res = await fetch('/api/bus-service', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const data = await res.json();
+                const entries = Array.isArray(data) ? data : [];
+                if (entries.length < 2) {
+                    busServiceComparisonNote = 'Not enough service entries to compare.';
+                    busServiceHighlightParts = new Set();
+                    busServiceData = entries;
+                    renderBusServiceExpenses();
+                    return;
+                }
+
+                const dateKey = (value) => {
+                    if (!value) return '';
+                    const d = new Date(value);
+                    if (Number.isNaN(d.getTime())) return '';
+                    return d.toISOString().split('T')[0];
+                };
+
+                const grouped = entries.reduce((acc, entry) => {
+                    const key = dateKey(entry.serviceDate);
+                    if (!key) return acc;
+                    if (!acc[key]) acc[key] = [];
+                    acc[key].push(entry);
+                    return acc;
+                }, {});
+
+                const dates = Object.keys(grouped).sort();
+                if (dates.length < 2) {
+                    busServiceComparisonNote = 'Not enough distinct service dates to compare.';
+                    busServiceHighlightParts = new Set();
+                    busServiceData = entries;
+                    renderBusServiceExpenses();
+                    return;
+                }
+
+                const latestDate = dates[dates.length - 1];
+                const previousDate = dates[dates.length - 2];
+                const latestEntries = grouped[latestDate] || [];
+                const previousEntries = grouped[previousDate] || [];
+
+                const sumByPart = (items) => items.reduce((acc, entry) => {
+                    const key = String(entry.servicePart || '').trim();
+                    if (!key) return acc;
+                    acc[key] = (acc[key] || 0) + (Number(entry.amount) || 0);
+                    return acc;
+                }, {});
+
+                const latestTotals = sumByPart(latestEntries);
+                const previousTotals = sumByPart(previousEntries);
+
+                busServiceHighlightParts = new Set();
+                Object.keys(latestTotals).forEach((part) => {
+                    const currentVal = latestTotals[part] || 0;
+                    const previousVal = previousTotals[part] || 0;
+                    if (currentVal > previousVal) {
+                        busServiceHighlightParts.add(part);
+                    }
+                });
+
+                busServiceComparisonNote = `Comparing latest service (${latestDate}) with preceding service (${previousDate}). Highlighted parts are higher in the latest service.`;
+                busServiceData = latestEntries;
+
+                const fromEl = document.getElementById('busServiceViewFilterFrom');
+                const toEl = document.getElementById('busServiceViewFilterTo');
+                if (fromEl) fromEl.value = latestDate;
+                if (toEl) toEl.value = latestDate;
+                renderBusServiceExpenses();
+            } catch (error) {
+                console.error('Error comparing bus service expenses:', error);
+                busServiceComparisonNote = '';
+                busServiceHighlightParts = new Set();
+                if (listEl) {
+                    listEl.innerHTML = `<div class="text-danger">Failed to compare service expenses: ${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        function startBusServiceEdit(id) {
+            busServiceEditId = String(id);
+            renderBusServiceExpenses();
+        }
+
+        function cancelBusServiceEdit() {
+            busServiceEditId = null;
+            renderBusServiceExpenses();
+        }
+
+        async function saveBusServiceEdit(id) {
+            const rowInputs = Array.from(document.querySelectorAll('#busServiceList tr input[data-edit-field]'));
+            if (!rowInputs.length) return;
+
+            const payload = {};
+            rowInputs.forEach((input) => {
+                const field = input.getAttribute('data-edit-field');
+                payload[field] = input.value;
+            });
+
+            try {
+                const res = await fetch(`/api/bus-service/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                busServiceEditId = null;
+                await loadBusServiceExpenses();
+                alert('Service entry updated successfully.');
+            } catch (error) {
+                console.error('Error updating bus service expense:', error);
+                alert(`Failed to update service entry: ${error.message}`);
+            }
+        }
+
+        function initBusServiceViewFilters() {
+            const fromEl = document.getElementById('busServiceViewFilterFrom');
+            const toEl = document.getElementById('busServiceViewFilterTo');
+            if (!fromEl || !toEl) return;
+            if (!fromEl.value || !toEl.value) {
+                applyBusServiceYearFilter('this');
+            }
+            fromEl.addEventListener('change', () => {
+                if (toEl.value && fromEl.value && toEl.value < fromEl.value) {
+                    toEl.value = fromEl.value;
+                }
+            });
+        }
+
+        function getBusServiceViewFilterRange() {
+            const fromEl = document.getElementById('busServiceViewFilterFrom');
+            const toEl = document.getElementById('busServiceViewFilterTo');
+            return {
+                startDate: String(fromEl?.value || '').trim(),
+                endDate: String(toEl?.value || '').trim()
+            };
+        }
+
+        function applyBusServiceYearFilter(mode) {
+            const fromEl = document.getElementById('busServiceViewFilterFrom');
+            const toEl = document.getElementById('busServiceViewFilterTo');
+            if (!fromEl || !toEl) return;
+            const now = new Date();
+            if (mode === 'previousAll') {
+                const start = new Date(2000, 0, 1);
+                const end = new Date(now.getFullYear() - 1, 11, 31);
+                fromEl.value = start.toISOString().split('T')[0];
+                toEl.value = end.toISOString().split('T')[0];
+                loadBusServiceExpenses();
+                return;
+            }
+            const year = mode === 'previous' ? now.getFullYear() - 1 : now.getFullYear();
+            const start = new Date(year, 0, 1);
+            const end = new Date(year, 11, 31);
+            fromEl.value = start.toISOString().split('T')[0];
+            toEl.value = end.toISOString().split('T')[0];
+            loadBusServiceExpenses();
+        }
+
+        async function saveBusServiceExpense(event) {
+            event.preventDefault();
+            const dateEl = document.getElementById('busServiceDate');
+            const notesEl = document.getElementById('busServiceNotes');
+            const garageNameEl = document.getElementById('busServiceGarageName');
+            const garageMobileEl = document.getElementById('busServiceGarageMobile');
+            const garageAddressEl = document.getElementById('busServiceGarageAddress');
+            if (!dateEl) return;
+            const serviceDate = dateEl.value;
+            const notes = String(notesEl?.value || '').trim();
+            const garageName = String(garageNameEl?.value || '').trim();
+            const garageMobile = String(garageMobileEl?.value || '').trim();
+            const garageAddress = String(garageAddressEl?.value || '').trim();
+            if (!serviceDate) {
+                alert('Please select a service date.');
+                return;
+            }
+            if (!garageName) {
+                alert('Please enter the garage name.');
+                return;
+            }
+
+            const inputEls = Array.from(document.querySelectorAll('#busServiceInputsBody input[data-service-part]'));
+            const entries = inputEls.map((input) => {
+                const servicePart = String(input.getAttribute('data-service-part') || '').trim();
+                const amount = Number(input.value);
+                return { servicePart, amount, notes };
+            }).filter((entry) => entry.servicePart && Number.isFinite(entry.amount) && entry.amount > 0);
+
+            if (!entries.length) {
+                alert('Please enter at least one service amount.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/bus-service', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        serviceDate,
+                        notes,
+                        entries,
+                        garageName,
+                        garageMobile,
+                        garageAddress,
+                        busName: 'Bus On Wheels'
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                inputEls.forEach((input) => { input.value = ''; });
+                if (notesEl) notesEl.value = '';
+                if (garageNameEl) garageNameEl.value = '';
+                if (garageMobileEl) garageMobileEl.value = '';
+                if (garageAddressEl) garageAddressEl.value = '';
+                dateEl.value = today;
+                await loadBusServiceExpenses();
+                alert('Bus service expenses saved successfully.');
+            } catch (error) {
+                console.error('Error saving bus service expense:', error);
+                alert(`Failed to save bus service expense: ${error.message}`);
             }
         }
 
