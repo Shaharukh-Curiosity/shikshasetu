@@ -170,6 +170,9 @@
                 <button class="nav-link" onclick="showTab('attendance')">Attendance Report</button>
             </li>
             <li class="nav-item">
+                <button class="nav-link" onclick="showTab('exam')">Exam</button>
+            </li>
+            <li class="nav-item">
                 <button class="nav-link" onclick="showTab('dailywork')">Daily Work</button>
             </li>
             <li class="nav-item">
@@ -392,6 +395,66 @@
                     </div>
 
                     <div id="attendanceResults"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="examTab" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <h5 class="card-title mb-0">Exam Result</h5>
+                        <div class="text-muted small">Select a teacher to narrow the result, or leave it on All Teachers to review every registered teacher.</div>
+                    </div>
+
+                    <div class="row g-3 mb-3 align-items-end">
+                        <div class="col-md-3">
+                            <label>Region</label>
+                            <select class="form-select" id="examRegion" onchange="loadExamBatches(); loadExamPlan(true);">
+                                <option value="">Select Region</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Batch</label>
+                            <select class="form-select" id="examBatch" onchange="loadExamPlan(true);">
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Teacher</label>
+                            <select class="form-select" id="examTeacher">
+                                <option value="all">All Registered Teachers</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-outline-primary w-100" onclick="loadExamPlan(false)">Load Plan</button>
+                        </div>
+                    </div>
+
+                    <div id="examPlanMeta" class="alert alert-light border small mb-3">
+                        Load an exam plan to auto-fill the held date for the selected phase.
+                    </div>
+
+                    <div class="row g-3 mb-4 align-items-end">
+                        <div class="col-md-3">
+                            <label>Exam Phase</label>
+                            <select class="form-select" id="examPhase" onchange="syncExamHeldDate()">
+                                <option value="theory">Theory</option>
+                                <option value="practical">Practical</option>
+                                <option value="presentation">Presentation</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label>Exam Held Date</label>
+                            <input type="date" class="form-control" id="examHeldDate">
+                        </div>
+                        <div class="col-md-3">
+                            <label>&nbsp;</label>
+                            <button class="btn btn-primary w-100" onclick="viewExamResults()">View Exam Result</button>
+                        </div>
+                    </div>
+
+                    <div id="examResults"></div>
                 </div>
             </div>
         </div>
@@ -622,6 +685,7 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadFilterRegions();
@@ -632,6 +696,7 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
             } else if (tab === 'markattendance') {
@@ -641,6 +706,7 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadAdminMarkRegions();
@@ -651,6 +717,7 @@
                 document.getElementById('viewDailyTab').style.display = 'block';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadAdminViewRegions();
@@ -661,6 +728,7 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'block';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadWaRegions();
@@ -671,9 +739,22 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'block';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadAttRegions();
+            } else if (tab === 'exam') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'block';
+                document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('backupTab').style.display = 'none';
+                loadExamRegions();
+                loadExamTeachers();
             } else if (tab === 'dailywork') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
@@ -681,6 +762,7 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'block';
                 document.getElementById('backupTab').style.display = 'none';
             } else if (tab === 'backup') {
@@ -690,6 +772,7 @@
                 document.getElementById('viewDailyTab').style.display = 'none';
                 document.getElementById('whatsappInviteTab').style.display = 'none';
                 document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'block';
             }
@@ -1507,7 +1590,301 @@
                 document.getElementById('adminViewResults').innerHTML =
                     `<div class="alert alert-danger">Error: ${error.message}</div>`;
             }
-        }// ===== ADMIN MARK ATTENDANCE =====
+        }
+
+        // ===== ADMIN EXAM RESULT =====
+        let adminExamPlan = null;
+
+        function updateExamPlanMeta() {
+            const metaEl = document.getElementById('examPlanMeta');
+            if (!metaEl) return;
+
+            if (!adminExamPlan) {
+                metaEl.textContent = 'Load an exam plan to auto-fill the held date for the selected phase.';
+                return;
+            }
+
+            const phase = document.getElementById('examPhase')?.value || 'theory';
+            const phaseLabel = phase.charAt(0).toUpperCase() + phase.slice(1);
+            const phaseDate = adminExamPlan[`${phase}Date`] || '-';
+            metaEl.innerHTML = `
+                <strong>Saved Plan:</strong>
+                Theory: ${escapeHtml(adminExamPlan.theoryDate || '-')},
+                Practical: ${escapeHtml(adminExamPlan.practicalDate || '-')},
+                Presentation: ${escapeHtml(adminExamPlan.presentationDate || '-')}<br>
+                <strong>Selected Phase:</strong> ${escapeHtml(phaseLabel)} &nbsp; | &nbsp;
+                <strong>Suggested Date:</strong> ${escapeHtml(phaseDate)}
+            `;
+        }
+
+        function syncExamHeldDate() {
+            const phase = document.getElementById('examPhase')?.value || 'theory';
+            const heldDateEl = document.getElementById('examHeldDate');
+            if (!heldDateEl) return;
+
+            const planDate = adminExamPlan?.[`${phase}Date`] || '';
+            heldDateEl.value = planDate || '';
+            updateExamPlanMeta();
+        }
+
+        function setAdminExamPlanInputs(plan) {
+            adminExamPlan = plan || null;
+            syncExamHeldDate();
+        }
+
+        async function loadExamRegions() {
+            try {
+                const res = await fetch('/api/students/regions/all', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const regions = await res.json();
+                const select = document.getElementById('examRegion');
+                if (!select) return;
+                const current = select.value;
+                select.innerHTML = '<option value="">Select Region</option>';
+                regions.forEach(region => {
+                    select.innerHTML += `<option value="${region}">${region}</option>`;
+                });
+                if (current) select.value = current;
+            } catch (error) {
+                console.error('Error loading exam regions:', error);
+            }
+        }
+
+        async function loadExamBatches() {
+            const region = document.getElementById('examRegion').value;
+            const select = document.getElementById('examBatch');
+            if (!select) return;
+
+            if (!region) {
+                select.innerHTML = '<option value="">Select Batch</option>';
+                setAdminExamPlanInputs(null);
+                document.getElementById('examResults').innerHTML = '';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/students/batches/${encodeURIComponent(region)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const batches = await res.json();
+                const current = select.value;
+                select.innerHTML = '<option value="">Select Batch</option>';
+                batches.forEach(batch => {
+                    select.innerHTML += `<option value="${batch}">${batch}</option>`;
+                });
+                if (current) select.value = current;
+                document.getElementById('examResults').innerHTML = '';
+            } catch (error) {
+                console.error('Error loading exam batches:', error);
+            }
+        }
+
+        async function loadExamTeachers() {
+            try {
+                const res = await fetch('/api/users/teachers', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error(`API Error: ${res.status}`);
+                const teachers = await res.json();
+                const select = document.getElementById('examTeacher');
+                if (!select) return;
+                const current = select.value || 'all';
+                select.innerHTML = '<option value="all">All Registered Teachers</option>';
+                teachers.forEach(teacher => {
+                    select.innerHTML += `<option value="${teacher._id}">${escapeHtml(teacher.name || teacher.email || 'Teacher')}</option>`;
+                });
+                select.value = current;
+            } catch (error) {
+                console.error('Error loading exam teachers:', error);
+            }
+        }
+
+        async function loadExamPlan(silent = true) {
+            const region = document.getElementById('examRegion').value;
+            const batch = document.getElementById('examBatch').value;
+
+            if (!region || !batch) {
+                setAdminExamPlanInputs(null);
+                if (!silent) {
+                    alert('Please select region and batch to load plan');
+                }
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/exam-plan?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                setAdminExamPlanInputs(data);
+            } catch (error) {
+                console.error('Error loading exam plan:', error);
+                if (!silent) {
+                    alert(`Failed to load exam plan: ${error.message}`);
+                }
+            }
+        }
+
+        function matchesTeacherFilter(student, teacherId) {
+            if (!teacherId || teacherId === 'all') return true;
+            const marks = student?.marks || {};
+            const ids = [
+                marks.markedBy,
+                marks.theoryMarkedById,
+                marks.practicalMarkedById,
+                marks.presentationMarkedById
+            ].filter(Boolean).map(String);
+            return ids.includes(String(teacherId));
+        }
+
+        async function viewExamResults() {
+            const region = document.getElementById('examRegion').value;
+            const batch = document.getElementById('examBatch').value;
+            const teacherId = document.getElementById('examTeacher').value;
+            const phase = document.getElementById('examPhase').value;
+            const heldDate = document.getElementById('examHeldDate').value || adminExamPlan?.[`${phase}Date`] || '';
+            const resultsEl = document.getElementById('examResults');
+
+            if (!region || !batch) {
+                alert('Please select region and batch');
+                return;
+            }
+
+            if (!heldDate) {
+                alert(`Please select a held date for the ${phase} exam.`);
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${encodeURIComponent(heldDate)}&includeInactive=true`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                const phaseConfig = {
+                    theory: {
+                        label: 'Theory',
+                        score: (student) => student?.marks?.theory,
+                        teacherName: (student) => student?.marks?.theoryMarkedByName || student?.marks?.markedBy,
+                        teacherId: (student) => student?.marks?.theoryMarkedById || student?.marks?.markedBy,
+                        maxMarks: 40
+                    },
+                    practical: {
+                        label: 'Practical',
+                        score: (student) => student?.marks?.practical,
+                        teacherName: (student) => student?.marks?.practicalMarkedByName || student?.marks?.markedBy,
+                        teacherId: (student) => student?.marks?.practicalMarkedById || student?.marks?.markedBy,
+                        maxMarks: 40
+                    },
+                    presentation: {
+                        label: 'Presentation',
+                        score: (student) => {
+                            const score = student?.marks?.presentation;
+                            return Number.isFinite(score) ? score : student?.presentationPrefill;
+                        },
+                        teacherName: (student) => student?.marks?.presentationMarkedByName || student?.marks?.markedBy,
+                        teacherId: (student) => student?.marks?.presentationMarkedById || student?.marks?.markedBy,
+                        maxMarks: 20
+                    }
+                }[phase] || phaseConfig.theory;
+
+                const rows = Array.isArray(data) ? data.filter(student => matchesTeacherFilter(student, teacherId)) : [];
+                if (!rows.length) {
+                    resultsEl.innerHTML = '<div class="alert alert-warning">No exam results found for the selected filters.</div>';
+                    return;
+                }
+
+                const rowsWithSelectedPhaseData = rows.filter((student) => {
+                    const selectedScore = phase === 'presentation'
+                        ? (Number.isFinite(student?.marks?.presentation) ? student.marks.presentation : student?.presentationPrefill)
+                        : student?.marks?.[phase];
+                    return selectedScore !== null && selectedScore !== undefined;
+                });
+                if (!rowsWithSelectedPhaseData.length) {
+                    resultsEl.innerHTML = `<div class="alert alert-warning">No ${escapeHtml(phaseConfig.label.toLowerCase())} marks found for ${escapeHtml(heldDate)}.</div>`;
+                    return;
+                }
+
+                const teacherLabel = teacherId === 'all'
+                    ? 'All Registered Teachers'
+                    : (document.getElementById('examTeacher')?.selectedOptions?.[0]?.textContent || 'Selected Teacher');
+
+                let html = `
+                    <div class="alert alert-info">
+                        <strong>Region:</strong> ${escapeHtml(region)} &nbsp; | &nbsp;
+                        <strong>Batch:</strong> ${escapeHtml(batch)} &nbsp; | &nbsp;
+                        <strong>Teacher:</strong> ${escapeHtml(teacherLabel)} &nbsp; | &nbsp;
+                        <strong>Phase:</strong> ${escapeHtml(phaseConfig.label)} &nbsp; | &nbsp;
+                        <strong>Date:</strong> ${escapeHtml(heldDate)}
+                    </div>
+                    <div class="table-responsive">
+                    <table class="table table-bordered table-striped align-middle">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>#</th>
+                                <th>Student Name</th>
+                                <th class="text-center">${escapeHtml(phaseConfig.label)} Marks</th>
+                                <th class="text-center">Teacher</th>
+                                <th class="text-center">Marked At</th>
+                                <th class="text-center">Total Obtained</th>
+                                <th class="text-center">Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                rows.forEach((student, index) => {
+                    const m = student.marks || {};
+                    const phaseScore = phaseConfig.score(student);
+                    const scoreHtml = (phaseScore === null || phaseScore === undefined)
+                        ? '<span class="badge bg-secondary">MISSED</span>'
+                        : `<span class="fw-semibold">${escapeHtml(phaseScore)}</span>`;
+                    const teacherName = phaseConfig.teacherName(student) || '-';
+                    const teacherIdValue = phaseConfig.teacherId(student) || '-';
+                    const markedAt = student?.marks?.markedAt || '-';
+                    const totalObtained = Number.isFinite(Number(m?.totalObtained))
+                        ? Number(m.totalObtained)
+                        : Number.isFinite(Number(phaseScore))
+                            ? Number(phaseScore)
+                            : 0;
+                    const percentage = Number.isFinite(Number(m?.percentage))
+                        ? Number(m.percentage)
+                        : (phaseScore !== null && phaseScore !== undefined)
+                            ? Number(((Number(phaseScore) / phaseConfig.maxMarks) * 100).toFixed(2))
+                            : 0;
+
+                    html += `
+                        <tr>
+                            <td>${index + 1}</td>
+                            <td>${escapeHtml(student.name || '-')}</td>
+                            <td class="text-center">${scoreHtml}${phase === 'presentation' && student.presentationPrefill !== null ? `<div class="small text-muted">Prefill: ${escapeHtml(student.presentationPrefill)}</div>` : ''}</td>
+                            <td class="text-center">${escapeHtml(teacherName || teacherIdValue)}</td>
+                            <td class="text-center">${markedAt !== '-' ? escapeHtml(formatDateTime(markedAt)) : '-'}</td>
+                            <td class="text-center">${escapeHtml(totalObtained)}</td>
+                            <td class="text-center"><span class="badge bg-primary">${percentage.toFixed(2)}%</span></td>
+                        </tr>
+                    `;
+                });
+
+                html += `
+                        </tbody>
+                    </table>
+                    </div>
+                `;
+
+                resultsEl.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading exam results:', error);
+                resultsEl.innerHTML = `<div class="alert alert-danger">Error: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        // ===== ADMIN MARK ATTENDANCE =====
         let adminCurrentStudents = [];
         let adminLateTimes = new Map();
 

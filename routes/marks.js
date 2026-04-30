@@ -353,6 +353,7 @@ router.get('/by-plan', auth, isTeacherOrAdmin, async (req, res) => {
       const presentationFromMarks = (pm && hasValue(pm.presentation)) ? Number(pm.presentation) : null;
       const presentationFromTable = computePresentationFromTable(pt);
       const presentation = presentationFromMarks !== null ? presentationFromMarks : presentationFromTable;
+      const presentationSource = presentationFromMarks !== null ? pm : pt;
 
       const totalObtained = (theory || 0) + (practical || 0) + (presentation || 0);
       const percentage = Number(((totalObtained / TOTAL_MARKS) * 100).toFixed(2));
@@ -367,9 +368,17 @@ router.get('/by-plan', auth, isTeacherOrAdmin, async (req, res) => {
           theory,
           practical,
           presentation,
+          theoryMarkedById: t?.markedBy || null,
+          theoryMarkedByName: t?.markedByName || null,
+          practicalMarkedById: p?.markedBy || null,
+          practicalMarkedByName: p?.markedByName || null,
+          presentationMarkedById: presentationSource?.markedBy || null,
+          presentationMarkedByName: presentationSource?.markedByName || null,
           totalMarks: TOTAL_MARKS,
           totalObtained,
           percentage,
+          markedBy: t?.markedBy || p?.markedBy || presentationSource?.markedBy || null,
+          markedByName: t?.markedByName || p?.markedByName || presentationSource?.markedByName || null,
           missingComponents: {
             theory: theory === null,
             practical: practical === null,
@@ -380,6 +389,188 @@ router.get('/by-plan', auth, isTeacherOrAdmin, async (req, res) => {
     });
 
     res.json({ usedDates, students: results });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
+// STUDENTS WHO APPEARED IN ALL THREE PHASES
+// ============================================
+router.get('/appeared-three-phases', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const region = String(req.query.region || '').trim();
+    const batchNumber = String(req.query.batchNumber || '').trim();
+
+    if (!region) {
+      return res.status(400).json({ message: 'Missing parameters: region' });
+    }
+
+    const useAllBatches = !batchNumber || batchNumber.toLowerCase() === 'all';
+    const batchFilter = useAllBatches ? {} : { batchNumber };
+
+    const students = await User.find({
+      role: 'student',
+      region,
+      ...batchFilter,
+      isActive: true
+    }).lean();
+
+    if (!students || students.length === 0) {
+      return res.json({
+        mode: 'appeared-three-phases',
+        summary: {
+          region,
+          batchNumber: useAllBatches ? 'all' : batchNumber,
+          totalStudents: 0,
+          matchedStudents: 0
+        },
+        students: []
+      });
+    }
+
+    const hasValue = (v) => v !== null && v !== undefined && v !== '';
+    const toFiniteNumber = (value) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : null;
+    };
+    const sumBreakdown = (breakdown) => {
+      if (!breakdown) return null;
+      const values = ['word', 'excel'].map(key => breakdown[key]);
+      if (!values.some(hasValue)) return null;
+      return values.reduce((acc, value) => acc + (Number.isFinite(Number(value)) ? Number(value) : 0), 0);
+    };
+    const computePresentation = (record) => {
+      if (!record) return null;
+      const presentationValue = toFiniteNumber(record.presentation);
+      if (presentationValue !== null) return presentationValue;
+      const presentationMarksValue = toFiniteNumber(record.presentationMarks);
+      if (presentationMarksValue !== null) return presentationMarksValue;
+      const evalData = record.evaluation || {};
+      const content = toFiniteNumber(evalData.content);
+      const design = toFiniteNumber(evalData.design);
+      const communication = toFiniteNumber(evalData.communication);
+      const hasAny = content !== null || design !== null || communication !== null;
+      if (!hasAny) return null;
+      return Math.max(0, Math.min(20, (content || 0) + (design || 0) + (communication || 0)));
+    };
+
+    const [theoryRecords, practicalRecords, presentationMarksRecords, presentationTableRecords] = await Promise.all([
+      Marks.find({ region, ...batchFilter, theory: { $ne: null } }).sort({ date: -1 }).lean(),
+      Marks.find({ region, ...batchFilter, practical: { $ne: null } }).sort({ date: -1 }).lean(),
+      Marks.find({ region, ...batchFilter, presentation: { $ne: null } }).sort({ date: -1 }).lean(),
+      Presentation.find({
+        region,
+        ...batchFilter,
+        $or: [
+          { presentationMarks: { $ne: null } },
+          { 'evaluation.content': { $ne: null } },
+          { 'evaluation.design': { $ne: null } },
+          { 'evaluation.communication': { $ne: null } }
+        ]
+      }).sort({ date: -1 }).lean()
+    ]);
+
+    const theoryMap = new Map();
+    const practicalMap = new Map();
+    const presentationMap = new Map();
+
+    theoryRecords.forEach((record) => {
+      const studentId = String(record.studentId);
+      const theoryValue = toFiniteNumber(record.theory);
+      if (!theoryMap.has(studentId) && theoryValue !== null) {
+        theoryMap.set(studentId, {
+          value: theoryValue,
+          date: record.date || null,
+          markedByName: record.markedByName || null
+        });
+      }
+    });
+
+    practicalRecords.forEach((record) => {
+      const studentId = String(record.studentId);
+      if (practicalMap.has(studentId)) return;
+      const practicalValue = toFiniteNumber(record.practical) ?? sumBreakdown(record.practicalBreakdown || {});
+      if (practicalValue !== null && practicalValue !== undefined) {
+        practicalMap.set(studentId, {
+          value: practicalValue,
+          date: record.date || null,
+          markedByName: record.markedByName || null
+        });
+      }
+    });
+
+    presentationMarksRecords.forEach((record) => {
+      const studentId = String(record.studentId);
+      if (presentationMap.has(studentId)) return;
+      const presentationValue = toFiniteNumber(record.presentation);
+      if (presentationValue === null) return;
+      presentationMap.set(studentId, {
+        value: presentationValue,
+        date: record.date || null,
+        markedByName: record.markedByName || null
+      });
+    });
+
+    presentationTableRecords.forEach((record) => {
+      const studentId = String(record.studentId);
+      if (presentationMap.has(studentId)) return;
+      const presentationValue = computePresentation(record);
+      if (presentationValue !== null) {
+        presentationMap.set(studentId, {
+          value: Number(presentationValue),
+          date: record.date || null,
+          markedByName: record.markedByName || null
+        });
+      }
+    });
+
+    const results = students
+      .map((student) => {
+        const studentId = String(student._id);
+        const theory = theoryMap.get(studentId) || null;
+        const practical = practicalMap.get(studentId) || null;
+        const presentation = presentationMap.get(studentId) || null;
+        if (!theory || !practical || !presentation) return null;
+
+        return {
+          studentId: student._id,
+          name: student.name,
+          schoolName: student.schoolName || '',
+          standard: student.standard || '',
+          batchNumber: student.batchNumber || '',
+          mobile: student.mobile || '',
+          region: student.region || region,
+          marks: {
+            theory: theory.value,
+            practical: practical.value,
+            presentation: presentation.value
+          },
+          appeared: {
+            theory: true,
+            practical: true,
+            presentation: true
+          }
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        const batchCmp = String(a.batchNumber || '').localeCompare(String(b.batchNumber || ''), undefined, { numeric: true, sensitivity: 'base' });
+        if (batchCmp !== 0) return batchCmp;
+        return String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true, sensitivity: 'base' });
+      });
+
+    res.json({
+      mode: 'appeared-three-phases',
+      summary: {
+        region,
+        batchNumber: useAllBatches ? 'all' : batchNumber,
+        totalStudents: students.length,
+        matchedStudents: results.length
+      },
+      students: results
+    });
   } catch (error) {
     console.error('FATAL ERROR:', error);
     res.status(500).json({ message: 'Server error' });

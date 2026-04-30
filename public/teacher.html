@@ -853,6 +853,7 @@
                                     <button class="btn btn-outline-primary w-100" onclick="loadExamComponentStudents('practical')">Load Practical</button>
                                 </div>
                             </div>
+                            <div id="examPracticalSummary" class="mb-3"></div>
                             <div id="examPracticalTable"></div>
                         </div>
                     </div>
@@ -882,6 +883,7 @@
                                     <button class="btn btn-outline-primary w-100" onclick="loadExamComponentStudents('theory')">Load Theory</button>
                                 </div>
                             </div>
+                            <div id="examTheorySummary" class="mb-3"></div>
                             <div id="examTheoryTable"></div>
                         </div>
                     </div>
@@ -912,14 +914,30 @@
                             <label>Date</label>
                             <input type="date" class="form-control" id="resultDate" required>
                         </div>
-                        <div class="col-md-3">
-                            <label>&nbsp;</label>
-                            <div class="d-grid gap-2">
-                                <button class="btn btn-primary w-100" onclick="viewResult()">View</button>
-                                <button class="btn btn-success w-100" onclick="viewTop3()">Top 3</button>
-                                <button class="btn btn-outline-primary w-100" onclick="downloadPassedStudentsCSV()">Download Passed</button>
-                                <button class="btn btn-outline-danger w-100" onclick="viewExamMissed()">Exam Missed</button>
+                            <div class="col-md-3">
+                                <label>&nbsp;</label>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-primary w-100" onclick="viewResult()">View</button>
+                                    <button class="btn btn-success w-100" onclick="viewTop3()">Top 3</button>
+                                    <button class="btn btn-outline-primary w-100" onclick="downloadPassedStudentsCSV()">Download Passed</button>
+                                    <button class="btn btn-outline-success w-100" onclick="exportAppearedStudentsToExcel()">Export Students to Excel</button>
+                                    <button class="btn btn-outline-danger w-100" onclick="viewExamMissed()">Exam Missed</button>
+                                </div>
                             </div>
+                        </div>
+
+                    <div class="row g-3 mb-2">
+                        <div class="col-md-4">
+                            <label>Result Filter</label>
+                            <select class="form-select" id="resultFilterMode" onchange="updateResultFilterUI()">
+                                <option value="single">Single Date Result</option>
+                                <option value="appearedAll">Appeared in All Exams</option>
+                            </select>
+                        </div>
+                        <div class="col-md-8 d-flex align-items-end">
+                            <small class="text-muted" id="resultFilterHint">
+                                Single Date Result uses the selected date. Appeared in All Exams shows students who completed theory, practical, and presentation across the selected region and batch.
+                            </small>
                         </div>
                     </div>
 
@@ -1231,7 +1249,9 @@
         let lastViewRawStudents = [];
         let lastReportRawData = null;
         let lastReportShareData = null;
+        let lastResultAppearedShareData = null;
         let lastWorkShareData = null;
+        updateResultFilterUI();
         let analysisChart = null;
         let markFiltered = [];
         let markPage = 1;
@@ -1291,9 +1311,73 @@
             }
         };
         const examComponentState = {
-            practical: { students: [] },
-            theory: { students: [] }
+            practical: { students: [], summary: null },
+            theory: { students: [], summary: null }
         };
+
+        function hasExamValue(value) {
+            return value !== null && value !== undefined && value !== '';
+        }
+
+        function hasPracticalExamValue(marks) {
+            if (!marks) return false;
+            if (hasExamValue(marks.practical)) return true;
+            const breakdown = marks.practicalBreakdown || {};
+            return ['word', 'excel'].some((key) => hasExamValue(breakdown[key]));
+        }
+
+        function getExamComponentSummary(component, students) {
+            const total = Array.isArray(students) ? students.length : 0;
+            const appeared = (Array.isArray(students) ? students : []).filter((student) => {
+                const marks = student?.marks || null;
+                if (component === 'theory') {
+                    return hasExamValue(marks?.theory);
+                }
+                return hasPracticalExamValue(marks);
+            }).length;
+
+            return {
+                total,
+                appeared,
+                missed: Math.max(0, total - appeared)
+            };
+        }
+
+        function renderExamComponentSummary(component, summary) {
+            const meta = getExamComponentMeta(component);
+            const summaryEl = document.getElementById(`${meta?.prefix || ''}Summary`);
+            if (!summaryEl) return;
+
+            const data = summary || { total: 0, appeared: 0, missed: 0 };
+            summaryEl.innerHTML = `
+                <div class="alert alert-info py-2 mb-0">
+                    <strong>${meta?.label || 'Exam'}</strong> summary:
+                    Total Students: <strong>${data.total || 0}</strong> |
+                    Appeared: <strong>${data.appeared || 0}</strong> |
+                    Missed/Blank: <strong>${data.missed || 0}</strong>
+                </div>
+            `;
+        }
+
+        function normalizeExamComponentSummary(component, payloadSummary, students) {
+            const fallback = getExamComponentSummary(component, students);
+            const componentSummary = payloadSummary?.[component];
+            if (componentSummary && typeof componentSummary === 'object') {
+                return {
+                    total: Number.isFinite(componentSummary.total) ? Number(componentSummary.total) : fallback.total,
+                    appeared: Number.isFinite(componentSummary.appeared) ? Number(componentSummary.appeared) : fallback.appeared,
+                    missed: Number.isFinite(componentSummary.missed) ? Number(componentSummary.missed) : fallback.missed
+                };
+            }
+            if (payloadSummary && typeof payloadSummary === 'object' && !Array.isArray(payloadSummary)) {
+                return {
+                    total: Number.isFinite(payloadSummary.total) ? Number(payloadSummary.total) : fallback.total,
+                    appeared: Number.isFinite(payloadSummary.appeared) ? Number(payloadSummary.appeared) : fallback.appeared,
+                    missed: Number.isFinite(payloadSummary.missed) ? Number(payloadSummary.missed) : fallback.missed
+                };
+            }
+            return fallback;
+        }
         
         console.log('📍 Current page:', window.location.pathname);
         console.log('🚀 Loading initial data...');
@@ -2679,6 +2763,7 @@
                 });
                 batchEl.innerHTML = '<option value="">Select Batch</option>';
                 tableEl.innerHTML = '';
+                renderExamComponentSummary(component, { total: 0, appeared: 0, missed: 0 });
             } catch (error) {
                 console.error('Error loading exam regions:', error);
             }
@@ -2692,6 +2777,7 @@
             if (!region) {
                 batchEl.innerHTML = '<option value="">Select Batch</option>';
                 tableEl.innerHTML = '';
+                renderExamComponentSummary(component, { total: 0, appeared: 0, missed: 0 });
                 return;
             }
 
@@ -2707,6 +2793,7 @@
                 });
                 batchEl.value = 'all';
                 tableEl.innerHTML = '';
+                renderExamComponentSummary(component, { total: 0, appeared: 0, missed: 0 });
             } catch (error) {
                 console.error('Error loading exam batches:', error);
             }
@@ -2726,8 +2813,16 @@
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
                 if (!res.ok) throw new Error(`API Error: ${res.status}`);
-                const students = await res.json();
+                const payload = await res.json();
+                const students = Array.isArray(payload) ? payload : (payload.students || []);
+                const summary = Array.isArray(payload) ? null : (payload.summary || null);
                 examComponentState[component].students = Array.isArray(students) ? students : [];
+                examComponentState[component].summary = normalizeExamComponentSummary(
+                    component,
+                    summary,
+                    examComponentState[component].students
+                );
+                renderExamComponentSummary(component, examComponentState[component].summary);
 
                 if (!students || students.length === 0) {
                     tableEl.innerHTML = '<div class="alert alert-warning">No students found in this batch</div>';
@@ -2759,8 +2854,10 @@
             const students = Array.isArray(examComponentState[component].students)
                 ? examComponentState[component].students
                 : [];
+            const summary = examComponentState[component].summary || getExamComponentSummary(component, students);
 
             if (students.length === 0) {
+                renderExamComponentSummary(component, summary);
                 tableEl.innerHTML = '<div class="alert alert-warning">No students found</div>';
                 return;
             }
@@ -2854,6 +2951,7 @@
             `;
 
             tableEl.innerHTML = html;
+            renderExamComponentSummary(component, summary);
         }
 
         async function saveExamComponentMarks(component) {
@@ -3161,14 +3259,32 @@
         async function viewResult() {
             const region = document.getElementById('resultRegion').value;
             const batch = document.getElementById('resultBatch').value;
-            const date = document.getElementById('resultDate').value;
+            const filterMode = getResultFilterMode();
+            const resultEl = document.getElementById('resultResults');
 
-            if (!region || !date || !batch) {
-                alert('Please select region, batch, and date');
+            if (!region || !batch) {
+                alert('Please select region and batch');
                 return;
             }
 
             try {
+                if (filterMode === 'appearedAll') {
+                    const res = await fetch(
+                        `/api/marks/appeared-three-phases?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                    renderAppearedThreePhaseResult(data, region, batch);
+                    return;
+                }
+
+                const date = document.getElementById('resultDate').value;
+                if (!date) {
+                    alert('Please select date');
+                    return;
+                }
+
                 const res = await fetch(
                     `/api/marks/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}&includeInactive=true`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
@@ -3177,8 +3293,9 @@
                 const students = await res.json();
 
                 if (!students || students.length === 0) {
-                    document.getElementById('resultResults').innerHTML =
-                        '<div class="alert alert-warning">No students found for selected filters</div>';
+                    if (resultEl) {
+                        resultEl.innerHTML = '<div class="alert alert-warning">No students found for selected filters</div>';
+                    }
                     return;
                 }
 
@@ -3187,8 +3304,9 @@
                     !!student.marks || Number.isFinite(student.presentationPrefill)
                 );
                 if (!hasAnyExamData) {
-                    document.getElementById('resultResults').innerHTML =
-                        '<div class="alert alert-warning">No data found. Exam is not taken or not scheduled for the selected date.</div>';
+                    if (resultEl) {
+                        resultEl.innerHTML = '<div class="alert alert-warning">No data found. Exam is not taken or not scheduled for the selected date.</div>';
+                    }
                     return;
                 }
 
@@ -3270,11 +3388,13 @@
                     </div>
                 `;
 
-                document.getElementById('resultResults').innerHTML = html;
+                if (resultEl) resultEl.innerHTML = html;
             } catch (error) {
                 console.error('? Error loading results:', error);
-                document.getElementById('resultResults').innerHTML =
-                    `<div class="alert alert-danger">Error loading results: ${error.message}</div>`;
+                if (resultEl) {
+                    resultEl.innerHTML =
+                        `<div class="alert alert-danger">Error loading results: ${error.message}</div>`;
+                }
             }
         }
 
@@ -3435,6 +3555,8 @@
                     hintEl.textContent = 'Exam Plan: use separate dates for theory, practical, and presentation.';
                 } else if (mode === 'range') {
                     hintEl.textContent = 'Date Range: checks if each student completed each component anytime in the range.';
+                } else if (mode === 'appearedAll') {
+                    hintEl.textContent = 'Appeared in All Exams: shows students who completed theory, practical, and presentation.';
                 } else {
                     hintEl.textContent = 'Latest Per Component: uses latest available date of theory, practical, and presentation.';
                 }
@@ -3442,9 +3564,13 @@
         }
 
         async function viewExamMissed() {
+            const mode = document.getElementById('examMissedMode')?.value || 'single';
+            if (mode === 'appearedAll') {
+                await viewResult();
+                return;
+            }
             const region = document.getElementById('resultRegion').value;
             const batch = document.getElementById('resultBatch').value;
-            const mode = document.getElementById('examMissedMode')?.value || 'single';
             const date = document.getElementById('resultDate').value;
             const theoryDate = document.getElementById('examMissedTheoryDate')?.value;
             const practicalDate = document.getElementById('examMissedPracticalDate')?.value;
@@ -3517,12 +3643,14 @@
                 const missedCount = {
                     theory: students.filter(s => s.missed?.theory).length,
                     practical: students.filter(s => s.missed?.practical).length,
-                    presentation: students.filter(s => s.missed?.presentation).length
+                    presentation: students.filter(s => s.missed?.presentation).length,
+                    combined: students.filter(s => s.missed?.theory || s.missed?.practical || s.missed?.presentation).length
                 };
 
                 const renderMissedTable = (filterType = 'all') => {
                     const rows = students.filter(s => {
                         if (filterType === 'all') return true;
+                        if (filterType === 'combined') return !!(s.missed?.theory || s.missed?.practical || s.missed?.presentation);
                         if (filterType === 'theory') return !!s.missed?.theory;
                         if (filterType === 'practical') return !!s.missed?.practical;
                         if (filterType === 'presentation') return !!s.missed?.presentation;
@@ -3535,12 +3663,14 @@
                             <span class="small">${basisText}</span><br>
                             Theory Missed: <strong>${missedCount.theory}</strong> |
                             Practical Missed: <strong>${missedCount.practical}</strong> |
-                            Presentation Missed: <strong>${missedCount.presentation}</strong>
+                            Presentation Missed: <strong>${missedCount.presentation}</strong> |
+                            Any Missed: <strong>${missedCount.combined}</strong>
                         </div>
                         <div class="d-flex align-items-center gap-2 mb-2">
                             <label class="form-label mb-0" for="examMissedFilter">Filter:</label>
                             <select class="form-select form-select-sm w-auto" id="examMissedFilter">
                                 <option value="all">All Missed Students</option>
+                                <option value="combined">Theory + Practical + Presentation</option>
                                 <option value="theory">Theory Missed</option>
                                 <option value="practical">Practical Missed</option>
                                 <option value="presentation">Presentation Missed</option>
@@ -3619,6 +3749,197 @@
                     `<div class="alert alert-danger">Error loading exam missed: ${error.message}</div>`;
             }
         }
+
+        function getResultFilterMode() {
+            return document.getElementById('resultFilterMode')?.value || 'single';
+        }
+
+        function updateResultFilterUI() {
+            const mode = getResultFilterMode();
+            const hintEl = document.getElementById('resultFilterHint');
+            const exportBtn = document.querySelector('button[onclick="exportAppearedStudentsToExcel()"]');
+            if (hintEl) {
+                hintEl.textContent = mode === 'appearedAll'
+                    ? 'Appeared in All Exams shows students who completed theory, practical, and presentation across the selected region and batch.'
+                    : 'Single Date Result uses the selected date. Appeared in All Exams shows students who completed theory, practical, and presentation across the selected region and batch.';
+            }
+            if (exportBtn) {
+                exportBtn.disabled = mode !== 'appearedAll';
+                exportBtn.title = mode !== 'appearedAll'
+                    ? 'Select Appeared in All Exams to export this report'
+                    : 'Export the appeared report to WhatsApp PDF';
+            }
+        }
+
+        function normalizeAppearedPhaseStudents(payload) {
+            if (!payload) return { summary: null, students: [] };
+            if (Array.isArray(payload)) {
+                return { summary: null, students: payload };
+            }
+            return {
+                summary: payload.summary || null,
+                students: Array.isArray(payload.students) ? payload.students : []
+            };
+        }
+
+        function renderAppearedThreePhaseResult(payload, region, batch) {
+            const { summary, students } = normalizeAppearedPhaseStudents(payload);
+            const resultEl = document.getElementById('resultResults');
+            if (!resultEl) return;
+
+            if (!students || students.length === 0) {
+                const batchLabel = batch === 'all' ? 'All Batches' : batch;
+                resultEl.innerHTML = `
+                    <div class="alert alert-warning">
+                        No students found who appeared in all exams for ${escapeHtml(region)} / ${escapeHtml(batchLabel)}.
+                    </div>
+                `;
+                lastResultAppearedShareData = { mode: getResultFilterMode(), region, batch, summary, students: [] };
+                return;
+            }
+
+            const batchLabel = batch === 'all' ? 'All Batches' : batch;
+            const totalStudents = Number(summary?.totalStudents || 0);
+            const matchedStudents = Number(summary?.matchedStudents || students.length);
+
+            let html = `
+                <div class="alert alert-info">
+                    <strong>Region:</strong> ${escapeHtml(region)} &nbsp; | &nbsp;
+                    <strong>Batch:</strong> ${escapeHtml(batchLabel)}<br>
+                    <strong>Filter:</strong> Appeared in All Exams
+                    <div class="mt-2">
+                        Total Students Checked: <strong>${totalStudents}</strong> |
+                        Matched Students: <strong>${matchedStudents}</strong>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th>School</th>
+                            <th>Batch</th>
+                            <th class="text-center">Theory</th>
+                            <th class="text-center">Practical</th>
+                            <th class="text-center">Presentation</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            students.forEach((student, index) => {
+                const marks = student.marks || {};
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(student.name || '-')}</td>
+                        <td>${escapeHtml(student.schoolName || '-')}</td>
+                        <td>${escapeHtml(student.batchNumber || '-')}</td>
+                        <td class="text-center">${Number.isFinite(marks.theory) ? Number(marks.theory) : '-'}</td>
+                        <td class="text-center">${Number.isFinite(marks.practical) ? Number(marks.practical) : '-'}</td>
+                        <td class="text-center">${Number.isFinite(marks.presentation) ? Number(marks.presentation) : '-'}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+                </div>
+            `;
+
+            resultEl.innerHTML = html;
+            lastResultAppearedShareData = {
+                mode: getResultFilterMode(),
+                region,
+                batch,
+                summary,
+                students
+            };
+        }
+
+        async function exportAppearedStudentsToExcel() {
+            const mode = getResultFilterMode();
+            if (mode !== 'appearedAll') {
+                alert('Select "Appeared in All Exams" in the mode dropdown first.');
+                return;
+            }
+
+            const region = document.getElementById('resultRegion').value;
+            const batch = document.getElementById('resultBatch').value;
+            if (!region || !batch) {
+                alert('Please select region and batch');
+                return;
+            }
+
+            if (!window.XLSX) {
+                alert('Excel library not loaded. Please refresh and try again.');
+                return;
+            }
+
+            try {
+                let payload = lastResultAppearedShareData;
+                if (!payload || payload.region !== region || payload.batch !== batch) {
+                    const res = await fetch(
+                        `/api/marks/appeared-three-phases?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+                    payload = {
+                        mode,
+                        region,
+                        batch,
+                        summary: data.summary || null,
+                        students: Array.isArray(data.students) ? data.students : []
+                    };
+                }
+
+                const students = Array.isArray(payload.students) ? payload.students : [];
+                if (students.length === 0) {
+                    alert('No students found to export.');
+                    return;
+                }
+
+                const batchLabel = batch === 'all' ? 'All Batches' : `Batch ${batch}`;
+                const generatedDate = new Date().toISOString().split('T')[0];
+                const rows = students.map((student, index) => ({
+                    'S.No': index + 1,
+                    'Student Name': student.name || '',
+                    'Batch Number': student.batchNumber || '',
+                    'Theory': Number.isFinite(student.marks?.theory) ? Number(student.marks.theory) : '',
+                    'Presentation': Number.isFinite(student.marks?.presentation) ? Number(student.marks.presentation) : '',
+                    'Practical': Number.isFinite(student.marks?.practical) ? Number(student.marks.practical) : '',
+                    'Mobile': student.mobile || '',
+                    'School Name': student.schoolName || ''
+                }));
+
+                const ws = XLSX.utils.json_to_sheet(rows);
+                ws['!cols'] = [
+                    { wch: 8 },
+                    { wch: 28 },
+                    { wch: 18 },
+                    { wch: 14 },
+                    { wch: 14 },
+                    { wch: 14 },
+                    { wch: 18 },
+                    { wch: 28 }
+                ];
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Appeared Students');
+
+                const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
+                const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
+                const fileName = `Appeared_Students_${safeRegion}_${safeBatch}_${generatedDate}.xlsx`;
+                XLSX.writeFile(wb, fileName);
+            } catch (error) {
+                console.error('Error exporting appeared students to Excel:', error);
+                alert('Failed to export students: ' + error.message);
+            }
+        }
+
 // LOW ATTENDANCE FUNCTIONS
         async function loadLowRegions() {
             try {
@@ -6594,14 +6915,13 @@
                     String(student.batchNumber || '-'),
                     String(student.schoolName || '-'),
                     String(student.standard || '-'),
-                    String(student.mobile || '-'),
                     String(student.age ?? '-'),
                     student.isActive ? 'Active' : 'Inactive'
                 ]));
 
                 doc.autoTable({
                     startY: 184,
-                    head: [['S.No', 'Student Name', 'Batch Number', 'School', 'Standard', 'Mobile', 'Age', 'Status']],
+                    head: [['S.No', 'Student Name', 'Batch Number', 'School', 'Standard', 'Age', 'Status']],
                     body,
                     styles: { fontSize: 10, cellPadding: 5 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
