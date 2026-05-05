@@ -439,7 +439,7 @@ router.get('/export', auth, isAdmin, async (req, res) => {
     if (district) query.district = district;
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
-    if (batchNumber) query.batchNumber = batchNumber;
+    if (batchNumber && String(batchNumber).toLowerCase() !== 'all') query.batchNumber = batchNumber;
 
     const students = await User.find(query).select('-password').lean();
 
@@ -581,7 +581,7 @@ router.get('/', auth, async (req, res) => {
     if (district) query.district = district;
     if (region) query.region = region;
     if (schoolName) query.schoolName = schoolName;
-    if (batchNumber) query.batchNumber = batchNumber;
+    if (batchNumber && String(batchNumber).toLowerCase() !== 'all') query.batchNumber = batchNumber;
     if (q) {
       const or = [
         { name: { $regex: q, $options: 'i' } },

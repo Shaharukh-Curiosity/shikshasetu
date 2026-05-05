@@ -588,9 +588,11 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     // Get all students in this batch/region
     const studentsQuery = {
       role: 'student',
-      region: region,
-      batchNumber: batchNumber
+      region: region
     };
+    if (String(batchNumber).toLowerCase() !== 'all') {
+      studentsQuery.batchNumber = batchNumber;
+    }
     const normalizedStatus = String(status || 'all').toLowerCase();
     if (normalizedStatus === 'active') studentsQuery.isActive = true;
     if (normalizedStatus === 'inactive') studentsQuery.isActive = false;
