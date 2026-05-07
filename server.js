@@ -33,6 +33,7 @@ app.use('/api/backup', require('./routes/backup'));
 app.use('/api/presentations', require('./routes/presentations'));
 app.use('/api/bus-inventory', require('./routes/busInventory'));
 app.use('/api/bus-service', require('./routes/busService'));
+app.use('/api/csfi-project-bills', require('./routes/csfiProjectBills'));
 app.use('/api/exam-plan', require('./routes/examPlan'));
 
 // Serve HTML pages

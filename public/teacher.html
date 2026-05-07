@@ -231,6 +231,7 @@
                     <option value="report">View Report</option>
                     <option value="work">Daily Work</option>
                     <option value="bus">Bus On Wheels</option>
+                    <option value="csfi">CSFI Project</option>
                     <option value="low">Low Attendance</option>
                     <option value="presentation">Presentation</option>
                     <option value="marks">Exam</option>
@@ -256,6 +257,9 @@
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" id="busTab" onclick="showTab('bus')"><i class="bi bi-truck"></i><span class="tab-text">Bus On Wheels</span></button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" id="csfiTab" onclick="showTab('csfi')"><i class="bi bi-receipt-cutoff"></i><span class="tab-text">CSFI Project</span></button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" id="lowTab" onclick="showTab('low')"><i class="bi bi-exclamation-triangle"></i><span class="tab-text">Low Attendance</span></button>
@@ -767,6 +771,116 @@
             </div>
         </div>
 
+        <!-- CSFI PROJECT -->
+        <div id="csfiSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h5 class="card-title mb-0">CSFI Project Bills</h5>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-outline-secondary" type="button" onclick="showCsfiEntryView()">Bill Entry</button>
+                            <button class="btn btn-outline-primary" type="button" onclick="showCsfiExpenseTracker()">Expense Tracker</button>
+                            <button class="btn btn-outline-primary" type="button" onclick="refreshCsfiCurrentView()">Refresh Bills</button>
+                        </div>
+                    </div>
+                    <div class="alert alert-light border mb-4">
+                        Store bills for the CSFI projects here. Pick the project category once, then enter the bill date, matter, and amount.
+                    </div>
+                    <div id="csfiEntryPanel">
+                        <div class="row g-3 align-items-end mb-3">
+                            <div class="col-md-4">
+                                <label>Project Category</label>
+                                <select class="form-select" id="csfiProjectSelector" onchange="handleCsfiProjectChange(this.value)">
+                                    <option value="first-bus" selected>Bus</option>
+                                    <option value="bio-diversity">Bio Diversity</option>
+                                    <option value="shikshamitra">Shikshamitra</option>
+                                    <option value="malnutrition">Malnutrition</option>
+                                </select>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="alert alert-primary mb-0 py-2">
+                                    Current category: <strong id="csfiCurrentProjectLabel">Bus</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <form id="csfiProjectBillForm" onsubmit="saveCsfiProjectBill(event)">
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-3">
+                                    <label>Bill Date</label>
+                                    <input type="date" class="form-control" id="csfiBillDate" required>
+                                </div>
+                                <div class="col-md-7">
+                                    <label>Matter</label>
+                                    <input type="text" class="form-control" id="csfiMatter" maxlength="200" placeholder="Bill matter or description" required>
+                                </div>
+                                <div class="col-md-2">
+                                    <label>Amount</label>
+                                    <input type="number" class="form-control" id="csfiAmount" min="0" step="1" placeholder="0" required>
+                                </div>
+                            </div>
+                            <div class="mt-3 d-flex gap-2 justify-content-end">
+                                <button class="btn btn-success" type="submit">Save Bill</button>
+                            </div>
+                        </form>
+                        <div class="mt-4">
+                            <div class="card border-0 bg-light">
+                                <div class="card-body">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                        <h6 class="mb-0">Excel Upload</h6>
+                                        <button class="btn btn-sm btn-outline-primary" type="button" onclick="importCsfiExcel()">Upload Excel</button>
+                                    </div>
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-6">
+                                            <label>Excel File</label>
+                                            <input type="file" class="form-control" id="csfiExcelFile" accept=".xlsx,.xls">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="small text-muted">
+                                                Required columns: <strong>Date</strong>, <strong>Matter</strong>, <strong>Amount</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div id="csfiImportResult" class="mt-3"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4" id="csfiTrackerPanel" style="display: none;">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <h6 class="mb-0">Expense Tracker</h6>
+                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                <button class="btn btn-sm btn-outline-success" type="button" onclick="exportCsfiExpenseTrackerExcel()">Export Excel</button>
+                                <div class="fw-semibold">Total Amount: <span id="csfiTrackerTotalAmount">0</span></div>
+                            </div>
+                        </div>
+                        <div class="row g-3 align-items-end mb-3">
+                            <div class="col-md-3">
+                                <label>Project Category</label>
+                                <select class="form-select" id="csfiTrackerProjectSelector" onchange="handleCsfiProjectChange(this.value)">
+                                    <option value="first-bus">Bus</option>
+                                    <option value="bio-diversity">Bio Diversity</option>
+                                    <option value="shikshamitra">Shikshamitra</option>
+                                    <option value="malnutrition">Malnutrition</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label>Financial Year</label>
+                                <select class="form-select" id="csfiTrackerYearSelector" onchange="handleCsfiFinancialYearChange(this.value)">
+                                    <option value="all">All Years</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="alert alert-primary mb-0 py-2">
+                                    Showing bills for: <strong id="csfiTrackerProjectLabel">Bus</strong>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="csfiTrackerList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- PRESENTATION -->
         <div id="presentationSection" style="display: none;">
             <div class="card">
@@ -1268,6 +1382,10 @@
         let busServiceEditId = null;
         let busServiceHighlightParts = new Set();
         let busServiceComparisonNote = '';
+        let csfiProjectBills = [];
+        let csfiSelectedProject = 'first-bus';
+        let csfiSelectedFinancialYear = 'all';
+        let csfiViewMode = 'entry';
         const busServiceParts = [
             'Bus Wheel Service',
             'Engine Oil',
@@ -1293,6 +1411,12 @@
             'Diesel for Cleaning',
             'Urea'
         ];
+        const csfiProjectOptions = {
+            'first-bus': 'Bus',
+            'bio-diversity': 'Bio Diversity',
+            shikshamitra: 'Shikshamitra',
+            malnutrition: 'Malnutrition'
+        };
         const examComponentConfig = {
             practical: {
                 prefix: 'examPractical',
@@ -1612,6 +1736,7 @@
                 'reportSection',
                 'workSection',
                 'busSection',
+                'csfiSection',
                 'lowSection',
                 'analysisSection',
                 'marksSection',
@@ -1625,6 +1750,7 @@
                 'reportTab',
                 'workTab',
                 'busTab',
+                'csfiTab',
                 'lowTab',
                 'analysisTab',
                 'marksTab',
@@ -1665,6 +1791,13 @@
                 document.getElementById('busTab').classList.add('active');
                 backToBusInventoryEditor();
                 loadBusInventory();
+            } else if (tab === 'csfi') {
+                document.getElementById('csfiSection').style.display = 'block';
+                document.getElementById('csfiTab').classList.add('active');
+                setCsfiBillDefaults();
+                setCsfiViewMode('entry');
+                syncCsfiProjectUI();
+                loadCsfiProjectBills();
             } else if (tab === 'presentation') {
                 document.getElementById('presentationSection').style.display = 'block';
                 document.getElementById('presentationTab').classList.add('active');
@@ -5556,6 +5689,515 @@
             } catch (error) {
                 console.error('Error saving bus service expense:', error);
                 alert(`Failed to save bus service expense: ${error.message}`);
+            }
+        }
+
+        function setCsfiBillDefaults() {
+            const dateEl = document.getElementById('csfiBillDate');
+            if (dateEl && !dateEl.value) {
+                dateEl.value = today;
+            }
+        }
+
+        function setCsfiViewMode(mode) {
+            csfiViewMode = mode === 'tracker' ? 'tracker' : 'entry';
+            const entryPanel = document.getElementById('csfiEntryPanel');
+            const trackerPanel = document.getElementById('csfiTrackerPanel');
+            if (entryPanel) entryPanel.style.display = csfiViewMode === 'entry' ? 'block' : 'none';
+            if (trackerPanel) trackerPanel.style.display = csfiViewMode === 'tracker' ? 'block' : 'none';
+            syncCsfiProjectUI();
+        }
+
+        function showCsfiEntryView() {
+            setCsfiViewMode('entry');
+            syncCsfiProjectUI();
+            loadCsfiProjectBills();
+        }
+
+        async function showCsfiExpenseTracker() {
+            setCsfiViewMode('tracker');
+            await loadCsfiExpenseTracker();
+        }
+
+        async function refreshCsfiCurrentView() {
+            if (csfiViewMode === 'tracker') {
+                await loadCsfiExpenseTracker();
+                return;
+            }
+            await loadCsfiProjectBills();
+        }
+
+        function syncCsfiProjectUI() {
+            const selectorEl = document.getElementById('csfiProjectSelector');
+            const trackerSelectorEl = document.getElementById('csfiTrackerProjectSelector');
+            const yearSelectorEl = document.getElementById('csfiTrackerYearSelector');
+            const labelEl = document.getElementById('csfiCurrentProjectLabel');
+            const trackerLabelEl = document.getElementById('csfiTrackerProjectLabel');
+            const projectLabel = formatCsfiProjectLabel(csfiSelectedProject);
+            if (selectorEl && selectorEl.value !== csfiSelectedProject) {
+                selectorEl.value = csfiSelectedProject;
+            }
+            if (trackerSelectorEl && trackerSelectorEl.value !== csfiSelectedProject) {
+                trackerSelectorEl.value = csfiSelectedProject;
+            }
+            if (yearSelectorEl && yearSelectorEl.value !== csfiSelectedFinancialYear) {
+                yearSelectorEl.value = csfiSelectedFinancialYear;
+            }
+            if (labelEl) {
+                labelEl.textContent = projectLabel;
+            }
+            if (trackerLabelEl) {
+                trackerLabelEl.textContent = projectLabel;
+            }
+        }
+
+        function handleCsfiProjectChange(value) {
+            const nextProject = String(value || '').trim();
+            if (!nextProject) return;
+            csfiSelectedProject = nextProject;
+            syncCsfiProjectUI();
+            if (csfiViewMode === 'tracker') {
+                loadCsfiExpenseTracker();
+            } else {
+                loadCsfiProjectBills();
+            }
+        }
+
+        function formatCsfiProjectLabel(project) {
+            return csfiProjectOptions[String(project || '').trim()] || String(project || '-');
+        }
+
+        function getCsfiFinancialYearLabel(value) {
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) return '';
+            const year = parsed.getFullYear();
+            const month = parsed.getMonth(); // 0-based
+            return month >= 3 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+        }
+
+        function getCsfiFinancialYearStartDate(value) {
+            const year = String(value || '').trim();
+            if (!year || year === 'all') {
+                return '';
+            }
+            const match = year.match(/^(\d{4})-(\d{4})$/);
+            if (!match) {
+                return '';
+            }
+            const startYear = Number(match[1]);
+            const endYear = Number(match[2]);
+            if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear !== startYear + 1) {
+                return '';
+            }
+            return `${startYear}-04-01`;
+        }
+
+        function getCsfiFinancialYearEndDate(value) {
+            const year = String(value || '').trim();
+            if (!year || year === 'all') {
+                return '';
+            }
+            const match = year.match(/^(\d{4})-(\d{4})$/);
+            if (!match) {
+                return '';
+            }
+            const startYear = Number(match[1]);
+            const endYear = Number(match[2]);
+            if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear !== startYear + 1) {
+                return '';
+            }
+            return `${endYear}-03-31`;
+        }
+
+        function getCsfiFinancialYearRange(value) {
+            return {
+                startDate: getCsfiFinancialYearStartDate(value),
+                endDate: getCsfiFinancialYearEndDate(value)
+            };
+        }
+
+        function buildCsfiFinancialYearOptions(bills) {
+            const years = new Set();
+            (Array.isArray(bills) ? bills : []).forEach((bill) => {
+                const yearLabel = getCsfiFinancialYearLabel(bill?.billDate || bill?.date);
+                if (yearLabel) years.add(yearLabel);
+            });
+            return Array.from(years).sort((a, b) => {
+                const aStart = Number(String(a).split('-')[0]);
+                const bStart = Number(String(b).split('-')[0]);
+                return bStart - aStart;
+            });
+        }
+
+        function populateCsfiFinancialYearSelector(bills) {
+            const selectorEl = document.getElementById('csfiTrackerYearSelector');
+            if (!selectorEl) return;
+
+            const options = buildCsfiFinancialYearOptions(bills);
+            const currentValue = selectorEl.value || csfiSelectedFinancialYear || 'all';
+            selectorEl.innerHTML = '<option value="all">All Years</option>';
+            options.forEach((year) => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                selectorEl.appendChild(option);
+            });
+
+            const preferred = currentValue === 'all'
+                ? 'all'
+                : (options.includes(currentValue) ? currentValue : 'all');
+            selectorEl.value = preferred;
+            csfiSelectedFinancialYear = preferred;
+        }
+
+        function handleCsfiFinancialYearChange(value) {
+            csfiSelectedFinancialYear = String(value || '').trim() || 'all';
+            syncCsfiProjectUI();
+            if (csfiViewMode === 'tracker') {
+                loadCsfiExpenseTracker();
+            }
+        }
+
+        function renderCsfiProjectBills() {
+            return;
+        }
+
+        function getCsfiTrackerFilteredBills(bills) {
+            const list = Array.isArray(bills) ? bills : [];
+            if (csfiSelectedFinancialYear === 'all') return list;
+            return list.filter((bill) => getCsfiFinancialYearLabel(bill.billDate || bill.date) === csfiSelectedFinancialYear);
+        }
+
+        function formatCsfiAmount(value) {
+            return Math.round(Number(value) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
+
+        async function loadCsfiProjectBills() {
+            return loadCsfiProjectBillsForSelectedProject();
+        }
+
+        async function loadCsfiExpenseTracker() {
+            const listEl = document.getElementById('csfiTrackerList');
+            if (listEl) {
+                listEl.innerHTML = '<div class="text-muted">Loading CSFI tracker...</div>';
+            }
+            try {
+                const query = csfiSelectedProject ? `?project=${encodeURIComponent(csfiSelectedProject)}` : '';
+                const res = await fetch(`/api/csfi-project-bills${query}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const data = await res.json();
+                const allBills = Array.isArray(data) ? data : [];
+                csfiProjectBills = allBills;
+                populateCsfiFinancialYearSelector(allBills);
+                renderCsfiExpenseTracker(allBills);
+            } catch (error) {
+                console.error('Error loading CSFI tracker:', error);
+                if (listEl) {
+                    listEl.innerHTML = `<div class="text-danger">Failed to load CSFI tracker: ${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        async function loadCsfiProjectBillsForSelectedProject() {
+            const listEl = document.getElementById('csfiProjectBillsList');
+            if (listEl) {
+                listEl.innerHTML = '<div class="text-muted">Loading CSFI bills...</div>';
+            }
+            try {
+                const query = csfiSelectedProject ? `?project=${encodeURIComponent(csfiSelectedProject)}` : '';
+                const res = await fetch(`/api/csfi-project-bills${query}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const data = await res.json();
+                csfiProjectBills = Array.isArray(data) ? data : [];
+                if (listEl) {
+                    listEl.innerHTML = '';
+                }
+            } catch (error) {
+                console.error('Error loading CSFI bills:', error);
+                if (listEl) {
+                    listEl.innerHTML = `<div class="text-danger">Failed to load CSFI bills: ${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        function normalizeCsfiHeader(value) {
+            return String(value || '')
+                .trim()
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '');
+        }
+
+        function formatCsfiExcelDate(value) {
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                return value.toISOString().slice(0, 10);
+            }
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                const utcDays = Math.floor(value - 25569);
+                const utcValue = utcDays * 86400 * 1000;
+                const dateInfo = new Date(utcValue);
+                return Number.isNaN(dateInfo.getTime()) ? '' : dateInfo.toISOString().slice(0, 10);
+            }
+            const text = String(value || '').trim();
+            if (!text) return '';
+            const parsed = new Date(text);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString().slice(0, 10);
+            }
+            return text;
+        }
+
+        function parseCsfiExcelRows(rows) {
+            if (!Array.isArray(rows) || rows.length < 2) {
+                throw new Error('The sheet must contain a header row and at least one data row.');
+            }
+
+            const headerRow = rows[0].map(normalizeCsfiHeader);
+            const dateIndex = headerRow.findIndex((value) => value === 'date');
+            const matterIndex = headerRow.findIndex((value) => value === 'matter');
+            const amountIndex = headerRow.findIndex((value) => value === 'amount');
+
+            if (dateIndex === -1 || matterIndex === -1 || amountIndex === -1) {
+                throw new Error('Headers must include Date, Matter, and Amount.');
+            }
+
+            const entries = [];
+            const skipped = [];
+
+            rows.slice(1).forEach((row, rowOffset) => {
+                const rowNumber = rowOffset + 2;
+                if (!row || row.every((cell) => String(cell || '').trim() === '')) {
+                    return;
+                }
+
+                const billDate = formatCsfiExcelDate(row[dateIndex]);
+                const matter = String(row[matterIndex] || '').trim();
+                const amount = Number(String(row[amountIndex] || '').replace(/,/g, ''));
+
+                if (!billDate || !matter || !Number.isFinite(amount)) {
+                    skipped.push(rowNumber);
+                    return;
+                }
+
+                entries.push({ billDate, matter, amount });
+            });
+
+            return { entries, skipped };
+        }
+
+        async function importCsfiExcel() {
+            const fileInput = document.getElementById('csfiExcelFile');
+            const resultEl = document.getElementById('csfiImportResult');
+            if (!fileInput || !resultEl) return;
+
+            const file = fileInput.files?.[0];
+            if (!file) {
+                resultEl.innerHTML = '<div class="alert alert-warning mb-0">Please choose an Excel file first.</div>';
+                return;
+            }
+            if (!window.XLSX) {
+                resultEl.innerHTML = '<div class="alert alert-warning mb-0">Excel library not loaded. Please refresh and try again.</div>';
+                return;
+            }
+            if (!csfiSelectedProject) {
+                resultEl.innerHTML = '<div class="alert alert-warning mb-0">Please select a project category first.</div>';
+                return;
+            }
+
+            try {
+                resultEl.innerHTML = '<div class="alert alert-info mb-0">Reading Excel file...</div>';
+                const buffer = await file.arrayBuffer();
+                const workbook = XLSX.read(buffer, { type: 'array' });
+                const sheetName = workbook.SheetNames?.[0];
+                if (!sheetName) {
+                    throw new Error('Excel file does not contain any sheets.');
+                }
+                const sheet = workbook.Sheets[sheetName];
+                const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                const { entries, skipped } = parseCsfiExcelRows(rows);
+
+                if (!entries.length) {
+                    resultEl.innerHTML = '<div class="alert alert-warning mb-0">No valid rows found in the Excel file.</div>';
+                    return;
+                }
+
+                const res = await fetch('/api/csfi-project-bills', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        project: csfiSelectedProject,
+                        entries
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                if (fileInput) fileInput.value = '';
+                await loadCsfiExpenseTracker();
+                resultEl.innerHTML = `
+                    <div class="alert alert-success mb-0">
+                        Imported ${data.created || entries.length} rows successfully.
+                        ${skipped.length || data.skipped ? `Skipped ${data.skipped || skipped.length} row(s).` : ''}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error importing CSFI Excel:', error);
+                resultEl.innerHTML = `<div class="alert alert-danger mb-0">Failed to import Excel: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        function renderCsfiExpenseTracker(bills) {
+            const listEl = document.getElementById('csfiTrackerList');
+            const totalEl = document.getElementById('csfiTrackerTotalAmount');
+            if (!listEl) return;
+
+            const currentLabel = formatCsfiProjectLabel(csfiSelectedProject);
+            const yearLabel = String(csfiSelectedFinancialYear || 'All Years').trim();
+            const filteredBills = getCsfiTrackerFilteredBills(bills);
+            const totalAmount = filteredBills.reduce((sum, bill) => sum + Math.round(Number(bill.amount) || 0), 0);
+            if (totalEl) {
+                totalEl.textContent = formatCsfiAmount(totalAmount);
+            }
+
+            if (!filteredBills.length) {
+                listEl.innerHTML = `<div class="alert alert-light border">No bills found for ${escapeHtml(currentLabel)} in ${escapeHtml(yearLabel)}.</div>`;
+                return;
+            }
+
+            const rows = filteredBills.map((bill, index) => {
+                const billDate = bill.billDate ? new Date(bill.billDate).toLocaleDateString() : '-';
+                return `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(billDate)}</td>
+                        <td>${escapeHtml(bill.matter || '-')}</td>
+                        <td>${escapeHtml(formatCsfiAmount(bill.amount))}</td>
+                        <td>${escapeHtml(bill.createdByName || 'Unknown')}</td>
+                        <td>${escapeHtml(bill.createdAt ? new Date(bill.createdAt).toLocaleString() : '-')}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            listEl.innerHTML = `
+                <div class="alert alert-light border py-2 mb-3">
+                    Project: <strong>${escapeHtml(currentLabel)}</strong> | Financial Year: <strong>${escapeHtml(yearLabel)}</strong> | Rows: <strong>${filteredBills.length}</strong>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th colspan="6" class="text-start">${escapeHtml(currentLabel)}</th>
+                            </tr>
+                            <tr>
+                                <th style="width: 6%;">#</th>
+                                <th style="width: 12%;">Date</th>
+                                <th style="width: 40%;">Matter</th>
+                                <th style="width: 10%;">Amount</th>
+                                <th style="width: 10%;">Added By</th>
+                                <th style="width: 16%;">Saved At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function exportCsfiExpenseTrackerExcel() {
+            if (!window.XLSX) {
+                alert('Excel library not loaded. Please refresh and try again.');
+                return;
+            }
+
+            const filteredBills = getCsfiTrackerFilteredBills(csfiProjectBills);
+            if (!filteredBills.length) {
+                alert('No bills found for the selected project and financial year.');
+                return;
+            }
+
+            const rows = filteredBills.map((bill, index) => ({
+                'Sr No': index + 1,
+                'Date': bill.billDate ? new Date(bill.billDate).toISOString().slice(0, 10) : '',
+                'Matter': bill.matter || '',
+                'Amount': Math.round(Number(bill.amount) || 0)
+            }));
+
+            const workbook = XLSX.utils.book_new();
+            const worksheet = XLSX.utils.json_to_sheet(rows);
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'CSFI Bills');
+
+            const projectLabel = formatCsfiProjectLabel(csfiSelectedProject).replace(/[^a-z0-9]+/gi, '_');
+            const yearLabel = String(csfiSelectedFinancialYear || 'All_Years').replace(/[^a-z0-9-]+/gi, '_');
+            const fileName = `CSFI_${projectLabel}_${yearLabel}.xlsx`;
+            XLSX.writeFile(workbook, fileName);
+        }
+
+        async function saveCsfiProjectBill(event) {
+            event.preventDefault();
+
+            const dateEl = document.getElementById('csfiBillDate');
+            const matterEl = document.getElementById('csfiMatter');
+            const amountEl = document.getElementById('csfiAmount');
+
+            const billDate = String(dateEl?.value || '').trim();
+            const project = String(csfiSelectedProject || '').trim();
+            const matter = String(matterEl?.value || '').trim();
+            const amount = Number(amountEl?.value);
+
+            if (!billDate) {
+                alert('Please select a bill date.');
+                return;
+            }
+            if (!project) {
+                alert('Please select a project category at the top first.');
+                return;
+            }
+            if (!matter) {
+                alert('Please enter the matter.');
+                return;
+            }
+            if (!Number.isFinite(amount) || amount < 0) {
+                alert('Please enter a valid amount.');
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/csfi-project-bills', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        billDate,
+                        project,
+                        matter,
+                        amount
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                if (matterEl) matterEl.value = '';
+                if (amountEl) amountEl.value = '';
+                setCsfiBillDefaults();
+                await loadCsfiProjectBills();
+                alert('CSFI bill saved successfully.');
+            } catch (error) {
+                console.error('Error saving CSFI bill:', error);
+                alert(`Failed to save CSFI bill: ${error.message}`);
             }
         }
 
