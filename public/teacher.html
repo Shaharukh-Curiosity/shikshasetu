@@ -780,6 +780,7 @@
                         <div class="d-flex flex-wrap gap-2">
                             <button class="btn btn-outline-secondary" type="button" onclick="showCsfiEntryView()">Bill Entry</button>
                             <button class="btn btn-outline-primary" type="button" onclick="showCsfiExpenseTracker()">Expense Tracker</button>
+                            <button class="btn btn-outline-primary" type="button" onclick="showCsfiExpenseAnalyzer()">Expense Analyzer</button>
                             <button class="btn btn-outline-primary" type="button" onclick="refreshCsfiCurrentView()">Refresh Bills</button>
                         </div>
                     </div>
@@ -850,7 +851,7 @@
                             <h6 class="mb-0">Expense Tracker</h6>
                             <div class="d-flex flex-wrap align-items-center gap-2">
                                 <button class="btn btn-sm btn-outline-success" type="button" onclick="exportCsfiExpenseTrackerExcel()">Export Excel</button>
-                                <div class="fw-semibold">Total Amount: <span id="csfiTrackerTotalAmount">0</span></div>
+                                <button class="btn btn-sm btn-outline-primary" type="button" id="csfiTrackerEditButton" onclick="toggleCsfiTrackerEditMode()">Edit Expense Tracker</button>
                             </div>
                         </div>
                         <div class="row g-3 align-items-end mb-3">
@@ -893,7 +894,87 @@
                                 </div>
                             </div>
                         </div>
+                        <div class="alert alert-light border d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <div class="fw-semibold">Total Amount</div>
+                            <div class="fs-5 fw-bold text-success"><span id="csfiTrackerTotalAmount">0</span></div>
+                        </div>
                         <div id="csfiTrackerList"></div>
+                    </div>
+                    <div class="mt-4" id="csfiAnalyzerPanel" style="display: none;">
+                        <div class="card border-0 bg-light">
+                            <div class="card-body">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                    <h6 class="mb-0">Expense Analyzer</h6>
+                                    <div class="small text-muted" id="csfiAnalyzerNote"></div>
+                                </div>
+                                <div class="row g-3 align-items-end mb-3">
+                                    <div class="col-md-3">
+                                        <label>Project Category</label>
+                                        <select class="form-select" id="csfiAnalyzerProjectSelector" onchange="handleCsfiProjectChange(this.value)">
+                                            <option value="first-bus">Bus</option>
+                                            <option value="bio-diversity">Bio Diversity</option>
+                                            <option value="shikshamitra">Shikshamitra</option>
+                                            <option value="malnutrition">Malnutrition</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label>Financial Year</label>
+                                        <select class="form-select" id="csfiAnalyzerYearSelector" onchange="handleCsfiFinancialYearChange(this.value)">
+                                            <option value="all">All Years</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label>Bill Month</label>
+                                        <select class="form-select" id="csfiAnalyzerMonthSelector" onchange="handleCsfiMonthChange(this.value)">
+                                            <option value="all">All Months</option>
+                                            <option value="1">January</option>
+                                            <option value="2">February</option>
+                                            <option value="3">March</option>
+                                            <option value="4">April</option>
+                                            <option value="5">May</option>
+                                            <option value="6">June</option>
+                                            <option value="7">July</option>
+                                            <option value="8">August</option>
+                                            <option value="9">September</option>
+                                            <option value="10">October</option>
+                                            <option value="11">November</option>
+                                            <option value="12">December</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="alert alert-primary mb-0 py-2">
+                                            Analyzer for: <strong id="csfiAnalyzerProjectLabel">Bus</strong>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3 align-items-start">
+                                    <div class="col-lg-7">
+                                        <div class="chart-wrap position-relative" style="min-height: 360px;">
+                                            <canvas id="csfiAnalyzerChart" height="360"></canvas>
+                                        </div>
+                                    </div>
+                                    <div class="col-lg-5">
+                                        <div class="alert alert-primary">
+                                            <div class="fw-semibold">Highest Expense Category</div>
+                                            <div class="fs-5" id="csfiAnalyzerTopCategory">-</div>
+                                            <div class="small text-muted">Total: <span id="csfiAnalyzerTopAmount">0</span></div>
+                                        </div>
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered align-middle">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Category</th>
+                                                        <th>Total</th>
+                                                        <th>%</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="csfiAnalyzerSummaryBody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1405,6 +1486,9 @@
         let csfiSelectedFinancialYear = 'all';
         let csfiSelectedMonth = 'all';
         let csfiViewMode = 'entry';
+        let csfiTrackerEditMode = false;
+        let csfiBillEditId = null;
+        let csfiAnalyzerChart = null;
         const busServiceParts = [
             'Bus Wheel Service',
             'Engine Oil',
@@ -5363,7 +5447,7 @@
 
             const totalAmount = busServiceData.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
             const totalEl = document.getElementById('busServiceTotalAmount');
-            if (totalEl) totalEl.textContent = totalAmount.toFixed(2);
+            if (totalEl) totalEl.textContent = Math.trunc(totalAmount).toLocaleString(undefined, { maximumFractionDigits: 0 });
             const noteEl = document.getElementById('busServiceCompareNote');
             if (noteEl) {
                 noteEl.textContent = busServiceComparisonNote || '';
@@ -5719,12 +5803,16 @@
         }
 
         function setCsfiViewMode(mode) {
-            csfiViewMode = mode === 'tracker' ? 'tracker' : 'entry';
+            const nextMode = ['entry', 'tracker', 'analyzer'].includes(mode) ? mode : 'entry';
+            csfiViewMode = nextMode;
             const entryPanel = document.getElementById('csfiEntryPanel');
             const trackerPanel = document.getElementById('csfiTrackerPanel');
+            const analyzerPanel = document.getElementById('csfiAnalyzerPanel');
             if (entryPanel) entryPanel.style.display = csfiViewMode === 'entry' ? 'block' : 'none';
             if (trackerPanel) trackerPanel.style.display = csfiViewMode === 'tracker' ? 'block' : 'none';
+            if (analyzerPanel) analyzerPanel.style.display = csfiViewMode === 'analyzer' ? 'block' : 'none';
             syncCsfiProjectUI();
+            syncCsfiTrackerEditUI();
         }
 
         function showCsfiEntryView() {
@@ -5738,9 +5826,18 @@
             await loadCsfiExpenseTracker();
         }
 
+        async function showCsfiExpenseAnalyzer() {
+            setCsfiViewMode('analyzer');
+            await loadCsfiExpenseAnalyzer();
+        }
+
         async function refreshCsfiCurrentView() {
             if (csfiViewMode === 'tracker') {
                 await loadCsfiExpenseTracker();
+                return;
+            }
+            if (csfiViewMode === 'analyzer') {
+                await loadCsfiExpenseAnalyzer();
                 return;
             }
             await loadCsfiProjectBills();
@@ -5749,10 +5846,14 @@
         function syncCsfiProjectUI() {
             const selectorEl = document.getElementById('csfiProjectSelector');
             const trackerSelectorEl = document.getElementById('csfiTrackerProjectSelector');
+            const analyzerSelectorEl = document.getElementById('csfiAnalyzerProjectSelector');
             const yearSelectorEl = document.getElementById('csfiTrackerYearSelector');
+            const analyzerYearSelectorEl = document.getElementById('csfiAnalyzerYearSelector');
             const monthSelectorEl = document.getElementById('csfiTrackerMonthSelector');
+            const analyzerMonthSelectorEl = document.getElementById('csfiAnalyzerMonthSelector');
             const labelEl = document.getElementById('csfiCurrentProjectLabel');
             const trackerLabelEl = document.getElementById('csfiTrackerProjectLabel');
+            const analyzerLabelEl = document.getElementById('csfiAnalyzerProjectLabel');
             const projectLabel = formatCsfiProjectLabel(csfiSelectedProject);
             if (selectorEl && selectorEl.value !== csfiSelectedProject) {
                 selectorEl.value = csfiSelectedProject;
@@ -5760,11 +5861,20 @@
             if (trackerSelectorEl && trackerSelectorEl.value !== csfiSelectedProject) {
                 trackerSelectorEl.value = csfiSelectedProject;
             }
+            if (analyzerSelectorEl && analyzerSelectorEl.value !== csfiSelectedProject) {
+                analyzerSelectorEl.value = csfiSelectedProject;
+            }
             if (yearSelectorEl && yearSelectorEl.value !== csfiSelectedFinancialYear) {
                 yearSelectorEl.value = csfiSelectedFinancialYear;
             }
+            if (analyzerYearSelectorEl && analyzerYearSelectorEl.value !== csfiSelectedFinancialYear) {
+                analyzerYearSelectorEl.value = csfiSelectedFinancialYear;
+            }
             if (monthSelectorEl && monthSelectorEl.value !== csfiSelectedMonth) {
                 monthSelectorEl.value = csfiSelectedMonth;
+            }
+            if (analyzerMonthSelectorEl && analyzerMonthSelectorEl.value !== csfiSelectedMonth) {
+                analyzerMonthSelectorEl.value = csfiSelectedMonth;
             }
             if (labelEl) {
                 labelEl.textContent = projectLabel;
@@ -5772,6 +5882,27 @@
             if (trackerLabelEl) {
                 trackerLabelEl.textContent = projectLabel;
             }
+            if (analyzerLabelEl) {
+                analyzerLabelEl.textContent = projectLabel;
+            }
+        }
+
+        function syncCsfiTrackerEditUI() {
+            const editButton = document.getElementById('csfiTrackerEditButton');
+            if (!editButton) return;
+            editButton.textContent = csfiTrackerEditMode ? 'Done Editing' : 'Edit Expense Tracker';
+            editButton.className = csfiTrackerEditMode
+                ? 'btn btn-sm btn-success'
+                : 'btn btn-sm btn-outline-primary';
+        }
+
+        function toggleCsfiTrackerEditMode() {
+            csfiTrackerEditMode = !csfiTrackerEditMode;
+            if (!csfiTrackerEditMode) {
+                csfiBillEditId = null;
+            }
+            syncCsfiTrackerEditUI();
+            renderCsfiExpenseTracker(csfiProjectBills);
         }
 
         function handleCsfiProjectChange(value) {
@@ -5779,6 +5910,10 @@
             if (!nextProject) return;
             csfiSelectedProject = nextProject;
             syncCsfiProjectUI();
+            if (csfiViewMode === 'analyzer') {
+                loadCsfiExpenseAnalyzer();
+                return;
+            }
             if (csfiViewMode === 'tracker') {
                 loadCsfiExpenseTracker();
             } else {
@@ -5852,30 +5987,43 @@
             });
         }
 
-        function populateCsfiFinancialYearSelector(bills) {
-            const selectorEl = document.getElementById('csfiTrackerYearSelector');
-            if (!selectorEl) return;
-
+        function populateCsfiFinancialYearSelectors(bills) {
             const options = buildCsfiFinancialYearOptions(bills);
-            const currentValue = selectorEl.value || csfiSelectedFinancialYear || 'all';
-            selectorEl.innerHTML = '<option value="all">All Years</option>';
-            options.forEach((year) => {
-                const option = document.createElement('option');
-                option.value = year;
-                option.textContent = year;
-                selectorEl.appendChild(option);
+            const selectorIds = ['csfiTrackerYearSelector', 'csfiAnalyzerYearSelector'];
+            let preferred = csfiSelectedFinancialYear || 'all';
+
+            selectorIds.forEach((id) => {
+                const selectorEl = document.getElementById(id);
+                if (!selectorEl) return;
+
+                const currentValue = selectorEl.value || preferred || 'all';
+                selectorEl.innerHTML = '<option value="all">All Years</option>';
+                options.forEach((year) => {
+                    const option = document.createElement('option');
+                    option.value = year;
+                    option.textContent = year;
+                    selectorEl.appendChild(option);
+                });
+
+                const nextValue = currentValue === 'all'
+                    ? 'all'
+                    : (options.includes(currentValue) ? currentValue : 'all');
+                selectorEl.value = nextValue;
+                if (nextValue !== 'all' || preferred === 'all') {
+                    preferred = nextValue;
+                }
             });
 
-            const preferred = currentValue === 'all'
-                ? 'all'
-                : (options.includes(currentValue) ? currentValue : 'all');
-            selectorEl.value = preferred;
             csfiSelectedFinancialYear = preferred;
         }
 
         function handleCsfiFinancialYearChange(value) {
             csfiSelectedFinancialYear = String(value || '').trim() || 'all';
             syncCsfiProjectUI();
+            if (csfiViewMode === 'analyzer') {
+                loadCsfiExpenseAnalyzer();
+                return;
+            }
             if (csfiViewMode === 'tracker') {
                 loadCsfiExpenseTracker();
             }
@@ -5884,6 +6032,10 @@
         function handleCsfiMonthChange(value) {
             csfiSelectedMonth = String(value || '').trim() || 'all';
             syncCsfiProjectUI();
+            if (csfiViewMode === 'analyzer') {
+                loadCsfiExpenseAnalyzer();
+                return;
+            }
             if (csfiViewMode === 'tracker') {
                 loadCsfiExpenseTracker();
             }
@@ -5905,8 +6057,39 @@
             });
         }
 
+        function normalizeCsfiAmountValue(value) {
+            const numericAmount = Number(String(value ?? '').replace(/,/g, ''));
+            if (!Number.isFinite(numericAmount)) return 0;
+            return Math.trunc(numericAmount);
+        }
+
+        function normalizeCsfiExpenseCategoryKey(value) {
+            return String(value || '')
+                .trim()
+                .toLowerCase()
+                .replace(/\s+/g, ' ');
+        }
+
+        function buildCsfiExpenseCategoryTotals(bills) {
+            const grouped = new Map();
+            (Array.isArray(bills) ? bills : []).forEach((bill) => {
+                const key = normalizeCsfiExpenseCategoryKey(bill?.matter);
+                if (!key) return;
+                const amount = normalizeCsfiAmountValue(bill?.amount);
+                if (!grouped.has(key)) {
+                    grouped.set(key, {
+                        label: String(bill?.matter || '').trim(),
+                        total: 0
+                    });
+                }
+                grouped.get(key).total += amount;
+            });
+
+            return Array.from(grouped.values()).sort((a, b) => b.total - a.total);
+        }
+
         function formatCsfiAmount(value) {
-            return Math.round(Number(value) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+            return String(normalizeCsfiAmountValue(value));
         }
 
         function padCsfiDatePart(value) {
@@ -5984,12 +6167,55 @@
                 const data = await res.json();
                 const allBills = Array.isArray(data) ? data : [];
                 csfiProjectBills = allBills;
-                populateCsfiFinancialYearSelector(allBills);
+                populateCsfiFinancialYearSelectors(allBills);
                 renderCsfiExpenseTracker(allBills);
+                if (csfiViewMode === 'analyzer') {
+                    renderCsfiExpenseAnalyzer(allBills);
+                }
             } catch (error) {
                 console.error('Error loading CSFI tracker:', error);
                 if (listEl) {
                     listEl.innerHTML = `<div class="text-danger">Failed to load CSFI tracker: ${escapeHtml(error.message)}</div>`;
+                }
+            }
+        }
+
+        async function loadCsfiExpenseAnalyzer() {
+            const noteEl = document.getElementById('csfiAnalyzerNote');
+            const bodyEl = document.getElementById('csfiAnalyzerSummaryBody');
+            if (noteEl) noteEl.textContent = 'Loading analyzer...';
+            if (bodyEl) bodyEl.innerHTML = '';
+            try {
+                const params = new URLSearchParams();
+                if (csfiSelectedProject) {
+                    params.set('project', csfiSelectedProject);
+                }
+                const range = getCsfiTrackerDateRange();
+                if (range.startDate && range.endDate) {
+                    params.set('startDate', range.startDate);
+                    params.set('endDate', range.endDate);
+                }
+                const query = params.toString() ? `?${params.toString()}` : '';
+                const res = await fetch(`/api/csfi-project-bills${query}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    throw new Error(`API Error: ${res.status}`);
+                }
+                const data = await res.json();
+                const allBills = Array.isArray(data) ? data : [];
+                csfiProjectBills = allBills;
+                populateCsfiFinancialYearSelectors(allBills);
+                renderCsfiExpenseAnalyzer(allBills);
+            } catch (error) {
+                console.error('Error loading CSFI analyzer:', error);
+                if (noteEl) noteEl.textContent = '';
+                if (bodyEl) {
+                    bodyEl.innerHTML = `<tr><td colspan="3" class="text-danger">Failed to load analyzer: ${escapeHtml(error.message)}</td></tr>`;
+                }
+                if (csfiAnalyzerChart) {
+                    csfiAnalyzerChart.destroy();
+                    csfiAnalyzerChart = null;
                 }
             }
         }
@@ -6011,6 +6237,9 @@
                 csfiProjectBills = Array.isArray(data) ? data : [];
                 if (listEl) {
                     listEl.innerHTML = '';
+                }
+                if (csfiViewMode === 'analyzer') {
+                    renderCsfiExpenseAnalyzer(csfiProjectBills);
                 }
             } catch (error) {
                 console.error('Error loading CSFI bills:', error);
@@ -6152,12 +6381,13 @@
             const listEl = document.getElementById('csfiTrackerList');
             const totalEl = document.getElementById('csfiTrackerTotalAmount');
             if (!listEl) return;
+            syncCsfiTrackerEditUI();
 
             const currentLabel = formatCsfiProjectLabel(csfiSelectedProject);
             const yearLabel = csfiSelectedFinancialYear === 'all' ? 'All Years' : String(csfiSelectedFinancialYear || '').trim();
             const monthLabel = csfiSelectedMonth === 'all' ? 'All Months' : new Date(2000, Number(csfiSelectedMonth) - 1, 1).toLocaleString(undefined, { month: 'long' });
             const filteredBills = getCsfiTrackerFilteredBills(bills);
-            const totalAmount = filteredBills.reduce((sum, bill) => sum + Math.round(Number(bill.amount) || 0), 0);
+            const totalAmount = filteredBills.reduce((sum, bill) => sum + normalizeCsfiAmountValue(bill.amount), 0);
             if (totalEl) {
                 totalEl.textContent = formatCsfiAmount(totalAmount);
             }
@@ -6169,14 +6399,47 @@
 
             const rows = filteredBills.map((bill, index) => {
                 const billDate = bill.billDate ? new Date(bill.billDate).toLocaleDateString() : '-';
+                const isEditing = csfiTrackerEditMode && String(csfiBillEditId || '') === String(bill._id || '');
                 return `
                     <tr>
                         <td>${index + 1}</td>
-                        <td>${escapeHtml(billDate)}</td>
-                        <td>${escapeHtml(bill.matter || '-')}</td>
-                        <td>${escapeHtml(formatCsfiAmount(bill.amount))}</td>
+                        <td>
+                            ${isEditing
+                                ? `<input type="date" class="form-control form-control-sm" value="${bill.billDate ? new Date(bill.billDate).toISOString().slice(0, 10) : ''}" data-edit-field="billDate">`
+                                : escapeHtml(billDate)}
+                        </td>
+                        <td>
+                            ${isEditing
+                                ? `<select class="form-select form-select-sm" data-edit-field="project">
+                                        <option value="first-bus" ${String(bill.project || '') === 'first-bus' ? 'selected' : ''}>Bus</option>
+                                        <option value="bio-diversity" ${String(bill.project || '') === 'bio-diversity' ? 'selected' : ''}>Bio Diversity</option>
+                                        <option value="shikshamitra" ${String(bill.project || '') === 'shikshamitra' ? 'selected' : ''}>Shikshamitra</option>
+                                        <option value="malnutrition" ${String(bill.project || '') === 'malnutrition' ? 'selected' : ''}>Malnutrition</option>
+                                    </select>`
+                                : escapeHtml(formatCsfiProjectLabel(bill.project || '-'))}
+                        </td>
+                        <td>
+                            ${isEditing
+                                ? `<input type="text" class="form-control form-control-sm" value="${escapeHtml(bill.matter || '')}" data-edit-field="matter">`
+                                : escapeHtml(bill.matter || '-')}
+                        </td>
+                        <td>
+                            ${isEditing
+                                ? `<input type="number" class="form-control form-control-sm" min="0" step="1" inputmode="numeric" value="${normalizeCsfiAmountValue(bill.amount)}" data-edit-field="amount">`
+                                : escapeHtml(formatCsfiAmount(bill.amount))}
+                        </td>
                         <td>${escapeHtml(bill.createdByName || 'Unknown')}</td>
                         <td>${escapeHtml(bill.createdAt ? new Date(bill.createdAt).toLocaleString() : '-')}</td>
+                        <td>
+                            ${isEditing
+                                ? `
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-sm btn-success" type="button" onclick="saveCsfiBillEdit('${bill._id}')">Save</button>
+                                        <button class="btn btn-sm btn-outline-secondary" type="button" onclick="cancelCsfiBillEdit()">Cancel</button>
+                                    </div>
+                                `
+                                : (csfiTrackerEditMode ? `<button class="btn btn-sm btn-outline-primary" type="button" onclick="startCsfiBillEdit('${bill._id}')">Edit</button>` : '-')}
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -6189,15 +6452,17 @@
                     <table class="table table-sm table-bordered align-middle">
                         <thead class="table-light">
                             <tr>
-                                <th colspan="6" class="text-start">${escapeHtml(currentLabel)}</th>
+                                <th colspan="8" class="text-start">${escapeHtml(currentLabel)}</th>
                             </tr>
                             <tr>
                                 <th style="width: 6%;">#</th>
                                 <th style="width: 12%;">Date</th>
-                                <th style="width: 40%;">Matter</th>
+                                <th style="width: 12%;">Project</th>
+                                <th style="width: 32%;">Matter</th>
                                 <th style="width: 10%;">Amount</th>
                                 <th style="width: 10%;">Added By</th>
-                                <th style="width: 16%;">Saved At</th>
+                                <th style="width: 12%;">Saved At</th>
+                                <th style="width: 6%;">Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -6206,6 +6471,124 @@
                     </table>
                 </div>
             `;
+        }
+
+        function renderCsfiExpenseAnalyzer(bills) {
+            const canvasEl = document.getElementById('csfiAnalyzerChart');
+            const noteEl = document.getElementById('csfiAnalyzerNote');
+            const topCategoryEl = document.getElementById('csfiAnalyzerTopCategory');
+            const topAmountEl = document.getElementById('csfiAnalyzerTopAmount');
+            const bodyEl = document.getElementById('csfiAnalyzerSummaryBody');
+            if (!canvasEl) return;
+
+            const filteredBills = getCsfiTrackerFilteredBills(bills);
+            const categoryTotals = buildCsfiExpenseCategoryTotals(filteredBills);
+            const totalAmount = categoryTotals.reduce((sum, item) => sum + item.total, 0);
+
+            if (noteEl) {
+                noteEl.textContent = totalAmount
+                    ? `Showing category totals for ${filteredBills.length} bill(s).`
+                    : 'No bills found for the selected project and filters.';
+            }
+
+            if (!categoryTotals.length) {
+                if (topCategoryEl) topCategoryEl.textContent = '-';
+                if (topAmountEl) topAmountEl.textContent = '0';
+                if (bodyEl) {
+                    bodyEl.innerHTML = '<tr><td colspan="3" class="text-muted">No expense data available.</td></tr>';
+                }
+                if (csfiAnalyzerChart) {
+                    csfiAnalyzerChart.destroy();
+                    csfiAnalyzerChart = null;
+                }
+                const ctxEmpty = canvasEl.getContext('2d');
+                if (ctxEmpty) {
+                    ctxEmpty.clearRect(0, 0, canvasEl.width, canvasEl.height);
+                }
+                return;
+            }
+
+            const topCategory = categoryTotals[0];
+            if (topCategoryEl) topCategoryEl.textContent = topCategory.label || '-';
+            if (topAmountEl) topAmountEl.textContent = formatCsfiAmount(topCategory.total);
+
+            const colors = [
+                '#0ea5a4', '#2563eb', '#f59e0b', '#ef4444', '#22c55e',
+                '#a855f7', '#14b8a6', '#f97316', '#64748b', '#06b6d4'
+            ];
+            const labels = categoryTotals.map((item) => item.label || '-');
+            const values = categoryTotals.map((item) => item.total);
+
+            if (bodyEl) {
+                bodyEl.innerHTML = categoryTotals.map((item, index) => {
+                    const percent = totalAmount > 0 ? ((item.total / totalAmount) * 100).toFixed(1) : '0.0';
+                    return `
+                        <tr class="${index === 0 ? 'table-success' : ''}">
+                            <td>${escapeHtml(item.label || '-')}</td>
+                            <td>${escapeHtml(formatCsfiAmount(item.total))}</td>
+                            <td>${escapeHtml(percent)}%</td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            const ctx = canvasEl.getContext('2d');
+            if (!ctx) return;
+
+            if (csfiAnalyzerChart) {
+                csfiAnalyzerChart.destroy();
+            }
+
+            csfiAnalyzerChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels,
+                    datasets: [{
+                        data: values,
+                        backgroundColor: labels.map((_, i) => colors[i % colors.length]),
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom' },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => {
+                                    const label = context.label || 'Category';
+                                    const value = normalizeCsfiAmountValue(context.raw);
+                                    const percent = totalAmount > 0 ? ((value / totalAmount) * 100).toFixed(1) : '0.0';
+                                    return `${label}: ${formatCsfiAmount(value)} (${percent}%)`;
+                                }
+                            }
+                        }
+                    }
+                },
+                plugins: [{
+                    id: 'csfiAnalyzerLabels',
+                    afterDraw(chart) {
+                        const { ctx } = chart;
+                        const dataset = chart.data.datasets[0];
+                        const meta = chart.getDatasetMeta(0);
+                        if (!dataset || !meta) return;
+                        ctx.save();
+                        ctx.font = '600 12px Arial';
+                        ctx.fillStyle = '#0f172a';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        meta.data.forEach((arc, index) => {
+                            const value = Number(dataset.data[index] || 0);
+                            if (!value || value < totalAmount * 0.05) return;
+                            const pos = arc.tooltipPosition();
+                            ctx.fillText(formatCsfiAmount(value), pos.x, pos.y);
+                        });
+                        ctx.restore();
+                    }
+                }]
+            });
         }
 
         function exportCsfiExpenseTrackerExcel() {
@@ -6224,7 +6607,7 @@
                 'Sr No': index + 1,
                 'Date': bill.billDate ? new Date(bill.billDate).toISOString().slice(0, 10) : '',
                 'Matter': bill.matter || '',
-                'Amount': Math.round(Number(bill.amount) || 0)
+                'Amount': normalizeCsfiAmountValue(bill.amount)
             }));
 
             const workbook = XLSX.utils.book_new();
@@ -6293,6 +6676,47 @@
             } catch (error) {
                 console.error('Error saving CSFI bill:', error);
                 alert(`Failed to save CSFI bill: ${error.message}`);
+            }
+        }
+
+        function startCsfiBillEdit(id) {
+            csfiBillEditId = String(id);
+            renderCsfiExpenseTracker(csfiProjectBills);
+        }
+
+        function cancelCsfiBillEdit() {
+            csfiBillEditId = null;
+            renderCsfiExpenseTracker(csfiProjectBills);
+        }
+
+        async function saveCsfiBillEdit(id) {
+            const rowInputs = Array.from(document.querySelectorAll('#csfiTrackerList tr input[data-edit-field], #csfiTrackerList tr select[data-edit-field]'));
+            if (!rowInputs.length) return;
+
+            const payload = {};
+            rowInputs.forEach((input) => {
+                const field = input.getAttribute('data-edit-field');
+                payload[field] = input.value;
+            });
+
+            try {
+                const res = await fetch(`/api/csfi-project-bills/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                csfiBillEditId = null;
+                await loadCsfiExpenseTracker();
+                alert('CSFI bill updated successfully.');
+            } catch (error) {
+                console.error('Error updating CSFI bill:', error);
+                alert(`Failed to update CSFI bill: ${error.message}`);
             }
         }
 

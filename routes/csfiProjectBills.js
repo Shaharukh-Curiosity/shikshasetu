@@ -12,6 +12,12 @@ function normalizeDate(value) {
   return parsed;
 }
 
+function normalizeAmount(value) {
+  const numericAmount = Number(String(value ?? '').replace(/,/g, ''));
+  if (!Number.isFinite(numericAmount)) return null;
+  return Math.trunc(numericAmount);
+}
+
 // @route   GET /api/csfi-project-bills
 // @desc    Get CSFI project bills
 // @access  Private (Teacher/Admin)
@@ -119,8 +125,8 @@ router.post('/', auth, isTeacherOrAdmin, async (req, res) => {
       return res.status(400).json({ message: 'matter is required' });
     }
 
-    const numericAmount = Number(amount);
-    if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+    const numericAmount = normalizeAmount(amount);
+    if (numericAmount === null || numericAmount < 0) {
       return res.status(400).json({ message: 'amount must be a valid number' });
     }
 
@@ -136,6 +142,67 @@ router.post('/', auth, isTeacherOrAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error saving CSFI project bill:', error);
     res.status(500).json({ message: 'Failed to save CSFI project bill' });
+  }
+});
+
+// @route   PUT /api/csfi-project-bills/:id
+// @desc    Update a CSFI project bill
+// @access  Private (Teacher/Admin)
+router.put('/:id', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { billDate, project, matter, amount } = req.body;
+    const updateDoc = {};
+
+    if (billDate !== undefined) {
+      const parsedDate = normalizeDate(billDate);
+      if (!parsedDate) {
+        return res.status(400).json({ message: 'billDate is invalid' });
+      }
+      updateDoc.billDate = parsedDate;
+    }
+
+    if (project !== undefined) {
+      const projectKey = String(project || '').trim();
+      if (!allowedProjects.has(projectKey)) {
+        return res.status(400).json({ message: 'project is invalid' });
+      }
+      updateDoc.project = projectKey;
+    }
+
+    if (matter !== undefined) {
+      const matterText = String(matter || '').trim();
+      if (!matterText) {
+        return res.status(400).json({ message: 'matter is required' });
+      }
+      updateDoc.matter = matterText;
+    }
+
+    if (amount !== undefined) {
+      const numericAmount = normalizeAmount(amount);
+      if (numericAmount === null || numericAmount < 0) {
+        return res.status(400).json({ message: 'amount must be a valid number' });
+      }
+      updateDoc.amount = numericAmount;
+    }
+
+    if (!Object.keys(updateDoc).length) {
+      return res.status(400).json({ message: 'No fields to update' });
+    }
+
+    const updated = await CsfiProjectBill.findByIdAndUpdate(
+      req.params.id,
+      { $set: updateDoc },
+      { new: true }
+    ).lean();
+
+    if (!updated) {
+      return res.status(404).json({ message: 'CSFI project bill not found' });
+    }
+
+    res.json({ message: 'CSFI project bill updated', bill: updated });
+  } catch (error) {
+    console.error('Error updating CSFI project bill:', error);
+    res.status(500).json({ message: 'Failed to update CSFI project bill' });
   }
 });
 
