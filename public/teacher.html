@@ -869,7 +869,25 @@
                                     <option value="all">All Years</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
+                            <div class="col-md-3">
+                                <label>Bill Month</label>
+                                <select class="form-select" id="csfiTrackerMonthSelector" onchange="handleCsfiMonthChange(this.value)">
+                                    <option value="all">All Months</option>
+                                    <option value="1">January</option>
+                                    <option value="2">February</option>
+                                    <option value="3">March</option>
+                                    <option value="4">April</option>
+                                    <option value="5">May</option>
+                                    <option value="6">June</option>
+                                    <option value="7">July</option>
+                                    <option value="8">August</option>
+                                    <option value="9">September</option>
+                                    <option value="10">October</option>
+                                    <option value="11">November</option>
+                                    <option value="12">December</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
                                 <div class="alert alert-primary mb-0 py-2">
                                     Showing bills for: <strong id="csfiTrackerProjectLabel">Bus</strong>
                                 </div>
@@ -1385,6 +1403,7 @@
         let csfiProjectBills = [];
         let csfiSelectedProject = 'first-bus';
         let csfiSelectedFinancialYear = 'all';
+        let csfiSelectedMonth = 'all';
         let csfiViewMode = 'entry';
         const busServiceParts = [
             'Bus Wheel Service',
@@ -5731,6 +5750,7 @@
             const selectorEl = document.getElementById('csfiProjectSelector');
             const trackerSelectorEl = document.getElementById('csfiTrackerProjectSelector');
             const yearSelectorEl = document.getElementById('csfiTrackerYearSelector');
+            const monthSelectorEl = document.getElementById('csfiTrackerMonthSelector');
             const labelEl = document.getElementById('csfiCurrentProjectLabel');
             const trackerLabelEl = document.getElementById('csfiTrackerProjectLabel');
             const projectLabel = formatCsfiProjectLabel(csfiSelectedProject);
@@ -5742,6 +5762,9 @@
             }
             if (yearSelectorEl && yearSelectorEl.value !== csfiSelectedFinancialYear) {
                 yearSelectorEl.value = csfiSelectedFinancialYear;
+            }
+            if (monthSelectorEl && monthSelectorEl.value !== csfiSelectedMonth) {
+                monthSelectorEl.value = csfiSelectedMonth;
             }
             if (labelEl) {
                 labelEl.textContent = projectLabel;
@@ -5858,18 +5881,78 @@
             }
         }
 
+        function handleCsfiMonthChange(value) {
+            csfiSelectedMonth = String(value || '').trim() || 'all';
+            syncCsfiProjectUI();
+            if (csfiViewMode === 'tracker') {
+                loadCsfiExpenseTracker();
+            }
+        }
+
         function renderCsfiProjectBills() {
             return;
         }
 
         function getCsfiTrackerFilteredBills(bills) {
             const list = Array.isArray(bills) ? bills : [];
-            if (csfiSelectedFinancialYear === 'all') return list;
-            return list.filter((bill) => getCsfiFinancialYearLabel(bill.billDate || bill.date) === csfiSelectedFinancialYear);
+            return list.filter((bill) => {
+                const yearMatches = csfiSelectedFinancialYear === 'all'
+                    || getCsfiFinancialYearLabel(bill.billDate || bill.date) === csfiSelectedFinancialYear;
+                const billMonth = new Date(bill.billDate || bill.date);
+                const monthMatches = csfiSelectedMonth === 'all'
+                    || (!Number.isNaN(billMonth.getTime()) && String(billMonth.getMonth() + 1) === csfiSelectedMonth);
+                return yearMatches && monthMatches;
+            });
         }
 
         function formatCsfiAmount(value) {
             return Math.round(Number(value) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+        }
+
+        function padCsfiDatePart(value) {
+            return String(value).padStart(2, '0');
+        }
+
+        function getCsfiMonthEndDate(year, monthNumber) {
+            const lastDay = new Date(year, monthNumber, 0).getDate();
+            return `${year}-${padCsfiDatePart(monthNumber)}-${padCsfiDatePart(lastDay)}`;
+        }
+
+        function getCsfiTrackerDateRange() {
+            const yearValue = String(csfiSelectedFinancialYear || '').trim();
+            const monthValue = String(csfiSelectedMonth || '').trim();
+            if (!yearValue || yearValue === 'all') {
+                return { startDate: '', endDate: '' };
+            }
+
+            const match = yearValue.match(/^(\d{4})-(\d{4})$/);
+            if (!match) {
+                return { startDate: '', endDate: '' };
+            }
+
+            const startYear = Number(match[1]);
+            const endYear = Number(match[2]);
+            if (!Number.isInteger(startYear) || !Number.isInteger(endYear) || endYear !== startYear + 1) {
+                return { startDate: '', endDate: '' };
+            }
+
+            if (!monthValue || monthValue === 'all') {
+                return {
+                    startDate: `${startYear}-04-01`,
+                    endDate: `${endYear}-03-31`
+                };
+            }
+
+            const monthNumber = Number(monthValue);
+            if (!Number.isInteger(monthNumber) || monthNumber < 1 || monthNumber > 12) {
+                return { startDate: '', endDate: '' };
+            }
+
+            const monthYear = monthNumber >= 4 ? startYear : endYear;
+            return {
+                startDate: `${monthYear}-${padCsfiDatePart(monthNumber)}-01`,
+                endDate: getCsfiMonthEndDate(monthYear, monthNumber)
+            };
         }
 
         async function loadCsfiProjectBills() {
@@ -5882,7 +5965,16 @@
                 listEl.innerHTML = '<div class="text-muted">Loading CSFI tracker...</div>';
             }
             try {
-                const query = csfiSelectedProject ? `?project=${encodeURIComponent(csfiSelectedProject)}` : '';
+                const params = new URLSearchParams();
+                if (csfiSelectedProject) {
+                    params.set('project', csfiSelectedProject);
+                }
+                const range = getCsfiTrackerDateRange();
+                if (range.startDate && range.endDate) {
+                    params.set('startDate', range.startDate);
+                    params.set('endDate', range.endDate);
+                }
+                const query = params.toString() ? `?${params.toString()}` : '';
                 const res = await fetch(`/api/csfi-project-bills${query}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -6062,7 +6154,8 @@
             if (!listEl) return;
 
             const currentLabel = formatCsfiProjectLabel(csfiSelectedProject);
-            const yearLabel = String(csfiSelectedFinancialYear || 'All Years').trim();
+            const yearLabel = csfiSelectedFinancialYear === 'all' ? 'All Years' : String(csfiSelectedFinancialYear || '').trim();
+            const monthLabel = csfiSelectedMonth === 'all' ? 'All Months' : new Date(2000, Number(csfiSelectedMonth) - 1, 1).toLocaleString(undefined, { month: 'long' });
             const filteredBills = getCsfiTrackerFilteredBills(bills);
             const totalAmount = filteredBills.reduce((sum, bill) => sum + Math.round(Number(bill.amount) || 0), 0);
             if (totalEl) {
@@ -6070,7 +6163,7 @@
             }
 
             if (!filteredBills.length) {
-                listEl.innerHTML = `<div class="alert alert-light border">No bills found for ${escapeHtml(currentLabel)} in ${escapeHtml(yearLabel)}.</div>`;
+                listEl.innerHTML = `<div class="alert alert-light border">No bills found for ${escapeHtml(currentLabel)} in ${escapeHtml(yearLabel)} (${escapeHtml(monthLabel)}).</div>`;
                 return;
             }
 
@@ -6090,7 +6183,7 @@
 
             listEl.innerHTML = `
                 <div class="alert alert-light border py-2 mb-3">
-                    Project: <strong>${escapeHtml(currentLabel)}</strong> | Financial Year: <strong>${escapeHtml(yearLabel)}</strong> | Rows: <strong>${filteredBills.length}</strong>
+                    Project: <strong>${escapeHtml(currentLabel)}</strong> | Financial Year: <strong>${escapeHtml(yearLabel)}</strong> | Bill Month: <strong>${escapeHtml(monthLabel)}</strong> | Rows: <strong>${filteredBills.length}</strong>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered align-middle">
@@ -6123,7 +6216,7 @@
 
             const filteredBills = getCsfiTrackerFilteredBills(csfiProjectBills);
             if (!filteredBills.length) {
-                alert('No bills found for the selected project and financial year.');
+                alert('No bills found for the selected project, financial year, and month.');
                 return;
             }
 
@@ -6139,8 +6232,10 @@
             XLSX.utils.book_append_sheet(workbook, worksheet, 'CSFI Bills');
 
             const projectLabel = formatCsfiProjectLabel(csfiSelectedProject).replace(/[^a-z0-9]+/gi, '_');
-            const yearLabel = String(csfiSelectedFinancialYear || 'All_Years').replace(/[^a-z0-9-]+/gi, '_');
-            const fileName = `CSFI_${projectLabel}_${yearLabel}.xlsx`;
+            const yearLabel = (csfiSelectedFinancialYear === 'all' ? 'All_Years' : String(csfiSelectedFinancialYear || 'All_Years')).replace(/[^a-z0-9-]+/gi, '_');
+            const monthLabel = csfiSelectedMonth === 'all' ? 'All_Months' : new Date(2000, Number(csfiSelectedMonth) - 1, 1).toLocaleString('en-US', { month: 'long' });
+            const monthKey = String(monthLabel || 'All_Months').replace(/[^a-z0-9-]+/gi, '_');
+            const fileName = `CSFI_${projectLabel}_${yearLabel}_${monthKey}.xlsx`;
             XLSX.writeFile(workbook, fileName);
         }
 
