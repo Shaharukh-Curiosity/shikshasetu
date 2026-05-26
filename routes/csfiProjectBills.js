@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const CsfiProjectBill = require('../models/CsfiProjectBill');
 const { auth, isTeacherOrAdmin } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 const allowedProjects = new Set(['first-bus', 'bio-diversity', 'shikshamitra', 'malnutrition']);
 
@@ -203,6 +204,39 @@ router.put('/:id', auth, isTeacherOrAdmin, async (req, res) => {
   } catch (error) {
     console.error('Error updating CSFI project bill:', error);
     res.status(500).json({ message: 'Failed to update CSFI project bill' });
+  }
+});
+
+// @route   DELETE /api/csfi-project-bills/:id
+// @desc    Delete a CSFI project bill
+// @access  Private (Teacher/Admin)
+router.delete('/:id', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const existing = await CsfiProjectBill.findById(req.params.id).lean();
+    if (!existing) {
+      return res.status(404).json({ message: 'CSFI project bill not found' });
+    }
+
+    await CsfiProjectBill.findByIdAndDelete(req.params.id);
+
+    await logAudit({
+      req,
+      action: 'csfi_project_bill_delete',
+      entity: 'csfi_project_bill',
+      entityId: String(existing._id),
+      before: {
+        billDate: existing.billDate,
+        project: existing.project,
+        matter: existing.matter,
+        amount: existing.amount,
+        createdByName: existing.createdByName
+      }
+    });
+
+    res.json({ message: 'CSFI project bill deleted' });
+  } catch (error) {
+    console.error('Error deleting CSFI project bill:', error);
+    res.status(500).json({ message: 'Failed to delete CSFI project bill' });
   }
 });
 

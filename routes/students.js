@@ -45,9 +45,8 @@ function mapRowToStudent(row) {
   return mapped;
 }
 
-async function findDuplicateStudent({ name, schoolName, batchNumber, mobile }, excludeId) {
+async function findDuplicateStudent({ name, schoolName, batchNumber }, excludeId) {
   const or = [];
-  if (mobile) or.push({ mobile, role: 'student' });
   if (name && schoolName && batchNumber) {
     or.push({ name, schoolName, batchNumber, role: 'student' });
   }
@@ -175,22 +174,6 @@ router.get('/schools/:region', auth, async (req, res) => {
   }
 });
 
-// Get stats
-router.get('/stats/dashboard', auth, async (req, res) => {
-  try {
-    const students = await User.find({ role: 'student' }).select('_id').lean();
-    const total = students.length;
-    const ids = students.map(s => String(s._id));
-    const statsMap = await buildAttendanceStatsMap(ids);
-
-    const active = students.filter(s => isAttendanceActive(statsMap.get(String(s._id)))).length;
-
-    res.json({ total, active, inactive: total - active });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
 // Get inactive student names (limited)
 router.get('/inactive-names', auth, isTeacherOrAdmin, async (req, res) => {
   try {
@@ -254,7 +237,7 @@ router.get('/inactive-details', auth, isTeacherOrAdmin, async (req, res) => {
   }
 });
 
-// Auto-update active/inactive by attendance percentage threshold
+// Normalize students back to active status
 router.post('/auto-inactivate-absent', auth, isTeacherOrAdmin, async (req, res) => {
   try {
     const students = await User.find({ role: 'student' }).select('_id isActive').lean();
@@ -262,32 +245,19 @@ router.post('/auto-inactivate-absent', auth, isTeacherOrAdmin, async (req, res) 
     const statsMap = await buildAttendanceStatsMap(ids);
 
     const inactiveIds = [];
-    const activeIds = [];
 
     students.forEach((student) => {
       const stats = statsMap.get(String(student._id)) || {};
-      const attendancePercentage = Number(stats.attendancePercentage || 0);
-      if (attendancePercentage < ATTENDANCE_ACTIVE_THRESHOLD) {
+      if (!student.isActive || Number(stats.attendancePercentage || 0) < ATTENDANCE_ACTIVE_THRESHOLD) {
         inactiveIds.push(student._id);
-      } else {
-        activeIds.push(student._id);
       }
     });
 
-    let updatedInactive = 0;
     let updatedActive = 0;
 
     if (inactiveIds.length > 0) {
-      const resultInactive = await User.updateMany(
-        { _id: { $in: inactiveIds }, role: 'student', isActive: true },
-        { $set: { isActive: false } }
-      );
-      updatedInactive = resultInactive.modifiedCount || resultInactive.nModified || 0;
-    }
-
-    if (activeIds.length > 0) {
       const resultActive = await User.updateMany(
-        { _id: { $in: activeIds }, role: 'student', isActive: false },
+        { _id: { $in: inactiveIds }, role: 'student', isActive: false },
         { $set: { isActive: true } }
       );
       updatedActive = resultActive.modifiedCount || resultActive.nModified || 0;
@@ -297,13 +267,12 @@ router.post('/auto-inactivate-absent', auth, isTeacherOrAdmin, async (req, res) 
       thresholdPercentage: ATTENDANCE_ACTIVE_THRESHOLD,
       totalStudents: students.length,
       inactiveStudents: inactiveIds.length,
-      activeStudents: activeIds.length,
-      updated: updatedInactive + updatedActive,
-      updatedInactive,
+      activeStudents: students.length - inactiveIds.length,
+      updated: updatedActive,
       updatedActive
     });
   } catch (error) {
-    res.status(500).json({ message: 'Auto-inactivate failed', details: error.message });
+    res.status(500).json({ message: 'Failed to normalize student active status', details: error.message });
   }
 });
 
@@ -820,12 +789,7 @@ router.get('/stats/dashboard', auth, async (req, res) => {
   try {
     const students = await User.find({ role: 'student' }).select('_id').lean();
     const total = students.length;
-    const ids = students.map(s => String(s._id));
-    const statsMap = await buildAttendanceStatsMap(ids);
-
-    const active = students.filter(s => isAttendanceActive(statsMap.get(String(s._id)))).length;
-
-    res.json({ total, active, inactive: total - active });
+    res.json({ total, active: total, inactive: 0 });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

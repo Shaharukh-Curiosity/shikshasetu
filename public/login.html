@@ -416,7 +416,9 @@
                 if (response.ok) {
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    window.location.href = data.user.role === 'admin' ? '/admin' : '/teacher';
+                    window.location.href = data.user.role === 'admin'
+                        ? '/admin'
+                        : '/teacher';
                 } else {
                     document.getElementById('message').innerHTML =
                         '<div class="alert alert-danger">' + data.message + '</div>';

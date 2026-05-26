@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const User = require('./models/User');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
@@ -19,7 +20,22 @@ if (!mongoUri) {
 }
 
 mongoose.connect(mongoUri)
-  .then(() => console.log('✅ Connected to MongoDB'))
+  .then(async () => {
+    console.log('✅ Connected to MongoDB');
+
+    try {
+      const result = await User.updateMany(
+        { role: 'student', isActive: false },
+        { $set: { isActive: true } }
+      );
+      const updated = result.modifiedCount ?? result.nModified ?? 0;
+      if (updated > 0) {
+        console.log(`✅ Normalized ${updated} inactive student(s) to active`);
+      }
+    } catch (error) {
+      console.error('⚠️ Failed to normalize student active status:', error);
+    }
+  })
   .catch(err => console.error('❌ MongoDB error:', err));
 
 // Routes

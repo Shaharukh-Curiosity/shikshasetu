@@ -171,7 +171,7 @@
 
     <div class="container">
         <div class="row mb-3" id="statsRow">
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="text-muted">Total Enrolled Students</h6>
@@ -179,7 +179,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-6">
                 <div class="card">
                     <div class="card-body">
                         <h6 class="text-muted">Active Students</h6>
@@ -187,20 +187,6 @@
                     </div>
                 </div>
             </div>
-            <div class="col-md-4">
-                <div class="card">
-                    <div class="card-body">
-                        <h6 class="text-muted">Inactive Students</h6>
-                        <h2 id="inactiveStudents">0</h2>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="d-flex align-items-center gap-2 mb-3">
-            <button class="btn btn-sm btn-outline-primary" id="inactiveDetailsLink" onclick="openInactiveDetails()">
-                View Inactive Details
-            </button>
-            <span class="text-muted small" id="inactiveStudentsMeta"></span>
         </div>
         
         <div class="card mb-4">
@@ -479,7 +465,6 @@
                             <select class="form-select" id="studentsStatusFilter" onchange="applyStudentsFilters()">
                                 <option value="all">All</option>
                                 <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
                             </select>
                         </div>
                         <div class="col-md-2">
@@ -1324,21 +1309,6 @@
         </div>
     </div>
 
-    <!-- Inactive Students Modal -->
-    <div class="modal" id="inactiveStudentsModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5>Inactive Students Details</h5>
-                    <button type="button" class="btn-close" onclick="closeModal('inactiveStudentsModal')"></button>
-                </div>
-                <div class="modal-body" id="inactiveStudentsContent">
-                    <div class="text-muted">Loading...</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -1627,111 +1597,8 @@
                 if (totalEl) totalEl.textContent = data.total;
                 const activeEl = document.getElementById('activeStudents');
                 if (activeEl) activeEl.textContent = data.active || 0;
-                const inactiveEl = document.getElementById('inactiveStudents');
-                if (inactiveEl) inactiveEl.textContent = data.inactive || 0;
             } catch (error) {
                 console.error('Error loading stats:', error);
-            }
-        }
-
-        async function autoInactivateByAbsence() {
-            try {
-                const res = await fetch('/api/students/auto-inactivate-absent', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ threshold: 5 })
-                });
-                if (!res.ok) return;
-                await loadStats();
-                await loadInactiveNames();
-            } catch (error) {
-                console.error('Error auto-inactivating students:', error);
-            }
-        }
-
-        async function loadInactiveNames() {
-            const metaEl = document.getElementById('inactiveStudentsMeta');
-            const linkEl = document.getElementById('inactiveDetailsLink');
-            if (!metaEl || !linkEl) return;
-
-            try {
-                const res = await fetch('/api/students/inactive-names?limit=20', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) {
-                    throw new Error(`API Error: ${res.status}`);
-                }
-                const data = await res.json();
-                const total = data.total || 0;
-                metaEl.textContent = total ? `Total inactive: ${total}` : 'No inactive students';
-                linkEl.disabled = total === 0;
-            } catch (error) {
-                console.error('Error loading inactive students:', error);
-                metaEl.textContent = 'Failed to load';
-                linkEl.disabled = true;
-            }
-        }
-
-        async function openInactiveDetails() {
-            const contentEl = document.getElementById('inactiveStudentsContent');
-            if (contentEl) contentEl.innerHTML = 'Loading...';
-            new bootstrap.Modal(document.getElementById('inactiveStudentsModal')).show();
-
-            try {
-                const res = await fetch('/api/students/inactive-details', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (!res.ok) {
-                    throw new Error(`API Error: ${res.status}`);
-                }
-                const data = await res.json();
-                const rows = data.students || [];
-                if (!rows.length) {
-                    contentEl.innerHTML = '<div class="alert alert-info">No inactive students found.</div>';
-                    return;
-                }
-
-                const hasAnyPhone = rows.some(s => getTelData(s.mobile));
-                let html = `
-                    <div class="table-responsive">
-                    <table class="table table-bordered table-striped">
-                        <thead class="table-dark">
-                            <tr>
-                                <th>#</th>
-                                <th>Student Name</th>
-                                <th>Batch</th>
-                                <th class="text-center">Total Classes</th>
-                                <th class="text-center">Absent</th>
-                                ${hasAnyPhone ? '<th class="text-center">Call</th>' : ''}
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                rows.forEach((s, index) => {
-                    const tel = getTelData(s.mobile);
-                    const callButton = tel
-                        ? buildCallButtonHtml(s.studentId, s.mobile, 'inactive-students', 'Call Parent')
-                        : '';
-                    html += `
-                        <tr>
-                            <td>${index + 1}</td>
-                            <td>${escapeHtml(s.name)}</td>
-                            <td>${escapeHtml(s.batchNumber || '-')}</td>
-                            <td class="text-center">${s.totalClasses || 0}</td>
-                            <td class="text-center">${s.absentCount || 0}</td>
-                            ${hasAnyPhone ? `<td class="text-center">${callButton}</td>` : ''}
-                        </tr>
-                    `;
-                });
-                html += '</tbody></table></div>';
-                contentEl.innerHTML = html;
-            } catch (error) {
-                if (contentEl) {
-                    contentEl.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
-                }
             }
         }
 
@@ -5934,6 +5801,13 @@
             return month >= 3 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
         }
 
+        function getCurrentCsfiFinancialYearLabel() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth(); // 0-based
+            return month >= 3 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+        }
+
         function getCsfiFinancialYearStartDate(value) {
             const year = String(value || '').trim();
             if (!year || year === 'all') {
@@ -5981,6 +5855,10 @@
                 const yearLabel = getCsfiFinancialYearLabel(bill?.billDate || bill?.date);
                 if (yearLabel) years.add(yearLabel);
             });
+            const currentYear = getCurrentCsfiFinancialYearLabel();
+            if (currentYear) {
+                years.add(currentYear);
+            }
             return Array.from(years).sort((a, b) => {
                 const aStart = Number(String(a).split('-')[0]);
                 const bStart = Number(String(b).split('-')[0]);
@@ -6437,9 +6315,15 @@
                                     <div class="d-flex gap-1">
                                         <button class="btn btn-sm btn-success" type="button" onclick="saveCsfiBillEdit('${bill._id}')">Save</button>
                                         <button class="btn btn-sm btn-outline-secondary" type="button" onclick="cancelCsfiBillEdit()">Cancel</button>
+                                        <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteCsfiBill('${bill._id}')">Delete</button>
                                     </div>
                                 `
-                                : (csfiTrackerEditMode ? `<button class="btn btn-sm btn-outline-primary" type="button" onclick="startCsfiBillEdit('${bill._id}')">Edit</button>` : '-')}
+                                : `
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-sm btn-outline-primary" type="button" onclick="startCsfiBillEdit('${bill._id}')">Edit</button>
+                                        <button class="btn btn-sm btn-outline-danger" type="button" onclick="deleteCsfiBill('${bill._id}')">Delete</button>
+                                    </div>
+                                `}
                         </td>
                     </tr>
                 `;
@@ -6756,6 +6640,36 @@
             } catch (error) {
                 console.error('Error updating CSFI bill:', error);
                 alert(`Failed to update CSFI bill: ${error.message}`);
+            }
+        }
+
+        async function deleteCsfiBill(id) {
+            const bill = (Array.isArray(csfiProjectBills) ? csfiProjectBills : []).find((item) => String(item._id) === String(id));
+            const label = bill
+                ? `${bill.matter || 'this bill'} (${bill.billDate ? new Date(bill.billDate).toISOString().slice(0, 10) : 'no date'})`
+                : 'this bill';
+            if (!confirm(`Delete ${label}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/csfi-project-bills/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || `API Error: ${res.status}`);
+
+                if (String(csfiBillEditId || '') === String(id)) {
+                    csfiBillEditId = null;
+                }
+                await loadCsfiExpenseTracker();
+                alert('CSFI bill deleted successfully.');
+            } catch (error) {
+                console.error('Error deleting CSFI bill:', error);
+                alert(`Failed to delete CSFI bill: ${error.message}`);
             }
         }
 
@@ -9226,7 +9140,6 @@
 
         // Initialize
         loadStats();
-        loadInactiveNames();
         loadRegions();
         loadSummaryRegions();
         updateFilterUI();
