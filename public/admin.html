@@ -20,6 +20,44 @@
             box-shadow: 0 10px 24px rgba(22, 42, 60, 0.08);
         }
 
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .gallery-item {
+            border: 1px solid #dbe7f2;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 10px 20px rgba(22, 42, 60, 0.08);
+        }
+
+        .gallery-thumb {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            display: block;
+            background: #edf4fb;
+        }
+
+        .gallery-meta {
+            padding: 12px;
+        }
+
+        .gallery-title {
+            font-weight: 700;
+            color: #21324a;
+            margin-bottom: 4px;
+        }
+
+        .gallery-desc {
+            font-size: 13px;
+            color: #5f7088;
+            min-height: 34px;
+        }
+
         .nav-tabs {
             border-bottom: 0;
             gap: 10px;
@@ -156,6 +194,9 @@
             </li>
             <li class="nav-item">
                 <button class="nav-link" onclick="showTab('dailywork')">Daily Work</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" onclick="showTab('media')">Media Gallery</button>
             </li>
             <li class="nav-item">
                 <button class="nav-link" onclick="showTab('backup')">Backup/Restore</button>
@@ -496,7 +537,10 @@
                         <input type="text" class="form-control mb-2" placeholder="Mobile" id="sMobile" required>
                         <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="sStandard">
                         <input type="text" class="form-control mb-2" placeholder="Batch Number" id="sBatch" required>
-                        <button type="submit" class="btn btn-success">Add Student</button>
+                        <div class="d-flex flex-wrap gap-2 mt-3">
+                            <button type="submit" class="btn btn-success" data-action="save-close">Add Student</button>
+                            <button type="submit" class="btn btn-outline-success" data-action="save-next">Save & Add Next</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -573,6 +617,47 @@
                         <button type="submit" class="btn btn-primary">Update User</button>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="mediaTab" style="display: none;">
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <h5 class="card-title mb-1">Media Gallery</h5>
+                        <div class="text-muted">Upload program or event photos for the teacher dashboard gallery.</div>
+                    </div>
+                </div>
+
+                <form id="mediaUploadForm" class="row g-3 align-items-end" enctype="multipart/form-data">
+                    <div class="col-md-4">
+                        <label class="form-label">Title</label>
+                        <input type="text" class="form-control" id="mediaTitle" placeholder="Event title">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" id="mediaDescription" placeholder="Short description">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Photos</label>
+                        <input type="file" class="form-control" id="mediaFiles" accept="image/*" multiple required>
+                    </div>
+                    <div class="col-md-12">
+                        <button type="submit" class="btn btn-primary">Upload Photos</button>
+                        <span id="mediaUploadStatus" class="ms-2 text-muted small"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-3">
+                    <h5 class="card-title mb-0">Uploaded Photos</h5>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="loadMediaGallery()">Refresh</button>
+                </div>
+                <div id="mediaGalleryList"></div>
             </div>
         </div>
     </div>
@@ -659,6 +744,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadFilterRegions();
             } else if (tab === 'users') {
@@ -670,6 +756,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
             } else if (tab === 'markattendance') {
                 document.getElementById('studentsTab').style.display = 'none';
@@ -680,6 +767,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadAdminMarkRegions();
             } else if (tab === 'viewdaily') {
@@ -691,6 +779,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadAdminViewRegions();
             } else if (tab === 'whatsapp') {
@@ -702,6 +791,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadWaRegions();
             } else if (tab === 'attendance') {
@@ -713,6 +803,7 @@
                 document.getElementById('attendanceTab').style.display = 'block';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadAttRegions();
             } else if (tab === 'exam') {
@@ -724,6 +815,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'block';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
                 loadExamRegions();
                 loadExamTeachers();
@@ -736,7 +828,20 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'block';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'none';
+            } else if (tab === 'media') {
+                document.getElementById('studentsTab').style.display = 'none';
+                document.getElementById('usersTab').style.display = 'none';
+                document.getElementById('markAttendanceTab').style.display = 'none';
+                document.getElementById('viewDailyTab').style.display = 'none';
+                document.getElementById('whatsappInviteTab').style.display = 'none';
+                document.getElementById('attendanceTab').style.display = 'none';
+                document.getElementById('examTab').style.display = 'none';
+                document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'block';
+                document.getElementById('backupTab').style.display = 'none';
+                loadMediaGallery();
             } else if (tab === 'backup') {
                 document.getElementById('studentsTab').style.display = 'none';
                 document.getElementById('usersTab').style.display = 'none';
@@ -746,6 +851,7 @@
                 document.getElementById('attendanceTab').style.display = 'none';
                 document.getElementById('examTab').style.display = 'none';
                 document.getElementById('dailyWorkTab').style.display = 'none';
+                document.getElementById('mediaTab').style.display = 'none';
                 document.getElementById('backupTab').style.display = 'block';
             }
         }
@@ -770,6 +876,104 @@
             document.getElementById('totalStudents').textContent = data.total;
             document.getElementById('activeStudents').textContent = data.active;
         }
+
+        function renderMediaGallery(items) {
+            const listEl = document.getElementById('mediaGalleryList');
+            if (!listEl) return;
+
+            if (!items || items.length === 0) {
+                listEl.innerHTML = '<div class="alert alert-info mb-0">No media uploaded yet.</div>';
+                return;
+            }
+
+            listEl.innerHTML = `
+                <div class="gallery-grid">
+                    ${items.map((item) => `
+                        <div class="gallery-item">
+                            <img class="gallery-thumb" src="${item.fileUrl}" alt="${escapeHtml(item.title || item.originalName || 'Media photo')}">
+                            <div class="gallery-meta">
+                                <div class="gallery-title">${escapeHtml(item.title || item.originalName || 'Untitled')}</div>
+                                <div class="gallery-desc">${escapeHtml(item.description || 'No description')}</div>
+                                <div class="text-muted small">${escapeHtml(new Date(item.createdAt).toLocaleString())}</div>
+                                <button class="btn btn-sm btn-outline-danger mt-2" onclick="deleteMediaItem('${item._id}')">Delete</button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function loadMediaGallery() {
+            const listEl = document.getElementById('mediaGalleryList');
+            if (listEl) listEl.innerHTML = '<div class="text-muted">Loading media...</div>';
+
+            try {
+                const res = await fetch('/api/media-gallery', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.message || 'Failed to load media');
+                }
+                const items = await res.json();
+                renderMediaGallery(items);
+            } catch (error) {
+                if (listEl) listEl.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
+        async function deleteMediaItem(id) {
+            if (!confirm('Delete this media item?')) return;
+            try {
+                const res = await fetch(`/api/media-gallery/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data.message || 'Failed to delete media');
+                }
+                await loadMediaGallery();
+                alert('Media deleted successfully.');
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        document.getElementById('mediaUploadForm')?.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const statusEl = document.getElementById('mediaUploadStatus');
+            const filesInput = document.getElementById('mediaFiles');
+            const files = filesInput?.files || [];
+            if (!files.length) {
+                alert('Please select at least one photo');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('title', document.getElementById('mediaTitle')?.value || '');
+            formData.append('description', document.getElementById('mediaDescription')?.value || '');
+            Array.from(files).forEach((file) => formData.append('photos', file));
+
+            try {
+                if (statusEl) statusEl.textContent = 'Uploading...';
+                const res = await fetch('/api/media-gallery', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data.message || 'Upload failed');
+                }
+                event.target.reset();
+                if (statusEl) statusEl.textContent = `Uploaded ${data.created || 0} photo(s).`;
+                await loadMediaGallery();
+            } catch (error) {
+                if (statusEl) statusEl.textContent = '';
+                alert(error.message);
+            }
+        });
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -879,6 +1083,7 @@
 
         document.getElementById('studentForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const action = e.submitter?.dataset?.action || 'save-close';
             const data = {
                 name: document.getElementById('sName').value,
                 region: document.getElementById('sRegion').value,
@@ -900,8 +1105,27 @@
             
             if (res.ok) {
                 alert('Student added successfully!');
-                closeModal('studentModal');
+                const modalEl = document.getElementById('studentModal');
+                const keepFields = action === 'save-next' ? {
+                    region: document.getElementById('sRegion').value,
+                    schoolName: document.getElementById('sSchool').value,
+                    standard: document.getElementById('sStandard').value,
+                    batchNumber: document.getElementById('sBatch').value
+                } : null;
+
                 e.target.reset();
+
+                if (action === 'save-next') {
+                    document.getElementById('sRegion').value = keepFields.region;
+                    document.getElementById('sSchool').value = keepFields.schoolName;
+                    document.getElementById('sStandard').value = keepFields.standard;
+                    document.getElementById('sBatch').value = keepFields.batchNumber;
+                    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                    document.getElementById('sName').focus();
+                } else {
+                    closeModal('studentModal');
+                }
                 loadStudents();
                 loadStats();
             } else {

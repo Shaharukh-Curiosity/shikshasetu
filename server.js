@@ -11,6 +11,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 
 // Connect to MongoDB
 const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
@@ -51,6 +52,7 @@ app.use('/api/bus-inventory', require('./routes/busInventory'));
 app.use('/api/bus-service', require('./routes/busService'));
 app.use('/api/csfi-project-bills', require('./routes/csfiProjectBills'));
 app.use('/api/exam-plan', require('./routes/examPlan'));
+app.use('/api/media-gallery', require('./routes/mediaGallery'));
 
 // Serve HTML pages
 app.get('/', (req, res) => {

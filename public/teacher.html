@@ -27,6 +27,44 @@
             box-shadow: 0 10px 24px rgba(22, 42, 60, 0.08);
         }
 
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .gallery-item {
+            border: 1px solid #dbe7f2;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 10px 20px rgba(22, 42, 60, 0.08);
+        }
+
+        .gallery-thumb {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            display: block;
+            background: #edf4fb;
+        }
+
+        .gallery-meta {
+            padding: 12px;
+        }
+
+        .gallery-title {
+            font-weight: 700;
+            color: #21324a;
+            margin-bottom: 4px;
+        }
+
+        .gallery-desc {
+            font-size: 13px;
+            color: #5f7088;
+            min-height: 34px;
+        }
+
         .dashboard-nav-shell {
             border: 1px solid #dce8f4;
             border-radius: 18px;
@@ -223,6 +261,7 @@
                     <option value="marks">Exam</option>
                     <option value="result">Result</option>
                     <option value="analysis">Data Analysis</option>
+                    <option value="media">Media Gallery</option>
                 </select>
             </div>
             <ul class="nav nav-tabs">
@@ -261,6 +300,9 @@
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" id="analysisTab" onclick="showTab('analysis')"><i class="bi bi-graph-up-arrow"></i><span class="tab-text">Data Analysis</span></button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" id="mediaTab" onclick="showTab('media')"><i class="bi bi-images"></i><span class="tab-text">Media Gallery</span></button>
                 </li>
             </ul>
         </div>
@@ -966,6 +1008,21 @@
             </div>
         </div>
 
+        <div id="mediaSection" style="display: none;">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <div>
+                            <h5 class="card-title mb-1">Media Gallery</h5>
+                            <div class="text-muted">Program and event photos shared by the admin.</div>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm" onclick="loadMediaGallery()">Refresh</button>
+                    </div>
+                    <div id="mediaGalleryList"></div>
+                </div>
+            </div>
+        </div>
+
         <!-- PRESENTATION -->
         <div id="presentationSection" style="display: none;">
             <div class="card">
@@ -1602,6 +1659,50 @@
             }
         }
 
+        function renderMediaGallery(items) {
+            const listEl = document.getElementById('mediaGalleryList');
+            if (!listEl) return;
+
+            if (!items || items.length === 0) {
+                listEl.innerHTML = '<div class="alert alert-info mb-0">No media uploaded yet.</div>';
+                return;
+            }
+
+            listEl.innerHTML = `
+                <div class="gallery-grid">
+                    ${items.map((item) => `
+                        <div class="gallery-item">
+                            <img class="gallery-thumb" src="${item.fileUrl}" alt="${escapeHtml(item.title || item.originalName || 'Media photo')}">
+                            <div class="gallery-meta">
+                                <div class="gallery-title">${escapeHtml(item.title || item.originalName || 'Untitled')}</div>
+                                <div class="gallery-desc">${escapeHtml(item.description || 'No description')}</div>
+                                <div class="text-muted small">${escapeHtml(new Date(item.createdAt).toLocaleString())}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        async function loadMediaGallery() {
+            const listEl = document.getElementById('mediaGalleryList');
+            if (listEl) listEl.innerHTML = '<div class="text-muted">Loading media...</div>';
+
+            try {
+                const res = await fetch('/api/media-gallery', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    throw new Error(data.message || 'Failed to load media');
+                }
+                const items = await res.json();
+                renderMediaGallery(items);
+            } catch (error) {
+                if (listEl) listEl.innerHTML = `<div class="alert alert-danger mb-0">${escapeHtml(error.message)}</div>`;
+            }
+        }
+
         let lastEngagement = null;
 
         function renderEngagementTable(rows, mode) {
@@ -1710,6 +1811,7 @@
                 'csfiSection',
                 'lowSection',
                 'analysisSection',
+                'mediaSection',
                 'marksSection',
                 'resultSection',
                 'presentationSection'
@@ -1724,6 +1826,7 @@
                 'csfiTab',
                 'lowTab',
                 'analysisTab',
+                'mediaTab',
                 'marksTab',
                 'resultTab',
                 'presentationTab'
@@ -1785,6 +1888,10 @@
                 document.getElementById('analysisSection').style.display = 'block';
                 document.getElementById('analysisTab').classList.add('active');
                 loadAnalysisRegions();
+            } else if (tab === 'media') {
+                document.getElementById('mediaSection').style.display = 'block';
+                document.getElementById('mediaTab').classList.add('active');
+                loadMediaGallery();
             } else if (tab === 'low') {
                 document.getElementById('lowSection').style.display = 'block';
                 document.getElementById('lowTab').classList.add('active');
