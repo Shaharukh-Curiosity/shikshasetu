@@ -7111,7 +7111,10 @@
                 html += `
                     <tr>
                         <td class="align-middle">${index + 1}</td>
-                        <td class="align-middle fw-semibold">${student.name}${prevDayIcon}${consecutiveIcon}${frequentAbsentBadge}${plannedBadge}${plannedNote}</td>
+                        <td class="align-middle fw-semibold">
+                            <div>${student.name}${prevDayIcon}${consecutiveIcon}${frequentAbsentBadge}${plannedBadge}${plannedNote}</div>
+                            ${student.joiningDate ? `<div class="small text-muted">Joined: ${escapeHtml(student.joiningDate)}</div>` : ''}
+                        </td>
                         <td class="align-middle">
                             <div class="d-flex flex-column align-items-center gap-2">
                                 <div class="d-flex justify-content-center gap-2 flex-wrap">
@@ -8608,7 +8611,7 @@
                     <tr>
                         <td class="text-center">${index + 1}</td>
                         <td>${student.name}</td>
-                        <td>${formatJoinDate(student.enrollmentDate)}</td>
+                        <td>${formatJoinDate(student.joiningDate || student.enrollmentDate)}</td>
                         <td>${student.reportBatch || '-'}</td>
                         <td class="text-center"><strong>${student.totalClasses}</strong></td>
                         <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
@@ -8867,7 +8870,7 @@
                 const rows = summary.map((s, idx) => ([
                     String(idx + 1),
                     String(s.name || '-'),
-                    String(formatJoinDate(s.enrollmentDate)),
+                    String(formatJoinDate(s.joiningDate || s.enrollmentDate)),
                     String(s.reportBatch || s.batchNumber || '-'),
                     String(s.totalClasses || 0),
                     String(s.absent || 0),
@@ -9192,6 +9195,7 @@
                         <h6>${s.name}</h6>
                         <div class="text-muted">${s.schoolName || '-'} | ${s.region || '-'} | Batch: ${s.batchNumber || '-'}</div>
                         <div>Standard: ${s.standard || '-'} | Mobile: ${s.mobile || '-'} | Age: ${s.age || '-'}</div>
+                        <div>Date of Joining: ${escapeHtml(s.joiningDate || '-')}</div>
                         <div>Status: ${s.isActive ? 'Active' : 'Inactive'}</div>
                     </div>
                     <div class="mb-3">

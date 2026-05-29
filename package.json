@@ -4,7 +4,8 @@
   "description": "Simple attendance management system",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "migrate:joining-date": "node scripts/backfill-joining-date.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

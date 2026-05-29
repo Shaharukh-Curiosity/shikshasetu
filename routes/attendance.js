@@ -17,6 +17,30 @@ function normalizeDateOnly(value) {
   return String(value || '').slice(0, 10);
 }
 
+function toDateOnly(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return '';
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
+function resolveJoiningDate(student) {
+  return toDateOnly(student?.joiningDate) || toDateOnly(student?.createdAt);
+}
+
+function isEligibleForAttendance(student, dateOnly) {
+  const joiningDate = resolveJoiningDate(student);
+  if (!joiningDate) return true;
+  return joiningDate <= dateOnly;
+}
+
 function isValidDateOnly(value) {
   return DATE_REGEX.test(value);
 }
@@ -68,6 +92,12 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
       const student = studentMap.get(studentId);
       if (!student) {
         console.log('❌ Student not found:', studentId);
+        errors++;
+        continue;
+      }
+
+      if (!isEligibleForAttendance(student, dateOnly)) {
+        console.log(`❌ Skipping student enrolled on/after attendance date: ${student.name}`);
         errors++;
         continue;
       }
@@ -437,15 +467,21 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     if (normalizedStatus === 'active') studentsQuery.isActive = true;
     if (normalizedStatus === 'inactive') studentsQuery.isActive = false;
     const students = await User.find(studentsQuery).lean();
+    const studentsWithJoinDate = students
+      .map(student => ({
+        ...student,
+        joiningDate: resolveJoiningDate(student)
+      }))
+      .filter(student => isEligibleForAttendance(student, dateOnly));
 
-    console.log('Found students:', students.length);
+    console.log('Found students:', studentsWithJoinDate.length);
 
-    if (students.length === 0) {
+    if (studentsWithJoinDate.length === 0) {
       console.log('No students found\n');
       return res.json([]);
     }
 
-    const studentIds = students.map(s => String(s._id));
+    const studentIds = studentsWithJoinDate.map(s => String(s._id));
 
     // Fetch attendance by enrolled student IDs so batch data stays correct even if batch/status changed later
     const attendanceRecords = await Attendance.find({
@@ -507,7 +543,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     });
 
     // Combine students with their attendance
-    const results = students.map(student => {
+    const results = studentsWithJoinDate.map(student => {
       const studentIdStr = String(student._id);
       const attendance = attendanceMap[studentIdStr];
       const planned = plannedMap.get(studentIdStr);
@@ -526,6 +562,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
         batchNumber: student.batchNumber,
         mobile: student.mobile,
         standard: student.standard,
+        joiningDate: student.joiningDate || null,
         previousDay: prevMap.get(studentIdStr)
           ? { status: prevMap.get(studentIdStr).status, date: prevDate }
           : null,
@@ -598,16 +635,20 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     if (normalizedStatus === 'inactive') studentsQuery.isActive = false;
 
     const students = await User.find(studentsQuery).lean();
+    const studentsWithJoinDate = students.map(student => ({
+      ...student,
+      joiningDate: resolveJoiningDate(student)
+    })).filter(student => !student.joiningDate || student.joiningDate <= endDate);
 
-    console.log('Found students:', students.length);
+    console.log('Found students:', studentsWithJoinDate.length);
 
-    if (students.length === 0) {
+    if (studentsWithJoinDate.length === 0) {
       console.log('No students found\n');
       return res.json([]);
     }
 
     // Get attendance records for the date range
-    const studentIds = students.map(s => String(s._id));
+    const studentIds = studentsWithJoinDate.map(s => String(s._id));
     const attendanceRecords = await Attendance.find({
       studentId: { $in: studentIds },
       date: {
@@ -623,11 +664,14 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     console.log('Unique class dates:', uniqueDates.length);
 
     // Build summary for each student
-    const summary = students.map(student => {
+    const summary = studentsWithJoinDate.map(student => {
       const studentIdStr = String(student._id);
+      const joinDate = student.joiningDate || '';
+      const effectiveStart = joinDate && joinDate > startDate ? joinDate : startDate;
       
       // Get records for this student
-      const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr);
+      const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr && r.date >= effectiveStart);
+      const studentClassDates = [...new Set(studentRecords.map(r => r.date))];
       
       // Count present and absent
       const presentCount = studentRecords.filter(r => PRESENT_STATUSES.has(r.status)).length;
@@ -654,8 +698,8 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
         batchNumber: student.batchNumber,
         standard: student.standard,
         mobile: student.mobile,
-        enrollmentDate: student.createdAt,
-        totalClasses: uniqueDates.length,        // Total number of classes held
+        enrollmentDate: joinDate || student.createdAt,
+        totalClasses: studentClassDates.length,  // Total number of classes held for this student since joining
         totalMarked: totalMarked,                // Number of times student was marked
         present: presentCount,
         late: lateCount,
@@ -679,7 +723,7 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
       summary: summary,
       stats: {
         totalClasses: uniqueDates.length,
-        totalStudents: students.length,
+        totalStudents: studentsWithJoinDate.length,
         totalPresent: totalPresent,
         totalAbsent: totalAbsent,
         dateRange: {
@@ -722,11 +766,15 @@ router.get('/class-details', auth, isTeacherOrAdmin, async (req, res) => {
     }
 
     const students = await User.find(studentsQuery)
-      .select('_id name schoolName standard mobile batchNumber region')
+      .select('_id name schoolName standard mobile batchNumber region joiningDate createdAt')
       .sort({ batchNumber: 1, name: 1 })
       .lean();
+    const studentsWithJoinDate = students.map(student => ({
+      ...student,
+      joiningDate: resolveJoiningDate(student)
+    })).filter(student => !student.joiningDate || student.joiningDate <= String(endDate));
 
-    if (!students.length) {
+    if (!studentsWithJoinDate.length) {
       return res.json({
         rows: [],
         meta: {
@@ -739,7 +787,7 @@ router.get('/class-details', auth, isTeacherOrAdmin, async (req, res) => {
       });
     }
 
-    const studentIds = students.map(s => String(s._id));
+    const studentIds = studentsWithJoinDate.map(s => String(s._id));
     const attendanceQuery = {
       studentId: { $in: studentIds },
       date: { $gte: String(startDate), $lte: String(endDate) }
@@ -756,6 +804,8 @@ router.get('/class-details', auth, isTeacherOrAdmin, async (req, res) => {
     attendanceRecords.forEach((row) => {
       const studentId = String(row.studentId || '');
       if (!studentId || !row.date) return;
+      const student = studentsWithJoinDate.find(s => String(s._id) === studentId);
+      if (student?.joiningDate && row.date < student.joiningDate) return;
       if (!daysByStudent[studentId]) {
         daysByStudent[studentId] = new Set();
       }
@@ -765,7 +815,7 @@ router.get('/class-details', auth, isTeacherOrAdmin, async (req, res) => {
       }
     });
 
-    const rows = students.map((student) => {
+    const rows = studentsWithJoinDate.map((student) => {
       const sid = String(student._id);
       const classDays = Array.from(daysByStudent[sid] || []).sort((a, b) => a - b);
       return {
@@ -776,6 +826,7 @@ router.get('/class-details', auth, isTeacherOrAdmin, async (req, res) => {
         mobile: student.mobile || '',
         batchNumber: student.batchNumber || '',
         region: student.region || '',
+        joiningDate: student.joiningDate || null,
         classDays
       };
     });

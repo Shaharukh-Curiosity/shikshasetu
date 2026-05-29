@@ -82,6 +82,7 @@ router.post('/restore', auth, isAdmin, upload.single('file'), async (req, res) =
         batchNumber: s.batchNumber,
         mobile: s.mobile,
         age: s.age,
+        joiningDate: s.joiningDate || (s.createdAt ? String(s.createdAt).slice(0, 10) : undefined),
         role: 'student',
         isActive: s.isActive !== undefined ? s.isActive : true
       });

@@ -19,11 +19,42 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
+const batchSortCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base'
+});
+
 function normalizeHeader(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
+}
+
+function toDateOnly(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+    return '';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+}
+
+function resolveJoiningDate(student) {
+  return toDateOnly(student?.joiningDate) || toDateOnly(student?.createdAt);
+}
+
+function isFutureDateOnly(value) {
+  const dateOnly = toDateOnly(value);
+  if (!dateOnly) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  return dateOnly > today;
 }
 
 function mapRowToStudent(row) {
@@ -41,6 +72,10 @@ function mapRowToStudent(row) {
     if (['batchnumber', 'batch', 'batchno'].includes(norm)) mapped.batchNumber = value;
     if (['mobile', 'phone', 'phonenumber'].includes(norm)) mapped.mobile = value;
     if (['age'].includes(norm)) mapped.age = Number(value);
+    if (['joiningdate', 'dateofjoining', 'joindate', 'admissiondate', 'enrollmentdate'].includes(norm)) {
+      const joiningDate = toDateOnly(value);
+      if (joiningDate) mapped.joiningDate = joiningDate;
+    }
   });
   return mapped;
 }
@@ -102,6 +137,30 @@ async function buildAttendanceStatsMap(studentIds) {
 
 function isAttendanceActive(stats) {
   return Number(stats?.attendancePercentage || 0) >= ATTENDANCE_ACTIVE_THRESHOLD;
+}
+
+function compareExportStudents(a, b) {
+  const batchA = String(a.batchNumber || '').trim();
+  const batchB = String(b.batchNumber || '').trim();
+
+  if (batchA || batchB) {
+    if (!batchA) return 1;
+    if (!batchB) return -1;
+
+    const batchCompare = batchSortCollator.compare(batchA, batchB);
+    if (batchCompare !== 0) return batchCompare;
+  }
+
+  const nameCompare = batchSortCollator.compare(
+    String(a.name || ''),
+    String(b.name || '')
+  );
+  if (nameCompare !== 0) return nameCompare;
+
+  return batchSortCollator.compare(
+    String(a.region || ''),
+    String(b.region || '')
+  );
 }
 
 // ⚠️ SPECIFIC ROUTES FIRST (before parameterized routes)
@@ -302,13 +361,14 @@ router.get('/region-summary/:region', auth, isTeacherOrAdmin, async (req, res) =
     }
 
     const students = await User.find({ role: 'student', region })
-      .select('createdAt')
+      .select('joiningDate createdAt')
       .lean();
 
     const totalStudents = students.length;
     let projectInaugurationDate = null;
     students.forEach((student) => {
-      const value = student?.createdAt ? new Date(student.createdAt) : null;
+      const joinDate = resolveJoiningDate(student);
+      const value = joinDate ? new Date(joinDate) : null;
       if (!value || Number.isNaN(value.getTime())) return;
       if (!projectInaugurationDate || value < projectInaugurationDate) {
         projectInaugurationDate = value;
@@ -361,6 +421,7 @@ router.get('/profile/:id', auth, isTeacherOrAdmin, async (req, res) => {
     if (!student) {
       return res.status(404).json({ message: 'Student not found' });
     }
+    const joiningDate = resolveJoiningDate(student);
 
     const attendanceRecords = await Attendance.find({ studentId: String(id) })
       .sort({ date: -1 })
@@ -372,8 +433,9 @@ router.get('/profile/:id', auth, isTeacherOrAdmin, async (req, res) => {
       .limit(30)
       .lean();
 
-    const presentCount = attendanceRecords.filter(r => ['present', 'late', 'leave'].includes(r.status)).length;
-    const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
+    const filteredAttendance = attendanceRecords.filter(r => !joiningDate || r.date >= joiningDate);
+    const presentCount = filteredAttendance.filter(r => ['present', 'late', 'leave'].includes(r.status)).length;
+    const absentCount = filteredAttendance.filter(r => r.status === 'absent').length;
 
     res.json({
       student: {
@@ -385,13 +447,14 @@ router.get('/profile/:id', auth, isTeacherOrAdmin, async (req, res) => {
         standard: student.standard,
         mobile: student.mobile,
         age: student.age,
+        joiningDate,
         isActive: student.isActive
       },
       attendance: {
         presentCount,
         absentCount,
         totalMarked: presentCount + absentCount,
-        records: attendanceRecords
+        records: filteredAttendance
       },
       marks: marksRecords
     });
@@ -411,6 +474,7 @@ router.get('/export', auth, isAdmin, async (req, res) => {
     if (batchNumber && String(batchNumber).toLowerCase() !== 'all') query.batchNumber = batchNumber;
 
     const students = await User.find(query).select('-password').lean();
+    students.sort(compareExportStudents);
 
     if (format === 'json') {
       res.setHeader('Content-Type', 'application/json');
@@ -425,6 +489,7 @@ router.get('/export', auth, isAdmin, async (req, res) => {
       'region',
       'schoolName',
       'standard',
+      'joiningDate',
       'batchNumber',
       'mobile',
       'age',
@@ -463,6 +528,15 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
         skipped.push({ reason: 'Invalid mobile format', row: raw });
         continue;
       }
+      const requestedJoiningDate = data.joiningDate ? toDateOnly(data.joiningDate) : '';
+      if (data.joiningDate && !requestedJoiningDate) {
+        skipped.push({ reason: 'Invalid joining date format', row: raw });
+        continue;
+      }
+      if (requestedJoiningDate && isFutureDateOnly(requestedJoiningDate)) {
+        skipped.push({ reason: 'Joining date cannot be in the future', row: raw });
+        continue;
+      }
 
       const dup = await findDuplicateStudent(data);
       if (dup) {
@@ -473,6 +547,7 @@ router.post('/import', auth, isAdmin, upload.single('file'), async (req, res) =>
       const student = new User({
         ...data,
         role: 'student',
+        joiningDate: requestedJoiningDate || toDateOnly(new Date()),
         isActive: true
       });
       await student.save();
@@ -614,6 +689,13 @@ router.post('/', auth, isAdmin, async (req, res) => {
     if (req.body.mobile && !/^[0-9+ -]{7,15}$/.test(String(req.body.mobile))) {
       return res.status(400).json({ message: 'Invalid mobile format' });
     }
+    const requestedJoiningDate = req.body.joiningDate ? toDateOnly(req.body.joiningDate) : '';
+    if (req.body.joiningDate && !requestedJoiningDate) {
+      return res.status(400).json({ message: 'Invalid joining date format. Use YYYY-MM-DD' });
+    }
+    if (requestedJoiningDate && isFutureDateOnly(requestedJoiningDate)) {
+      return res.status(400).json({ message: 'Joining date cannot be in the future' });
+    }
 
     const dup = await findDuplicateStudent(req.body);
     if (dup) {
@@ -623,6 +705,7 @@ router.post('/', auth, isAdmin, async (req, res) => {
     const student = new User({
       ...req.body,
       role: 'student',
+      joiningDate: requestedJoiningDate || toDateOnly(new Date()),
       isActive: true
     });
     
@@ -632,7 +715,12 @@ router.post('/', auth, isAdmin, async (req, res) => {
       action: 'student_add',
       entity: 'student',
       entityId: student._id?.toString(),
-      after: { name: student.name, region: student.region, schoolName: student.schoolName }
+      after: {
+        name: student.name,
+        region: student.region,
+        schoolName: student.schoolName,
+        joiningDate: resolveJoiningDate(student)
+      }
     });
 
     res.json({ message: 'Student added successfully', student });
@@ -673,6 +761,13 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
     if (req.body.mobile && !/^[0-9+ -]{7,15}$/.test(String(req.body.mobile))) {
       return res.status(400).json({ message: 'Invalid mobile format' });
     }
+    const requestedJoiningDate = req.body.joiningDate ? toDateOnly(req.body.joiningDate) : '';
+    if (req.body.joiningDate && !requestedJoiningDate) {
+      return res.status(400).json({ message: 'Invalid joining date format. Use YYYY-MM-DD' });
+    }
+    if (requestedJoiningDate && isFutureDateOnly(requestedJoiningDate)) {
+      return res.status(400).json({ message: 'Joining date cannot be in the future' });
+    }
 
     const dup = await findDuplicateStudent(req.body, id);
     if (dup) {
@@ -689,7 +784,8 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
         schoolName: req.body.schoolName,
         mobile: req.body.mobile,
         standard: req.body.standard,
-        batchNumber: req.body.batchNumber
+        batchNumber: req.body.batchNumber,
+        ...(requestedJoiningDate ? { joiningDate: requestedJoiningDate } : {})
       },
       { new: true, runValidators: true }
     );
@@ -712,6 +808,7 @@ router.put('/:id', auth, isAdmin, async (req, res) => {
         mobile: student.mobile,
         standard: student.standard,
         batchNumber: student.batchNumber,
+        joiningDate: resolveJoiningDate(student),
         age: student.age
       }
     });

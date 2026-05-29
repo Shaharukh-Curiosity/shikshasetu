@@ -536,6 +536,7 @@
                         <input type="number" class="form-control mb-2" placeholder="Age" id="sAge">
                         <input type="text" class="form-control mb-2" placeholder="Mobile" id="sMobile" required>
                         <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="sStandard">
+                        <input type="date" class="form-control mb-2" placeholder="Date of Joining" id="sJoiningDate">
                         <input type="text" class="form-control mb-2" placeholder="Batch Number" id="sBatch" required>
                         <div class="d-flex flex-wrap gap-2 mt-3">
                             <button type="submit" class="btn btn-success" data-action="save-close">Add Student</button>
@@ -564,6 +565,7 @@
                         <input type="number" class="form-control mb-2" placeholder="Age" id="editSAge">
                         <input type="text" class="form-control mb-2" placeholder="Mobile" id="editSMobile" required>
                         <input type="text" class="form-control mb-2" placeholder="Standard/Class" id="editSStandard">
+                        <input type="date" class="form-control mb-2" placeholder="Date of Joining" id="editSJoiningDate">
                         <input type="text" class="form-control mb-2" placeholder="Batch Number" id="editSBatch" required>
                         <button type="submit" class="btn btn-primary">Update Student</button>
                     </form>
@@ -857,6 +859,13 @@
         }
 
         function showAddStudentModal() {
+            const joinDateEl = document.getElementById('sJoiningDate');
+            if (joinDateEl && !joinDateEl.value) {
+                joinDateEl.value = new Date().toISOString().split('T')[0];
+            }
+            if (joinDateEl) {
+                joinDateEl.max = new Date().toISOString().split('T')[0];
+            }
             new bootstrap.Modal(document.getElementById('studentModal')).show();
         }
 
@@ -1003,7 +1012,14 @@
             });
             const students = await res.json();
             
-            let html = '<table class="table"><thead><tr><th>#</th><th>Name</th><th>Region</th><th>School</th><th>Batch</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+            const formatDateOnly = (value) => {
+                if (!value) return '-';
+                const dt = new Date(value);
+                if (Number.isNaN(dt.getTime())) return '-';
+                return dt.toISOString().slice(0, 10);
+            };
+
+            let html = '<table class="table"><thead><tr><th>#</th><th>Name</th><th>Region</th><th>School</th><th>Join Date</th><th>Batch</th><th>Mobile</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
             students.forEach((s, index) => {
                 const isActive = !!s.isActive;
                 const statusBadge = isActive
@@ -1011,17 +1027,21 @@
                     : '<span class="badge bg-secondary">Inactive</span>';
                 const toggleLabel = isActive ? 'Deactivate' : 'Activate';
                 const toggleBtnClass = isActive ? 'btn-outline-danger' : 'btn-outline-success';
+                const joinDateRaw = s.joiningDate || s.createdAt;
+                const joinDateDisplay = formatDateOnly(joinDateRaw);
+                const joinDateValue = joinDateDisplay === '-' ? '' : joinDateDisplay;
                 html += `<tr>
                     <td>${index + 1}</td>
                     <td>${s.name}</td>
                     <td>${s.region}</td>
                     <td>${s.schoolName || '-'}</td>
+                    <td>${joinDateDisplay}</td>
                     <td>${s.batchNumber}</td>
                     <td>${s.mobile || '-'}</td>
                     <td>${statusBadge}</td>
                     <td>
                         <button class="btn btn-sm btn-info" onclick="viewStudentProfile('${s._id}')">View</button>
-                        <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.region}', '${s.schoolName || ''}', '${s.mobile || ''}', '${s.age || ''}', '${s.standard || ''}', '${s.batchNumber}')">Edit</button>
+                        <button class="btn btn-sm btn-warning" onclick="editStudent('${s._id}', '${s.name}', '${s.region}', '${s.schoolName || ''}', '${s.mobile || ''}', '${s.age || ''}', '${s.standard || ''}', '${s.batchNumber}', '${joinDateValue}')">Edit</button>
                         <button class="btn btn-sm ${toggleBtnClass}" onclick="toggleStudentStatus('${s._id}', ${isActive})">${toggleLabel}</button>
                         <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s._id}')">Delete</button>
                     </td>
@@ -1091,6 +1111,7 @@
                 age: document.getElementById('sAge').value,
                 mobile: document.getElementById('sMobile').value,
                 standard: document.getElementById('sStandard').value,
+                joiningDate: document.getElementById('sJoiningDate').value,
                 batchNumber: document.getElementById('sBatch').value
             };
             
@@ -1110,6 +1131,7 @@
                     region: document.getElementById('sRegion').value,
                     schoolName: document.getElementById('sSchool').value,
                     standard: document.getElementById('sStandard').value,
+                    joiningDate: document.getElementById('sJoiningDate').value,
                     batchNumber: document.getElementById('sBatch').value
                 } : null;
 
@@ -1119,6 +1141,7 @@
                     document.getElementById('sRegion').value = keepFields.region;
                     document.getElementById('sSchool').value = keepFields.schoolName;
                     document.getElementById('sStandard').value = keepFields.standard;
+                    document.getElementById('sJoiningDate').value = keepFields.joiningDate;
                     document.getElementById('sBatch').value = keepFields.batchNumber;
                     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
                     modal.show();
@@ -1273,6 +1296,7 @@
                         <h6>${s.name}</h6>
                         <div class="text-muted">${s.schoolName || '-'} | ${s.region || '-'} | Batch: ${s.batchNumber || '-'}</div>
                         <div>Standard: ${s.standard || '-'} | Mobile: ${s.mobile || '-'} | Age: ${s.age || '-'}</div>
+                        <div>Date of Joining: ${escapeHtml(s.joiningDate || '-')}</div>
                         <div>Status: ${s.isActive ? 'Active' : 'Inactive'}</div>
                     </div>
                     <div class="mb-3">
@@ -1326,7 +1350,7 @@
         }
 
         // Edit Student Functions
-        function editStudent(id, name, region, school, mobile, age, standard, batch) {
+        function editStudent(id, name, region, school, mobile, age, standard, batch, joiningDate) {
             document.getElementById('editStudentId').value = id;
             document.getElementById('editSName').value = name;
             document.getElementById('editSRegion').value = region;
@@ -1335,6 +1359,11 @@
             document.getElementById('editSAge').value = age;
             document.getElementById('editSStandard').value = standard;
             document.getElementById('editSBatch').value = batch;
+            const editJoinDateEl = document.getElementById('editSJoiningDate');
+            if (editJoinDateEl) {
+                editJoinDateEl.max = new Date().toISOString().split('T')[0];
+                editJoinDateEl.value = joiningDate || '';
+            }
             new bootstrap.Modal(document.getElementById('editStudentModal')).show();
         }
 
@@ -1348,6 +1377,7 @@
                 age: document.getElementById('editSAge').value,
                 mobile: document.getElementById('editSMobile').value,
                 standard: document.getElementById('editSStandard').value,
+                joiningDate: document.getElementById('editSJoiningDate').value,
                 batchNumber: document.getElementById('editSBatch').value
             };
             
