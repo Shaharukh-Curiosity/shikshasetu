@@ -345,7 +345,24 @@
                         </div>
                         <div class="col-md-3">
                             <label>Date</label>
-                            <input type="date" class="form-control" id="markDate" required onchange="loadMarkStudents(); loadPlannedAbsenceList();">
+                            <input type="date" class="form-control" id="markDate" required onchange="handleMarkDateChange();">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="d-flex align-items-center justify-content-between">
+                                <span>Holiday / Sunday</span>
+                                <input type="checkbox" class="form-check-input m-0" id="markHolidayMode" onchange="handleHolidayModeChange();">
+                            </label>
+                            <input
+                                type="text"
+                                class="form-control"
+                                id="markHolidayReason"
+                                placeholder="Reason required for holiday"
+                                disabled
+                                oninput="handleHolidayReasonInput()"
+                            >
+                        </div>
+                        <div class="col-12">
+                            <div id="holidayNotice" class="alert alert-warning d-none py-2 mb-0"></div>
                         </div>
                     </div>
 
@@ -1499,6 +1516,9 @@
         const markPageSize = 25;
         let lastMarkSubmission = null;
         let markSelections = new Map();
+        let markHolidayMode = false;
+        let markHolidayReason = '';
+        refreshHolidayNotice();
         let currentPlannedAbsences = [];
         let studentsData = [];
         let studentsFiltered = [];
@@ -4499,7 +4519,7 @@
 
                     if (totalClasses > 0) {
                         summary
-                            .filter(s => s.present === totalClasses)
+                            .filter(s => Number(s.attendedClasses || 0) === totalClasses)
                             .forEach(s => {
                                 allAttended.push({
                                     batch: b,
@@ -4956,6 +4976,7 @@
             const region = document.getElementById('markRegion').value;
             const batch = document.getElementById('markBatch').value;
             const date = document.getElementById('markDate').value;
+            refreshHolidayNotice();
             
             if (!region || !batch) {
                 console.warn('⚠️ Region or batch not selected');
@@ -4970,9 +4991,20 @@
                 return;
             }
 
+            const allowBackfill = String(date).slice(0, 10) < new Date().toISOString().split('T')[0];
+
             try {
                 console.log('👥 Loading students for marking:', region, batch, date);
-                const res = await fetch(`/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`, {
+                const query = new URLSearchParams({
+                    region,
+                    batchNumber: batch,
+                    date
+                });
+                if (allowBackfill) {
+                    query.set('allowBackfill', 'true');
+                }
+
+                const res = await fetch(`/api/attendance/by-batch?${query.toString()}`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
@@ -7179,6 +7211,7 @@
                 alert('Please select a valid date (not in the future).');
                 return;
             }
+            const allowBackfill = isPastDate(date);
 
             console.log('📤 Submitting attendance for:', { region, batch, date });
 
@@ -7189,24 +7222,41 @@
 
             const attendanceRecords = [];
             let missingLateTimeFor = '';
-            
-            currentStudents.forEach(student => {
-                const state = getEffectiveMarkState(student);
-                const status = state.status;
-                if (status) {
-                    const lateTime = status === 'late' ? String(state.lateTime || '').trim() : '';
-                    if (status === 'late' && !lateTime) {
-                        missingLateTimeFor = student.name || 'selected student';
-                        return;
-                    }
+            const holidayMode = !!document.getElementById('markHolidayMode')?.checked || isSundayDate(date);
+            const holidayReason = String(document.getElementById('markHolidayReason')?.value || '').trim();
+
+            if (holidayMode) {
+                if (!holidayReason) {
+                    alert('Please enter the holiday reason first.');
+                    return;
+                }
+
+                currentStudents.forEach(student => {
                     attendanceRecords.push({
                         studentId: student._id,
-                        status: status,
-                        note: state.note || '',
-                        lateTime: lateTime
+                        status: 'leave',
+                        note: holidayReason
                     });
-                }
-            });
+                });
+            } else {
+                currentStudents.forEach(student => {
+                    const state = getEffectiveMarkState(student);
+                    const status = state.status;
+                    if (status) {
+                        const lateTime = status === 'late' ? String(state.lateTime || '').trim() : '';
+                        if (status === 'late' && !lateTime) {
+                            missingLateTimeFor = student.name || 'selected student';
+                            return;
+                        }
+                        attendanceRecords.push({
+                            studentId: student._id,
+                            status: status,
+                            note: state.note || '',
+                            lateTime: lateTime
+                        });
+                    }
+                });
+            }
             if (missingLateTimeFor) {
                 alert(`Late time is required for ${missingLateTimeFor}.`);
                 return;
@@ -7251,7 +7301,8 @@
                     },
                     body: JSON.stringify({
                         date: date,
-                        attendanceRecords: attendanceRecords
+                        attendanceRecords: attendanceRecords,
+                        allowBackfill
                     })
                 });
 
@@ -8462,6 +8513,59 @@
             }
         }
 
+        function getReportBatchLabel(student) {
+            return String(student?.reportBatch || student?.batchNumber || '-');
+        }
+
+        function getReportStudentName(student) {
+            return String(student?.name || '');
+        }
+
+        function getReportAttendedTotal(student) {
+            if (Number.isFinite(Number(student?.attendedClasses))) {
+                return Number(student.attendedClasses || 0);
+            }
+            return Number(student?.present || 0) + Number(student?.late || 0) + Number(student?.leave || 0);
+        }
+
+        function getReportTotalMarked(student) {
+            return Number(student?.totalMarked || 0);
+        }
+
+        function getReportAbsentDates(student) {
+            const rawDates = Array.isArray(student?.absentDates)
+                ? student.absentDates
+                : String(student?.absentDates || '')
+                    .split(',')
+                    .map(value => value.trim())
+                    .filter(Boolean);
+            return [...new Set(rawDates)].sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+        }
+
+        function formatReportAbsentDates(student) {
+            const dates = getReportAbsentDates(student);
+            if (!dates.length) return '-';
+            return dates.map(date => escapeHtml(String(date))).join(', ');
+        }
+
+        function sortReportStudents(rows) {
+            return [...(rows || [])].sort((a, b) => {
+                const batchCmp = getReportBatchLabel(a).localeCompare(getReportBatchLabel(b), undefined, {
+                    numeric: true,
+                    sensitivity: 'base'
+                });
+                if (batchCmp !== 0) return batchCmp;
+
+                const nameCmp = getReportStudentName(a).localeCompare(getReportStudentName(b), undefined, {
+                    numeric: true,
+                    sensitivity: 'base'
+                });
+                if (nameCmp !== 0) return nameCmp;
+
+                return String(a?._id || a?.studentId || '').localeCompare(String(b?._id || b?.studentId || ''));
+            });
+        }
+
         function applyReportStudentFilter() {
             if (!lastReportRawData || !Array.isArray(lastReportRawData.summary)) {
                 return;
@@ -8473,12 +8577,15 @@
             const percentFilter = Number(percentFilterRaw);
             const hasPercentFilter = percentFilterRaw !== '' && Number.isFinite(percentFilter);
 
-            const withComputed = summary.map((student) => {
+            const orderedSummary = sortReportStudents(summary);
+
+            const withComputed = orderedSummary.map((student) => {
                 const totalClasses = Number(student.totalClasses || 0);
-                const presentTotal = Number(student.present || 0) + Number(student.late || 0) + Number(student.leave || 0);
+                const attendedTotal = getReportAttendedTotal(student);
+                const totalMarked = getReportTotalMarked(student);
                 const percentage = Number(student.percentage || 0);
-                const attendedAll = totalClasses > 0 && presentTotal >= totalClasses;
-                return { ...student, presentTotal, percentage, attendedAll };
+                const attendedAll = totalClasses > 0 && attendedTotal >= totalClasses;
+                return { ...student, attendedTotal, totalMarked, percentage, attendedAll };
             });
 
             const filterByType = (student) => {
@@ -8531,8 +8638,8 @@
                     <div class="row">
                         <div class="col-md-3"><strong>Total Classes:</strong> ${stats.totalClasses}</div>
                         <div class="col-md-3"><strong>Total Students:</strong> ${stats.totalStudents}</div>
-                        <div class="col-md-3"><strong>Total Present:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
-                        <div class="col-md-3"><strong>Total Absent:</strong> <span class="badge bg-danger">${stats.totalAbsent}</span></div>
+                        <div class="col-md-3"><strong>Total Marked:</strong> <span class="badge bg-primary">${stats.totalMarked || 0}</span></div>
+                        <div class="col-md-3"><strong>Total Attended:</strong> <span class="badge bg-success">${stats.totalPresent}</span></div>
                     </div>
                     <p class="mt-2 mb-0"><strong>Period:</strong> ${stats.dateRange.start} to ${stats.dateRange.end}</p>
                 </div>
@@ -8575,50 +8682,27 @@
                         <tr>
                             <th class="text-center">S.No</th>
                             <th>Student Name</th>
-                            <th>Date of Joining</th>
                             <th>Batch</th>
-                            <th class="text-center">Total Classes</th>
-                            <th class="text-center">Marked</th>
-                            <th class="text-center">Present</th>
-                            <th class="text-center">Absent</th>
-                            <th class="text-center">Attendance %</th>
-                            <th>Marked By</th>
+                            <th class="text-center">Total Marked</th>
+                            <th class="text-center">Attended</th>
+                            <th>Absent Date</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
-            const formatJoinDate = (value) => {
-                if (!value) return '-';
-                const d = new Date(value);
-                if (Number.isNaN(d.getTime())) return '-';
-                return d.toISOString().split('T')[0];
-            };
-
             filteredSummary.forEach((student, index) => {
-                const percentage = Number(student.percentage || 0);
-                let percentBadge = 'bg-danger';
-                if (percentage >= 75) {
-                    percentBadge = 'bg-success';
-                } else if (percentage >= 50) {
-                    percentBadge = 'bg-warning';
-                }
-
-                const markedBy = student.markedBy || '-';
-                const presentTotal = student.presentTotal;
+                const attendedTotal = getReportAttendedTotal(student);
+                const totalMarked = getReportTotalMarked(student);
 
                 html += `
                     <tr>
                         <td class="text-center">${index + 1}</td>
-                        <td>${student.name}</td>
-                        <td>${formatJoinDate(student.joiningDate || student.enrollmentDate)}</td>
-                        <td>${student.reportBatch || '-'}</td>
-                        <td class="text-center"><strong>${student.totalClasses}</strong></td>
-                        <td class="text-center">${student.totalMarked}/${student.totalClasses}</td>
-                        <td class="text-center"><span class="badge bg-success">${presentTotal}</span></td>
-                        <td class="text-center"><span class="badge bg-danger">${student.absent}</span></td>
-                        <td class="text-center"><span class="badge ${percentBadge}">${percentage.toFixed(2)}%</span></td>
-                        <td>${markedBy}</td>
+                        <td>${escapeHtml(student.name || '-')}</td>
+                        <td>${escapeHtml(getReportBatchLabel(student))}</td>
+                        <td class="text-center"><span class="badge bg-primary">${totalMarked}</span></td>
+                        <td class="text-center"><span class="badge bg-success">${attendedTotal}</span></td>
+                        <td>${formatReportAbsentDates(student)}</td>
                     </tr>
                 `;
             });
@@ -8626,7 +8710,7 @@
             if (filteredSummary.length === 0) {
                 html += `
                     <tr>
-                        <td colspan="10" class="text-center text-muted">No students match the selected filter.</td>
+                        <td colspan="6" class="text-center text-muted">No students match the selected filter.</td>
                     </tr>
                 `;
             }
@@ -8718,6 +8802,8 @@
                     mergedSummary = (data.summary || []).map(student => ({ ...student, reportBatch: student.batchNumber || batch }));
                     stats = data.stats || null;
                 }
+
+                mergedSummary = sortReportStudents(mergedSummary);
 
                 if (!mergedSummary || mergedSummary.length === 0) {
                     document.getElementById('reportResults').innerHTML =
@@ -8858,24 +8944,17 @@
 
             try {
                 const { region, batch, filterType, startDate, endDate, summary } = lastReportShareData;
-                const totalPresent = summary.reduce((sum, s) => sum + ((s.present || 0) + (s.late || 0) + (s.leave || 0)), 0);
-                const totalAbsent = summary.reduce((sum, s) => sum + (s.absent || 0), 0);
-                const formatJoinDate = (value) => {
-                    if (!value) return '-';
-                    const d = new Date(value);
-                    if (Number.isNaN(d.getTime())) return '-';
-                    return d.toISOString().split('T')[0];
-                };
+                const orderedSummary = sortReportStudents(summary);
+                const totalPresent = orderedSummary.reduce((sum, s) => sum + getReportAttendedTotal(s), 0);
+                const totalMarked = orderedSummary.reduce((sum, s) => sum + getReportTotalMarked(s), 0);
 
-                const rows = summary.map((s, idx) => ([
+                const rows = orderedSummary.map((s, idx) => ([
                     String(idx + 1),
                     String(s.name || '-'),
-                    String(formatJoinDate(s.joiningDate || s.enrollmentDate)),
-                    String(s.reportBatch || s.batchNumber || '-'),
-                    String(s.totalClasses || 0),
-                    String(s.absent || 0),
-                    String((s.present || 0) + (s.late || 0) + (s.leave || 0)),
-                    `${Number(s.percentage || 0).toFixed(2)}%`
+                    String(getReportBatchLabel(s)),
+                    String(getReportTotalMarked(s)),
+                    String(getReportAttendedTotal(s)),
+                    String(getReportAbsentDates(s).join(', ') || '-')
                 ]));
 
                 const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
@@ -8886,12 +8965,12 @@
                 doc.text(`Batch: ${batch === 'all' ? 'All Batches' : batch}`, 40, 84);
                 doc.text(`Filter: ${filterType === 'month' ? 'Month' : 'Date Range'}`, 40, 100);
                 doc.text(`Period: ${startDate} to ${endDate}`, 40, 116);
-                doc.text(`Total Students: ${summary.length}   Present: ${totalPresent}   Absent: ${totalAbsent}`, 40, 132);
+                doc.text(`Total Students: ${orderedSummary.length}   Marked: ${totalMarked}   Attended: ${totalPresent}`, 40, 132);
                 doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 148);
 
                 doc.autoTable({
                     startY: 168,
-                    head: [['S.No', 'Student Name', 'Date of Joining', 'Batch Number', 'Total Class', 'Absent', 'Present', 'Attendance %']],
+                    head: [['S.No', 'Student Name', 'Batch Number', 'Total Marked', 'Attended', 'Absent Date']],
                     body: rows,
                     styles: { fontSize: 10, cellPadding: 6 },
                     headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
@@ -9036,6 +9115,79 @@
             if (!value) return false;
             const todayStr = new Date().toISOString().split('T')[0];
             return value > todayStr;
+        }
+
+        function isSundayDate(value) {
+            if (!value) return false;
+            const dt = new Date(`${value}T00:00:00`);
+            return !Number.isNaN(dt.getTime()) && dt.getDay() === 0;
+        }
+
+        function isPastDate(value) {
+            if (!value) return false;
+            const todayStr = new Date().toISOString().split('T')[0];
+            return String(value).slice(0, 10) < todayStr;
+        }
+
+        function syncHolidayStateFromUI() {
+            const modeEl = document.getElementById('markHolidayMode');
+            const reasonEl = document.getElementById('markHolidayReason');
+            markHolidayMode = !!modeEl?.checked;
+            markHolidayReason = String(reasonEl?.value || '').trim();
+            if (!markHolidayMode) {
+                markHolidayReason = '';
+            }
+        }
+
+        function refreshHolidayNotice() {
+            const date = document.getElementById('markDate')?.value || '';
+            const noticeEl = document.getElementById('holidayNotice');
+            const modeEl = document.getElementById('markHolidayMode');
+            const reasonEl = document.getElementById('markHolidayReason');
+
+            const sunday = isSundayDate(date);
+            if (sunday && modeEl) {
+                modeEl.checked = true;
+            }
+
+            syncHolidayStateFromUI();
+
+            if (reasonEl) {
+                reasonEl.disabled = !markHolidayMode;
+            }
+
+            if (!noticeEl) return;
+
+            if (sunday || markHolidayMode) {
+                noticeEl.classList.remove('d-none');
+                noticeEl.textContent = sunday
+                    ? 'Selected date is Sunday. If this is a holiday, enter the reason and all students will be marked as Leave for that date.'
+                    : 'Holiday mode is enabled. Enter the reason so all students can be marked as Leave for this date.';
+            } else {
+                noticeEl.classList.add('d-none');
+                noticeEl.textContent = '';
+            }
+        }
+
+        function handleMarkDateChange() {
+            refreshHolidayNotice();
+            loadMarkStudents();
+            loadPlannedAbsenceList();
+        }
+
+        function handleHolidayModeChange() {
+            refreshHolidayNotice();
+            if (markHolidayMode) {
+                const reasonEl = document.getElementById('markHolidayReason');
+                if (!reasonEl?.value.trim()) {
+                    reasonEl?.focus();
+                }
+            }
+        }
+
+        function handleHolidayReasonInput() {
+            syncHolidayStateFromUI();
+            refreshHolidayNotice();
         }
 
         function getStatusBadge(status) {

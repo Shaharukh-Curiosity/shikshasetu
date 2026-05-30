@@ -56,7 +56,8 @@ function normalizeLateTime(value) {
 // ============================================
 router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { attendanceRecords, date } = req.body;
+    const { attendanceRecords, date, allowBackfill } = req.body;
+    const canBackfill = String(allowBackfill || '').toLowerCase() === 'true';
 
     console.log('\n======= MARKING ATTENDANCE =======');
     console.log('Date:', date);
@@ -96,7 +97,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         continue;
       }
 
-      if (!isEligibleForAttendance(student, dateOnly)) {
+      if (!canBackfill && !isEligibleForAttendance(student, dateOnly)) {
         console.log(`❌ Skipping student enrolled on/after attendance date: ${student.name}`);
         errors++;
         continue;
@@ -430,7 +431,8 @@ router.patch('/planned-absences/:id/cancel', auth, isTeacherOrAdmin, async (req,
 // ============================================
 router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { region, batchNumber, date, markedByRole, status } = req.query;
+    const { region, batchNumber, date, markedByRole, status, allowBackfill } = req.query;
+    const canBackfill = String(allowBackfill || '').toLowerCase() === 'true';
 
     console.log('\n======= VIEWING ATTENDANCE =======');
     console.log('Region:', region);
@@ -455,7 +457,16 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     prev2DateObj.setDate(prev2DateObj.getDate() - 2);
     const prev2Date = prev2DateObj.toISOString().split('T')[0];
 
-    // Get all students in this batch/region
+    const normalizedStatus = String(status || 'all').toLowerCase();
+
+    const attendanceRecords = await Attendance.find({
+      region: region,
+      ...(batchNumber && batchNumber !== 'all' ? { batchNumber } : {}),
+      date: dateOnly
+    }).lean();
+    const attendanceStudentIds = [...new Set(attendanceRecords.map(r => String(r.studentId)).filter(Boolean))];
+
+    // Load the current roster, then layer in historical attendance students so past dates still render.
     const studentsQuery = {
       role: 'student',
       region: region
@@ -463,16 +474,38 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     if (batchNumber && batchNumber !== 'all') {
       studentsQuery.batchNumber = batchNumber;
     }
-    const normalizedStatus = String(status || 'all').toLowerCase();
     if (normalizedStatus === 'active') studentsQuery.isActive = true;
     if (normalizedStatus === 'inactive') studentsQuery.isActive = false;
-    const students = await User.find(studentsQuery).lean();
-    const studentsWithJoinDate = students
-      .map(student => ({
+
+    const currentStudents = await User.find(studentsQuery).lean();
+    const studentsMap = new Map();
+
+    currentStudents.forEach(student => {
+      studentsMap.set(String(student._id), {
         ...student,
         joiningDate: resolveJoiningDate(student)
-      }))
-      .filter(student => isEligibleForAttendance(student, dateOnly));
+      });
+    });
+
+    if (attendanceStudentIds.length > 0) {
+      const historicalStudents = await User.find({ _id: { $in: attendanceStudentIds }, role: 'student' }).lean();
+      historicalStudents.forEach(student => {
+        const studentId = String(student._id);
+        if (!studentsMap.has(studentId)) {
+          studentsMap.set(studentId, {
+            ...student,
+            joiningDate: resolveJoiningDate(student)
+          });
+        }
+      });
+    }
+
+    const studentsWithJoinDate = Array.from(studentsMap.values())
+      .filter(student => {
+        const studentId = String(student._id);
+        const isHistorical = attendanceStudentIds.includes(studentId);
+        return isHistorical || canBackfill || isEligibleForAttendance(student, dateOnly);
+      });
 
     console.log('Found students:', studentsWithJoinDate.length);
 
@@ -482,12 +515,6 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
     }
 
     const studentIds = studentsWithJoinDate.map(s => String(s._id));
-
-    // Fetch attendance by enrolled student IDs so batch data stays correct even if batch/status changed later
-    const attendanceRecords = await Attendance.find({
-      studentId: { $in: studentIds },
-      date: dateOnly
-    }).lean();
     const plannedAbsences = await PlannedAbsence.find({
       studentId: { $in: studentIds },
       status: 'active',
@@ -667,18 +694,24 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     const summary = studentsWithJoinDate.map(student => {
       const studentIdStr = String(student._id);
       const joinDate = student.joiningDate || '';
-      const effectiveStart = joinDate && joinDate > startDate ? joinDate : startDate;
       
-      // Get records for this student
-      const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr && r.date >= effectiveStart);
+      // Get records for this student strictly from the selected report range
+      const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr);
       const studentClassDates = [...new Set(studentRecords.map(r => r.date))];
+      const absentDates = [...new Set(
+        studentRecords
+          .filter(r => r.status === 'absent')
+          .map(r => r.date)
+          .filter(Boolean)
+      )].sort();
       
-      // Count present and absent
-      const presentCount = studentRecords.filter(r => PRESENT_STATUSES.has(r.status)).length;
+      // Count all attendance statuses
+      const presentCount = studentRecords.filter(r => r.status === 'present').length;
       const lateCount = studentRecords.filter(r => r.status === 'late').length;
       const leaveCount = studentRecords.filter(r => r.status === 'leave').length;
       const absentCount = studentRecords.filter(r => r.status === 'absent').length;
-      const totalMarked = presentCount + absentCount;
+      const totalMarked = studentRecords.length;
+      const attendedCount = presentCount + lateCount + leaveCount;
 
       // Get all unique teachers/admins who marked this student
       const markedBySet = new Set(studentRecords.map(r => r.markedByName).filter(Boolean));
@@ -699,19 +732,22 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
         standard: student.standard,
         mobile: student.mobile,
         enrollmentDate: joinDate || student.createdAt,
-        totalClasses: studentClassDates.length,  // Total number of classes held for this student since joining
+        totalClasses: studentClassDates.length,  // Total marked class dates in the selected range
         totalMarked: totalMarked,                // Number of times student was marked
+        attendedClasses: attendedCount,
         present: presentCount,
         late: lateCount,
         leave: leaveCount,
         absent: absentCount,
+        absentDates,
         markedBy: markedByList,                  // NEW: Teachers/Admins who marked
-        percentage: totalMarked > 0 ? ((presentCount / totalMarked) * 100).toFixed(2) : 0
+        percentage: totalMarked > 0 ? ((attendedCount / totalMarked) * 100).toFixed(2) : 0
       };
     });
 
-    const totalPresent = summary.reduce((sum, s) => sum + s.present, 0);
+    const totalPresent = summary.reduce((sum, s) => sum + s.attendedClasses, 0);
     const totalAbsent = summary.reduce((sum, s) => sum + s.absent, 0);
+    const totalMarked = summary.reduce((sum, s) => sum + s.totalMarked, 0);
 
     console.log('\n📊 Overall Summary:');
     console.log('Total Classes:', uniqueDates.length);
@@ -726,6 +762,7 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
         totalStudents: studentsWithJoinDate.length,
         totalPresent: totalPresent,
         totalAbsent: totalAbsent,
+        totalMarked: totalMarked,
         dateRange: {
           start: startDate,
           end: endDate,
