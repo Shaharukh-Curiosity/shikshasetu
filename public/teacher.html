@@ -431,7 +431,7 @@
                 <div class="card-body">
                     <h5 class="card-title">View Attendance Records (Daily)</h5>
                     
-                    <div class="row g-3 mb-4">
+                    <div class="row g-3 mb-3">
                         <div class="col-md-3">
                             <label>Region</label>
                             <select class="form-select" id="viewRegion" onchange="loadViewBatches();">
@@ -445,24 +445,51 @@
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label>Date</label>
+                            <label>Filter Type</label>
+                            <select class="form-select" id="viewFilterType" onchange="updateViewDailyFilterUI()">
+                                <option value="single-date">Single Date</option>
+                                <option value="month">Month</option>
+                                <option value="date-range">Date Range</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3" id="viewSingleDateWrap">
+                            <label id="viewDateLabel">Date</label>
                             <input type="date" class="form-control" id="viewDate" required>
                         </div>
-                        <div class="col-md-3">
-                            <label>Month (for Planned)</label>
-                            <input type="month" class="form-control" id="viewPlannedMonth">
+                        <div class="col-md-3" id="viewMonthWrap" style="display: none;">
+                            <label>Month</label>
+                            <input type="month" class="form-control" id="viewMonth">
                         </div>
+                        <div class="col-md-3" id="viewRangeStartWrap" style="display: none;">
+                            <label>Start Date</label>
+                            <input type="date" class="form-control" id="viewRangeStart">
+                        </div>
+                        <div class="col-md-3" id="viewRangeEndWrap" style="display: none;">
+                            <label>End Date</label>
+                            <input type="date" class="form-control" id="viewRangeEnd">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mb-4 align-items-end">
                         <div class="col-md-3">
                             <label>Status Filter</label>
                             <select class="form-select" id="viewStatusFilter" onchange="applyViewDailyFilter()">
                                 <option value="all">All</option>
                                 <option value="present">Present</option>
+                                <option value="late">Late</option>
+                                <option value="leave">Leave</option>
                                 <option value="absent">Absent</option>
                                 <option value="not_marked">Not Marked</option>
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label>&nbsp;</label>
+                            <label>Month (Planned Students)</label>
+                            <input type="month" class="form-control" id="viewPlannedMonth">
+                        </div>
+                        <div class="col-md-6">
                             <div class="d-grid gap-2">
                                 <button class="btn btn-primary w-100" onclick="viewAttendance()">View</button>
                                 <button class="btn btn-outline-primary w-100" onclick="viewPlannedStudentsAttendance()">Planned Students Attendance</button>
@@ -1415,6 +1442,12 @@
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('markDate').value = today;
         document.getElementById('viewDate').value = today;
+        const viewMonthEl = document.getElementById('viewMonth');
+        const viewRangeStartEl = document.getElementById('viewRangeStart');
+        const viewRangeEndEl = document.getElementById('viewRangeEnd');
+        if (viewMonthEl) viewMonthEl.value = today.slice(0, 7);
+        if (viewRangeStartEl) viewRangeStartEl.value = today;
+        if (viewRangeEndEl) viewRangeEndEl.value = today;
         const examPracticalDateEl = document.getElementById('examPracticalDate');
         const examTheoryDateEl = document.getElementById('examTheoryDate');
         if (examPracticalDateEl) examPracticalDateEl.value = today;
@@ -1472,6 +1505,9 @@
                 'presentationEvaluationDate',
                 'workDate',
                 'workViewDate',
+                'viewMonth',
+                'viewRangeStart',
+                'viewRangeEnd',
                 'analysisStartDate',
                 'analysisEndDate'
             ];
@@ -1498,6 +1534,7 @@
         setPlannedAbsenceDates();
         toggleExamMissedModeFields();
         updateWorkViewFilterUI();
+        updateViewDailyFilterUI();
         loadWorkViewTeachers();
 
         let currentStudents = [];
@@ -1505,6 +1542,7 @@
         let presentationEvaluationStudents = [];
         let lastViewAttendance = null;
         let lastViewRawStudents = [];
+        let lastViewRawRecords = [];
         let lastReportRawData = null;
         let lastReportShareData = null;
         let lastResultAppearedShareData = null;
@@ -7376,25 +7414,159 @@
             }
         }
         // VIEW ATTENDANCE
-        async function viewAttendance() {
+        function updateViewDailyFilterUI() {
+            const filterType = document.getElementById('viewFilterType')?.value || 'single-date';
+            const singleWrap = document.getElementById('viewSingleDateWrap');
+            const monthWrap = document.getElementById('viewMonthWrap');
+            const rangeStartWrap = document.getElementById('viewRangeStartWrap');
+            const rangeEndWrap = document.getElementById('viewRangeEndWrap');
+            const monthInput = document.getElementById('viewMonth');
+            const rangeStartInput = document.getElementById('viewRangeStart');
+            const rangeEndInput = document.getElementById('viewRangeEnd');
+
+            if (singleWrap) singleWrap.style.display = filterType === 'single-date' ? 'block' : 'none';
+            if (monthWrap) monthWrap.style.display = filterType === 'month' ? 'block' : 'none';
+            if (rangeStartWrap) rangeStartWrap.style.display = filterType === 'date-range' ? 'block' : 'none';
+            if (rangeEndWrap) rangeEndWrap.style.display = filterType === 'date-range' ? 'block' : 'none';
+
+            if (filterType === 'month' && monthInput && !monthInput.value) {
+                monthInput.value = today.slice(0, 7);
+            }
+            if (filterType === 'date-range') {
+                if (rangeStartInput && !rangeStartInput.value) rangeStartInput.value = today;
+                if (rangeEndInput && !rangeEndInput.value) rangeEndInput.value = today;
+            }
+        }
+
+        function getViewDailySelection() {
             const region = document.getElementById('viewRegion').value;
             const batch = document.getElementById('viewBatch').value;
-            const date = document.getElementById('viewDate').value;
+            const filterType = document.getElementById('viewFilterType')?.value || 'single-date';
+            const singleDate = document.getElementById('viewDate').value;
+            const monthValue = document.getElementById('viewMonth')?.value || today.slice(0, 7);
+            const rangeStart = document.getElementById('viewRangeStart')?.value || '';
+            const rangeEnd = document.getElementById('viewRangeEnd')?.value || '';
 
-            if (!region || !batch || !date) {
-                alert('Please select region, batch, and date');
+            if (!region || !batch) {
+                return { error: 'Please select region and batch.' };
+            }
+
+            if (filterType === 'month') {
+                const monthMatch = /^(\d{4})-(\d{2})$/.exec(String(monthValue || ''));
+                if (!monthMatch) {
+                    return { error: 'Please select a valid month.' };
+                }
+                const year = Number(monthMatch[1]);
+                const month = Number(monthMatch[2]);
+                const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+                const lastDay = new Date(year, month, 0).getDate();
+                const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+                return {
+                    region,
+                    batch,
+                    filterType,
+                    mode: 'range',
+                    startDate,
+                    endDate,
+                    label: monthValue
+                };
+            }
+
+            if (filterType === 'date-range') {
+                if (!rangeStart || !rangeEnd) {
+                    return { error: 'Please select start and end dates.' };
+                }
+                if (rangeStart > rangeEnd) {
+                    return { error: 'Start date cannot be after end date.' };
+                }
+                return {
+                    region,
+                    batch,
+                    filterType,
+                    mode: 'range',
+                    startDate: rangeStart,
+                    endDate: rangeEnd,
+                    label: `${rangeStart} to ${rangeEnd}`
+                };
+            }
+
+            if (!singleDate) {
+                return { error: 'Please select a date.' };
+            }
+            return {
+                region,
+                batch,
+                filterType,
+                mode: 'single',
+                date: singleDate,
+                startDate: singleDate,
+                endDate: singleDate,
+                label: singleDate
+            };
+        }
+
+        function matchesViewDailyStatusFilter(item, statusFilter) {
+            if (statusFilter === 'all') return true;
+            if (statusFilter === 'present') return item.statusRaw === 'present';
+            if (statusFilter === 'late') return item.statusRaw === 'late';
+            if (statusFilter === 'leave') return item.statusRaw === 'leave';
+            if (statusFilter === 'absent') return item.statusRaw === 'absent';
+            if (statusFilter === 'not_marked') return item.statusKey === 'not_marked';
+            return true;
+        }
+
+        async function viewAttendance() {
+            const selection = getViewDailySelection();
+            if (selection.error) {
+                alert(selection.error);
                 return;
             }
-            if (isFutureDate(date)) {
-                alert('Please select a valid date (not in the future).');
+
+            if (selection.mode === 'single') {
+                if (isFutureDate(selection.date)) {
+                    alert('Please select a valid date (not in the future).');
+                    return;
+                }
+
+                console.log('Viewing attendance for:', selection);
+
+                try {
+                    const res = await fetch(
+                        `/api/attendance/by-batch?region=${encodeURIComponent(selection.region)}&batchNumber=${encodeURIComponent(selection.batch)}&date=${selection.date}`,
+                        { headers: { 'Authorization': `Bearer ${token}` } }
+                    );
+
+                    if (!res.ok) {
+                        throw new Error(`API Error: ${res.status}`);
+                    }
+
+                    const students = await res.json();
+                    console.log('Attendance records loaded:', students.length);
+
+                    if (!students || students.length === 0) {
+                        document.getElementById('viewResults').innerHTML =
+                            '<div class="alert alert-warning">No students found in this batch</div>';
+                        lastViewRawStudents = [];
+                        lastViewRawRecords = [];
+                        lastViewAttendance = null;
+                        return;
+                    }
+
+                    lastViewRawStudents = students;
+                    lastViewRawRecords = [];
+                    renderViewAttendanceSingle(selection.region, selection.batch, selection.date);
+                } catch (error) {
+                    console.error('Error viewing attendance:', error);
+                    alert('Failed to load attendance');
+                }
                 return;
             }
 
-            console.log('Viewing attendance for:', { region, batch, date });
+            console.log('Viewing attendance range for:', selection);
 
             try {
                 const res = await fetch(
-                    `/api/attendance/by-batch?region=${encodeURIComponent(region)}&batchNumber=${encodeURIComponent(batch)}&date=${date}`,
+                    `/api/attendance/range?region=${encodeURIComponent(selection.region)}&batchNumber=${encodeURIComponent(selection.batch)}&startDate=${selection.startDate}&endDate=${selection.endDate}`,
                     { headers: { 'Authorization': `Bearer ${token}` } }
                 );
 
@@ -7402,34 +7574,45 @@
                     throw new Error(`API Error: ${res.status}`);
                 }
 
-                const students = await res.json();
-                console.log('Attendance records loaded:', students.length);
+                const payload = await res.json();
+                const records = Array.isArray(payload?.records) ? payload.records : [];
 
-                if (!students || students.length === 0) {
+                if (!records.length) {
                     document.getElementById('viewResults').innerHTML =
-                        '<div class="alert alert-warning">No students found in this batch</div>';
+                        '<div class="alert alert-warning">No attendance records found for the selected range</div>';
                     lastViewRawStudents = [];
+                    lastViewRawRecords = [];
                     lastViewAttendance = null;
                     return;
                 }
 
-                lastViewRawStudents = students;
-                renderViewAttendanceResults(region, batch, date);
-
+                lastViewRawStudents = [];
+                lastViewRawRecords = records;
+                renderViewAttendanceRange(selection.region, selection.batch, selection.startDate, selection.endDate, selection.filterType);
             } catch (error) {
-                console.error('Error viewing attendance:', error);
-                alert('Failed to load attendance');
+                console.error('Error viewing attendance range:', error);
+                alert('Failed to load attendance range');
             }
         }
 
         function applyViewDailyFilter() {
-            if (!lastViewAttendance || !lastViewRawStudents || lastViewRawStudents.length === 0) {
+            if (!lastViewAttendance) {
                 return;
             }
-            renderViewAttendanceResults(lastViewAttendance.region, lastViewAttendance.batch, lastViewAttendance.date);
+            if (lastViewAttendance.mode === 'single') {
+                renderViewAttendanceSingle(lastViewAttendance.region, lastViewAttendance.batch, lastViewAttendance.date);
+                return;
+            }
+            renderViewAttendanceRange(
+                lastViewAttendance.region,
+                lastViewAttendance.batch,
+                lastViewAttendance.startDate,
+                lastViewAttendance.endDate,
+                lastViewAttendance.filterType
+            );
         }
 
-        function renderViewAttendanceResults(region, batch, date) {
+        function renderViewAttendanceSingle(region, batch, date) {
             if (!Array.isArray(lastViewRawStudents) || lastViewRawStudents.length === 0) {
                 document.getElementById('viewResults').innerHTML =
                     '<div class="alert alert-warning">No students found in this batch</div>';
@@ -7440,36 +7623,28 @@
             const statusFilter = document.getElementById('viewStatusFilter')?.value || 'all';
 
             const normalized = lastViewRawStudents.map(student => {
-                let statusKey = 'not_marked';
-                let markedBy = '-';
-                let statusRaw = '';
-                let lateTime = '';
-                let statusBadge = getStatusBadge('');
-                if (student.attendance) {
-                    const status = student.attendance.status;
-                    statusBadge = getStatusBadge(status);
-                    markedBy = student.attendance.markedBy || '-';
-                    statusRaw = status || '';
-                    lateTime = String(student.attendance.lateTime || '').trim();
-                    if (status === 'present' || status === 'late' || status === 'leave') {
-                        statusKey = 'present';
-                    } else if (status === 'absent') {
-                        statusKey = 'absent';
-                    }
-                }
-                return { student, statusKey, markedBy, statusBadge, statusRaw, lateTime };
+                const statusRaw = String(student?.attendance?.status || '').toLowerCase();
+                const statusKey = statusRaw === 'absent' ? 'absent' : statusRaw ? 'present' : 'not_marked';
+                return {
+                    student,
+                    statusKey,
+                    markedBy: student?.attendance?.markedByName || student?.attendance?.markedBy || '-',
+                    statusBadge: getStatusBadge(statusRaw),
+                    statusRaw,
+                    lateTime: String(student?.attendance?.lateTime || '').trim()
+                };
             });
 
-            const present = normalized.filter(x => x.statusKey === 'present').length;
-            const absent = normalized.filter(x => x.statusKey === 'absent').length;
+            const present = normalized.filter(x => ['present', 'late', 'leave'].includes(x.statusRaw)).length;
+            const late = normalized.filter(x => x.statusRaw === 'late').length;
+            const leave = normalized.filter(x => x.statusRaw === 'leave').length;
+            const absent = normalized.filter(x => x.statusRaw === 'absent').length;
             const notMarked = normalized.filter(x => x.statusKey === 'not_marked').length;
-            const absentNames = normalized.filter(x => x.statusKey === 'absent').map(x => String(x.student.name || ''));
+            const absentNames = normalized.filter(x => x.statusRaw === 'absent').map(x => String(x.student.name || ''));
             const isSuspendedClass = normalized.length > 0 && present === 0 && absent === normalized.length && notMarked === 0;
             const absentLabel = isSuspendedClass ? 'Suspend Class' : 'Absent';
 
-            const filtered = statusFilter === 'all'
-                ? normalized
-                : normalized.filter(x => x.statusKey === statusFilter);
+            const filtered = normalized.filter(x => matchesViewDailyStatusFilter(x, statusFilter));
 
             let html = `
                 <table class="table table-bordered">
@@ -7490,7 +7665,7 @@
             const attendanceRows = [];
             filtered.forEach((item, index) => {
                 const student = item.student;
-                const isAbsent = item.statusKey === 'absent';
+                const isAbsent = item.statusRaw === 'absent';
                 const callButton = isAbsent
                     ? buildCallButtonHtml(student._id, student.mobile, 'view-attendance')
                     : '<span class="text-muted">-</span>';
@@ -7535,6 +7710,8 @@
                 <div class="alert alert-info">
                     <strong>Summary:</strong>
                     Present: <span class="badge bg-success">${present}</span> |
+                    Late: <span class="badge bg-warning text-dark">${late}</span> |
+                    Leave: <span class="badge bg-info text-dark">${leave}</span> |
                     ${absentLabel}: <span class="badge bg-danger">${absent}</span> |
                     Not Marked: <span class="badge bg-secondary">${notMarked}</span> |
                     Showing: <span class="badge bg-dark">${filtered.length}</span>
@@ -7545,7 +7722,153 @@
             `;
 
             document.getElementById('viewResults').innerHTML = summary + html;
-            lastViewAttendance = { region, batch, date, present, absent, notMarked, absentNames, suspendedClass: isSuspendedClass, records: attendanceRows };
+            lastViewAttendance = {
+                mode: 'single',
+                region,
+                batch,
+                date,
+                startDate: date,
+                endDate: date,
+                filterType: 'single-date',
+                label: date,
+                present,
+                late,
+                leave,
+                absent,
+                notMarked,
+                absentNames,
+                suspendedClass: isSuspendedClass,
+                records: attendanceRows
+            };
+        }
+
+        function renderViewAttendanceRange(region, batch, startDate, endDate, filterType) {
+            if (!Array.isArray(lastViewRawRecords) || lastViewRawRecords.length === 0) {
+                document.getElementById('viewResults').innerHTML =
+                    '<div class="alert alert-warning">No attendance records found for the selected range</div>';
+                lastViewAttendance = null;
+                return;
+            }
+
+            const statusFilter = document.getElementById('viewStatusFilter')?.value || 'all';
+            const filtered = lastViewRawRecords.filter(record => matchesViewDailyStatusFilter({
+                statusKey: String(record?.status || '').toLowerCase() === 'absent' ? 'absent' : (String(record?.status || '').toLowerCase() ? 'present' : 'not_marked'),
+                statusRaw: String(record?.status || '').toLowerCase()
+            }, statusFilter));
+
+            const present = lastViewRawRecords.filter(r => ['present', 'late', 'leave'].includes(String(r.status || '').toLowerCase())).length;
+            const late = lastViewRawRecords.filter(r => String(r.status || '').toLowerCase() === 'late').length;
+            const leave = lastViewRawRecords.filter(r => String(r.status || '').toLowerCase() === 'leave').length;
+            const absent = lastViewRawRecords.filter(r => String(r.status || '').toLowerCase() === 'absent').length;
+            const notMarked = lastViewRawRecords.filter(r => !String(r.status || '').trim()).length;
+
+            let html = `
+                <div class="alert alert-info">
+                    <strong>Summary:</strong>
+                    Present: <span class="badge bg-success">${present}</span> |
+                    Late: <span class="badge bg-warning text-dark">${late}</span> |
+                    Leave: <span class="badge bg-info text-dark">${leave}</span> |
+                    Absent: <span class="badge bg-danger">${absent}</span> |
+                    Not Marked: <span class="badge bg-secondary">${notMarked}</span> |
+                    Showing: <span class="badge bg-dark">${filtered.length}</span>
+                </div>
+                <div class="table-responsive">
+                <table class="table table-bordered table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Date</th>
+                            <th>Name</th>
+                            <th>Batch</th>
+                            <th>Status</th>
+                            <th>Late Time</th>
+                            <th>Marked By</th>
+                            <th>Parent Mobile</th>
+                            <th class="text-center">Call</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            const attendanceRows = [];
+            filtered.forEach((record, index) => {
+                const statusRaw = String(record?.status || '').toLowerCase();
+                const statusKey = statusRaw === 'absent' ? 'absent' : statusRaw ? 'present' : 'not_marked';
+                const statusBadge = getStatusBadge(statusRaw);
+                const mobile = String(record?.mobile || '');
+                const callButton = statusRaw === 'absent' && mobile
+                    ? buildCallButtonHtml(record.studentId, mobile, 'view-attendance')
+                    : '<span class="text-muted">-</span>';
+
+                attendanceRows.push({
+                    index,
+                    studentId: String(record?.studentId || ''),
+                    name: String(record?.studentName || ''),
+                    batchNumber: String(record?.batchNumber || ''),
+                    mobile,
+                    date: String(record?.date || ''),
+                    statusKey,
+                    statusRaw,
+                    lateTime: String(record?.lateTime || '').trim(),
+                    markedBy: String(record?.markedByName || record?.markedBy || '-')
+                });
+
+                html += `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(record?.date || '-')}</td>
+                        <td>${escapeHtml(record?.studentName || '-')}</td>
+                        <td>${escapeHtml(record?.batchNumber || '-')}</td>
+                        <td>${statusBadge}</td>
+                        <td>${statusRaw === 'late' ? escapeHtml(record?.lateTime || '-') : '-'}</td>
+                        <td>${escapeHtml(record?.markedByName || record?.markedBy || '-')}</td>
+                        <td>${mobile ? escapeHtml(mobile) : '-'}</td>
+                        <td class="text-center">${callButton}</td>
+                    </tr>
+                `;
+            });
+
+            if (filtered.length === 0) {
+                html += `
+                    <tr>
+                        <td colspan="9" class="text-center text-muted">No records in selected filter</td>
+                    </tr>
+                `;
+            }
+
+            html += '</tbody></table></div>';
+
+            const rangeLabel = filterType === 'month'
+                ? `Month: ${startDate.slice(0, 7)}`
+                : `Date Range: ${startDate} to ${endDate}`;
+
+            const summary = `
+                <div class="alert alert-secondary">
+                    <strong>Range:</strong> ${escapeHtml(rangeLabel)} |
+                    Records: <span class="badge bg-dark">${lastViewRawRecords.length}</span>
+                </div>
+                ${html}
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <button class="btn btn-success" onclick="shareAttendanceWhatsApp()">Download Attendance PDF</button>
+                </div>
+            `;
+
+            document.getElementById('viewResults').innerHTML = summary;
+            lastViewAttendance = {
+                mode: 'range',
+                region,
+                batch,
+                startDate,
+                endDate,
+                filterType,
+                label: rangeLabel,
+                present,
+                late,
+                leave,
+                absent,
+                notMarked,
+                records: attendanceRows
+            };
         }
 
         function shareAttendanceWhatsApp() {
@@ -7554,7 +7877,7 @@
                 return;
             }
 
-            const { region, batch, date, records, suspendedClass } = lastViewAttendance;
+            const { region, batch, records, mode, date, startDate, endDate, filterType, label } = lastViewAttendance;
             if (!Array.isArray(records) || records.length === 0) {
                 alert('No attendance records found to export.');
                 return;
@@ -7566,31 +7889,12 @@
                 return;
             }
 
-            const presentCount = records.filter(r => r.statusKey === 'present').length;
-            const absentRecords = records.filter(r => r.statusKey === 'absent');
-            const notMarkedCount = records.filter(r => r.statusKey === 'not_marked').length;
-            const isSuspendedClass = Boolean(suspendedClass) || (records.length > 0 && presentCount === 0 && absentRecords.length === records.length && notMarkedCount === 0);
-            const absentLabel = isSuspendedClass ? 'Suspend Class' : 'Absent';
-
-            const statusLabel = (record) => {
-                if (record.statusRaw === 'late') return 'Late';
-                if (record.statusRaw === 'leave') return 'Leave';
-                if (record.statusRaw === 'present') return 'Present';
-                if (record.statusKey === 'absent') return absentLabel;
-                return 'Not Marked';
-            };
-
-            const rows = records.map((r, index) => ([
-                String(index + 1),
-                String(r.name || '-'),
-                String(r.batchNumber || batch || '-'),
-                statusLabel(r),
-                r.statusRaw === 'late' ? String(r.lateTime || '-') : '-'
-            ]));
-
             const doc = new jsPdfLib.jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
             const pageWidth = doc.internal.pageSize.getWidth();
             const centerX = pageWidth / 2;
+            const filterLabel = mode === 'range'
+                ? (filterType === 'month' ? 'Month' : 'Date Range')
+                : 'Single Date';
 
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(18);
@@ -7600,7 +7904,7 @@
             doc.text('Janpath Network', centerX, 52, { align: 'center' });
 
             doc.setFontSize(16);
-            doc.text('DAILY ATTENDANCE REPORT', centerX, 76, { align: 'center' });
+            doc.text(mode === 'range' ? 'ATTENDANCE RANGE REPORT' : 'DAILY ATTENDANCE REPORT', centerX, 76, { align: 'center' });
 
             doc.setDrawColor(14, 165, 164);
             doc.setLineWidth(1.2);
@@ -7608,16 +7912,36 @@
 
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(11);
-            doc.text(`Date: ${date}`, 40, 112);
-            doc.text(`Region: ${region}`, 40, 128);
-            doc.text(`Batch: ${batch}`, 40, 144);
-            doc.text(`Total Students: ${records.length}`, 40, 160);
-            doc.text(`Present: ${presentCount}   ${absentLabel}: ${absentRecords.length}   Not Marked: ${notMarkedCount}`, 40, 176);
-            doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 192);
+            doc.text(`Region: ${region}`, 40, 112);
+            doc.text(`Batch: ${batch}`, 40, 128);
+            doc.text(`Filter: ${filterLabel}`, 40, 144);
+            doc.text(`Period: ${mode === 'range' ? `${startDate} to ${endDate}` : date}`, 40, 160);
+            doc.text(`Total Records: ${records.length}`, 40, 176);
+            doc.text(`Present: ${lastViewAttendance.present || 0}   Late: ${lastViewAttendance.late || 0}   Leave: ${lastViewAttendance.leave || 0}   Absent: ${lastViewAttendance.absent || 0}   Not Marked: ${lastViewAttendance.notMarked || 0}`, 40, 192);
+            doc.text(`Generated By: ${user.name || 'Class Teacher'}`, 40, 208);
+
+            const rows = mode === 'range'
+                ? records.map((r, index) => ([
+                    String(index + 1),
+                    String(r.date || '-'),
+                    String(r.name || '-'),
+                    String(r.batchNumber || batch || '-'),
+                    r.statusRaw === 'late' ? 'Late' : r.statusRaw === 'leave' ? 'Leave' : r.statusRaw === 'absent' ? 'Absent' : (r.statusRaw === 'present' ? 'Present' : 'Not Marked'),
+                    r.statusRaw === 'late' ? String(r.lateTime || '-') : '-'
+                ]))
+                : records.map((r, index) => ([
+                    String(index + 1),
+                    String(r.name || '-'),
+                    String(r.batchNumber || batch || '-'),
+                    r.statusRaw === 'late' ? 'Late' : r.statusRaw === 'leave' ? 'Leave' : r.statusRaw === 'absent' ? 'Absent' : (r.statusRaw === 'present' ? 'Present' : 'Not Marked'),
+                    r.statusRaw === 'late' ? String(r.lateTime || '-') : '-'
+                ]));
 
             doc.autoTable({
-                startY: 212,
-                head: [['S.No', 'Student Name', 'Batch Number', 'Status', 'Late Time']],
+                startY: 228,
+                head: mode === 'range'
+                    ? [['S.No', 'Date', 'Student Name', 'Batch Number', 'Status', 'Late Time']]
+                    : [['S.No', 'Student Name', 'Batch Number', 'Status', 'Late Time']],
                 body: rows,
                 styles: { fontSize: 10, cellPadding: 6 },
                 headStyles: { fillColor: [14, 165, 164], textColor: [255, 255, 255] },
@@ -7627,8 +7951,33 @@
 
             const safeRegion = String(region || 'region').replace(/[^\w-]/g, '_');
             const safeBatch = String(batch || 'batch').replace(/[^\w-]/g, '_');
-            const safeDate = String(date || new Date().toISOString().split('T')[0]);
-            doc.save(`Daily_Attendance_${safeRegion}_${safeBatch}_${safeDate}.pdf`);
+            const safePeriod = String(mode === 'range' ? `${startDate}_to_${endDate}` : date || new Date().toISOString().split('T')[0]).replace(/[^\w-]/g, '_');
+            const fileName = mode === 'range'
+                ? `Attendance_Range_${safeRegion}_${safeBatch}_${safePeriod}.pdf`
+                : `Daily_Attendance_${safeRegion}_${safeBatch}_${safePeriod}.pdf`;
+            const pdfBlob = doc.output('blob');
+
+            const shareText = mode === 'range'
+                ? `Attendance range report (${label}) - ${region}, ${batch}`
+                : `Daily attendance report (${date}) - ${region}, ${batch}`;
+            let file = null;
+            try {
+                file = new File([pdfBlob], fileName, { type: 'application/pdf' });
+            } catch (e) {
+                file = null;
+            }
+
+            if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share({
+                    title: mode === 'range' ? 'Attendance Range Report' : 'Daily Attendance Report',
+                    text: shareText,
+                    files: [file]
+                }).catch(() => {
+                    doc.save(fileName);
+                });
+            } else {
+                doc.save(fileName);
+            }
         }
 
         async function viewPlannedStudentsAttendance() {
@@ -9240,13 +9589,15 @@
 
         function getStatusBadge(status) {
             if (status === 'present') return '<span class="badge bg-success">PRESENT</span>';
-            if (status === 'late' || status === 'leave') return '<span class="badge bg-success">PRESENT</span>';
+            if (status === 'late') return '<span class="badge bg-warning text-dark">LATE</span>';
+            if (status === 'leave') return '<span class="badge bg-info text-dark">LEAVE</span>';
             if (status === 'absent') return '<span class="badge bg-danger">ABSENT</span>';
             return '<span class="badge bg-secondary">NOT MARKED</span>';
         }
 
         function normalizeStatusDisplay(status) {
-            if (status === 'late' || status === 'leave') return 'present';
+            if (status === 'late') return 'late';
+            if (status === 'leave') return 'leave';
             return status || 'not marked';
         }
 

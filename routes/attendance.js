@@ -638,6 +638,92 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
 });
 
 // ============================================
+// VIEW ATTENDANCE - DATE RANGE / MONTH
+// ============================================
+router.get('/range', auth, isTeacherOrAdmin, async (req, res) => {
+  try {
+    const { region, batchNumber, startDate, endDate } = req.query;
+
+    if (!region || !startDate || !endDate) {
+      return res.status(400).json({ message: 'Missing parameters' });
+    }
+    if (!isValidDateOnly(String(startDate)) || !isValidDateOnly(String(endDate))) {
+      return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
+    }
+    if (String(startDate) > String(endDate)) {
+      return res.status(400).json({ message: 'startDate cannot be after endDate' });
+    }
+
+    const attendanceQuery = {
+      region: String(region),
+      date: {
+        $gte: String(startDate),
+        $lte: String(endDate)
+      }
+    };
+    if (batchNumber && String(batchNumber).toLowerCase() !== 'all') {
+      attendanceQuery.batchNumber = String(batchNumber);
+    }
+
+    const attendanceRecords = await Attendance.find(attendanceQuery)
+      .sort({ date: 1, batchNumber: 1, studentName: 1 })
+      .lean();
+
+    const studentIds = [...new Set(attendanceRecords.map(r => String(r.studentId || '')).filter(Boolean))];
+    const students = studentIds.length > 0
+      ? await User.find({ _id: { $in: studentIds }, role: 'student' })
+        .select('_id name schoolName standard mobile batchNumber region joiningDate createdAt')
+        .lean()
+      : [];
+    const studentMap = new Map(students.map(student => [String(student._id), student]));
+
+    const records = attendanceRecords.map(record => {
+      const student = studentMap.get(String(record.studentId || ''));
+      return {
+        _id: String(record._id || ''),
+        studentId: String(record.studentId || ''),
+        studentName: record.studentName || student?.name || '',
+        schoolName: record.schoolName || student?.schoolName || '',
+        standard: record.standard || student?.standard || '',
+        mobile: record.mobile || student?.mobile || '',
+        batchNumber: record.batchNumber || student?.batchNumber || '',
+        region: record.region || student?.region || '',
+        date: record.date || '',
+        status: record.status || 'not_marked',
+        note: record.note || '',
+        lateTime: record.lateTime || '',
+        markedBy: record.markedBy || '',
+        markedByName: record.markedByName || '',
+        markedAt: record.markedAt || null
+      };
+    });
+
+    const presentCount = records.filter(r => ['present', 'late', 'leave'].includes(String(r.status || '').toLowerCase())).length;
+    const lateCount = records.filter(r => String(r.status || '').toLowerCase() === 'late').length;
+    const leaveCount = records.filter(r => String(r.status || '').toLowerCase() === 'leave').length;
+    const absentCount = records.filter(r => String(r.status || '').toLowerCase() === 'absent').length;
+
+    return res.json({
+      records,
+      summary: {
+        totalRecords: records.length,
+        presentCount,
+        lateCount,
+        leaveCount,
+        absentCount,
+        region: String(region),
+        batchNumber: String(batchNumber || 'all'),
+        startDate: String(startDate),
+        endDate: String(endDate)
+      }
+    });
+  } catch (error) {
+    console.error('FATAL ERROR:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ============================================
 // ATTENDANCE SUMMARY - Month/Date wise Report
 // ============================================
 router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
