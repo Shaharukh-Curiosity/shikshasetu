@@ -41,6 +41,14 @@ function isEligibleForAttendance(student, dateOnly) {
   return joiningDate <= dateOnly;
 }
 
+function getAttendanceStartDate(student, rangeStart) {
+  const joiningDate = resolveJoiningDate(student);
+  const reportStart = toDateOnly(rangeStart);
+  if (!joiningDate) return reportStart;
+  if (!reportStart) return joiningDate;
+  return joiningDate > reportStart ? joiningDate : reportStart;
+}
+
 function isValidDateOnly(value) {
   return DATE_REGEX.test(value);
 }
@@ -56,8 +64,7 @@ function normalizeLateTime(value) {
 // ============================================
 router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { attendanceRecords, date, allowBackfill } = req.body;
-    const canBackfill = String(allowBackfill || '').toLowerCase() === 'true';
+    const { attendanceRecords, date } = req.body;
 
     console.log('\n======= MARKING ATTENDANCE =======');
     console.log('Date:', date);
@@ -97,7 +104,7 @@ router.post('/mark', auth, isTeacherOrAdmin, async (req, res) => {
         continue;
       }
 
-      if (!canBackfill && !isEligibleForAttendance(student, dateOnly)) {
+      if (!isEligibleForAttendance(student, dateOnly)) {
         console.log(`❌ Skipping student enrolled on/after attendance date: ${student.name}`);
         errors++;
         continue;
@@ -431,8 +438,7 @@ router.patch('/planned-absences/:id/cancel', auth, isTeacherOrAdmin, async (req,
 // ============================================
 router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
   try {
-    const { region, batchNumber, date, markedByRole, status, allowBackfill } = req.query;
-    const canBackfill = String(allowBackfill || '').toLowerCase() === 'true';
+    const { region, batchNumber, date, markedByRole, status } = req.query;
 
     console.log('\n======= VIEWING ATTENDANCE =======');
     console.log('Region:', region);
@@ -504,7 +510,7 @@ router.get('/by-batch', auth, isTeacherOrAdmin, async (req, res) => {
       .filter(student => {
         const studentId = String(student._id);
         const isHistorical = attendanceStudentIds.includes(studentId);
-        return isHistorical || canBackfill || isEligibleForAttendance(student, dateOnly);
+        return isHistorical || isEligibleForAttendance(student, dateOnly);
       });
 
     console.log('Found students:', studentsWithJoinDate.length);
@@ -694,9 +700,14 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
     const summary = studentsWithJoinDate.map(student => {
       const studentIdStr = String(student._id);
       const joinDate = student.joiningDate || '';
+      const attendanceStartDate = getAttendanceStartDate(student, startDate);
       
-      // Get records for this student strictly from the selected report range
-      const studentRecords = attendanceRecords.filter(r => r.studentId === studentIdStr);
+      // Only count records from the selected range and on/after the student's join date
+      const studentRecords = attendanceRecords.filter(r => {
+        if (r.studentId !== studentIdStr) return false;
+        if (attendanceStartDate && r.date < attendanceStartDate) return false;
+        return true;
+      });
       const studentClassDates = [...new Set(studentRecords.map(r => r.date))];
       const absentDates = [...new Set(
         studentRecords
@@ -731,7 +742,7 @@ router.get('/summary', auth, isTeacherOrAdmin, async (req, res) => {
         batchNumber: student.batchNumber,
         standard: student.standard,
         mobile: student.mobile,
-        enrollmentDate: joinDate || student.createdAt,
+        enrollmentDate: joinDate || toDateOnly(student.createdAt),
         totalClasses: studentClassDates.length,  // Total marked class dates in the selected range
         totalMarked: totalMarked,                // Number of times student was marked
         attendedClasses: attendedCount,
